@@ -2,6 +2,9 @@ import type {
   BackupPreview,
   CustomFont,
   CustomFontsDocument,
+  ManualMatchDocument,
+  ManualTeamPatch,
+  OperatingMode,
   OverlayInstance,
   OverlayInstancesDocument,
   ScoringRuleset,
@@ -173,4 +176,30 @@ export const api = {
       { method: 'POST', body },
     );
   },
+
+  getManualState: () => request<{ document: ManualMatchDocument; standings: Team[] }>('/manual'),
+
+  setOperatingMode: (mode: OperatingMode) =>
+    request<{ document: ManualMatchDocument; standings: Team[] }>('/manual/mode', {
+      method: 'PUT',
+      body: JSON.stringify({ mode }),
+    }),
+
+  patchManualTeam: (teamNo: number, patch: ManualTeamPatch) =>
+    request<{ document: ManualMatchDocument; standings: Team[] }>(`/manual/teams/${teamNo}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }),
+
+  updateManualTeams: (teams: ({ teamNo: number } & ManualTeamPatch)[]) =>
+    request<{ document: ManualMatchDocument; standings: Team[] }>('/manual/teams', {
+      method: 'PUT',
+      body: JSON.stringify({ teams }),
+    }),
+
+  resetManualMatch: (options?: { seedFromAuto?: boolean }) =>
+    request<{ document: ManualMatchDocument; standings: Team[] }>('/manual/reset', {
+      method: 'POST',
+      body: JSON.stringify(options ?? {}),
+    }),
 };

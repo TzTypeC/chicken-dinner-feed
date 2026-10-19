@@ -24,6 +24,8 @@ function CountingValue({ value }: { value: number }) {
 }
 
 export function TeamRow({ team, isAlternate }: TeamRowProps) {
+  const textColor = team.isEliminated ? 'var(--overlay-text-muted)' : 'var(--overlay-text)';
+
   return (
     <motion.div
       // `layout` is what animates a team physically sliding past another as the standings change.
@@ -46,10 +48,7 @@ export function TeamRow({ team, isAlternate }: TeamRowProps) {
         transition: 'opacity 400ms ease',
       }}
     >
-      <span
-        className="font-semibold tabular-nums"
-        style={{ fontSize: u(17), color: 'var(--overlay-text)' }}
-      >
+      <span className="font-semibold tabular-nums" style={{ fontSize: u(17), color: textColor }}>
         {team.rank}
       </span>
 
@@ -78,7 +77,7 @@ export function TeamRow({ team, isAlternate }: TeamRowProps) {
 
       <span
         className="truncate font-bold tracking-wide"
-        style={{ fontSize: u(16), color: 'var(--overlay-text)' }}
+        style={{ fontSize: u(16), color: textColor }}
       >
         {team.name}
       </span>
@@ -87,17 +86,11 @@ export function TeamRow({ team, isAlternate }: TeamRowProps) {
         <AlivePlayerBars players={team.players} />
       </div>
 
-      <span
-        className="text-center font-semibold"
-        style={{ fontSize: u(16), color: 'var(--overlay-text)' }}
-      >
+      <span className="text-center font-semibold" style={{ fontSize: u(16), color: textColor }}>
         <CountingValue value={team.totalPoints} />
       </span>
 
-      <span
-        className="text-center font-semibold"
-        style={{ fontSize: u(16), color: 'var(--overlay-text)' }}
-      >
+      <span className="text-center font-semibold" style={{ fontSize: u(16), color: textColor }}>
         <CountingValue value={team.eliminations} />
       </span>
     </motion.div>

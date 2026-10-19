@@ -26,7 +26,7 @@ export interface CreateIngestSourceOptions {
  * Both are now real. `mock` needs no game and drives development; `pcob` polls the observer API.
  */
 export function createIngestSource(
-  kind: IngestSourceKind,
+  kind: Exclude<IngestSourceKind, 'manual'>,
   options: CreateIngestSourceOptions = {},
 ): IngestSource {
   switch (kind) {

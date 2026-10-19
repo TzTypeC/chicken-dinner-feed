@@ -1,5 +1,6 @@
 import type {
   CustomFont,
+  OperatingMode,
   OverlayInstance,
   OverlayInstancesDocument,
   ScoringRuleset,
@@ -15,6 +16,7 @@ import { ImportExport } from '@/features/admin/ImportExport';
 import { ImportIniButton } from '@/features/admin/ImportIniButton';
 import { InstanceToolbar } from '@/features/admin/InstanceToolbar';
 import { CopyableUrl } from '@/features/admin/CopyableUrl';
+import { ManualControl } from '@/features/admin/ManualControl';
 import { OnAirBadge } from '@/features/admin/OnAirBadge';
 import { OverlayPreview } from '@/features/admin/OverlayPreview';
 import { ScoringEditor } from '@/features/admin/ScoringEditor';
@@ -29,7 +31,7 @@ import { toInstanceId } from '@/lib/instance-id';
 import { useLiveStore } from '@/stores/live-store';
 import { toast } from '@/stores/toast-store';
 
-type Tab = 'overlays' | 'teams' | 'scoring' | 'fonts' | 'series' | 'importExport';
+type Tab = 'overlays' | 'manual' | 'teams' | 'scoring' | 'fonts' | 'series' | 'importExport';
 
 const SIDEBAR_STORAGE_KEY = 'cdf.admin.sidebar';
 
@@ -41,6 +43,11 @@ const CONNECTION_LABEL: Record<string, { label: string; hint: string; tone: stri
     tone: 'bg-amber-500',
   },
   connecting: { label: 'Connecting', hint: 'Trying to reach the data source', tone: 'bg-sky-500' },
+  error: {
+    label: 'API Error',
+    hint: 'Could not reach the PCOB API — check launch.bat or switch to Manual mode',
+    tone: 'bg-rose-500',
+  },
   disconnected: {
     label: 'Disconnected',
     hint: 'Check that launch.bat is running and "API Enable" is ticked',
@@ -58,9 +65,11 @@ export function AdminPage() {
 
   const snapshot = useLiveStore((state) => state.snapshot);
   const overlayStates = useLiveStore((state) => state.overlayStates);
+  const protocolMismatch = useLiveStore((state) => state.protocolMismatch);
   const connect = useLiveStore((state) => state.connect);
 
   const [tab, setTab] = useState<Tab>('overlays');
+  const [operatingMode, setOperatingMode] = useState<OperatingMode>('auto');
   const [overlays, setOverlays] = useState<OverlayInstancesDocument | null>(null);
   /**
    * What the server last confirmed, kept beside the draft so an edit that is undone stops counting
@@ -100,6 +109,11 @@ export function AdminPage() {
   // including a change a director just made from a stream deck.
   useEffect(() => connect(), [connect]);
 
+  useEffect(() => {
+    if (!snapshot) return;
+    setOperatingMode(snapshot.ingest.source === 'manual' ? 'manual' : 'auto');
+  }, [snapshot]);
+
   const reloadOverlays = useCallback(async (): Promise<OverlayInstancesDocument | null> => {
     try {
       const document = await api.getOverlays();
@@ -115,17 +129,20 @@ export function AdminPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const [overlayDocument, teamDocument, ruleset, fontDocument] = await Promise.all([
-          api.getOverlays(),
-          api.getTeams(),
-          api.getScoring(),
-          api.getFonts(),
-        ]);
+        const [overlayDocument, teamDocument, ruleset, fontDocument, manualState] =
+          await Promise.all([
+            api.getOverlays(),
+            api.getTeams(),
+            api.getScoring(),
+            api.getFonts(),
+            api.getManualState(),
+          ]);
         setOverlays(overlayDocument);
         setSavedOverlays(overlayDocument.instances);
         setTeams(teamDocument);
         setScoring(ruleset);
         setFonts(fontDocument.fonts);
+        setOperatingMode(manualState.document.mode);
         // Registered here as well as on the live channel, so the previews and the sample text are
         // correct before any overlay message has arrived.
         applyCustomFontFaces(fontDocument.fonts);
@@ -217,10 +234,35 @@ export function AdminPage() {
     }
   };
 
+  const changeMode = async (nextMode: OperatingMode) => {
+    if (nextMode === operatingMode) return;
+    try {
+      const response = await api.setOperatingMode(nextMode);
+      setOperatingMode(response.document.mode);
+      toast.success(
+        response.document.mode === 'manual'
+          ? 'Switched to Manual mode'
+          : 'Switched to PCOB API mode',
+        response.document.mode === 'manual'
+          ? 'Overlays are now driven by operator-entered manual data.'
+          : 'Automatic polling resumed. Manual match numbers remain saved.',
+      );
+    } catch (error) {
+      toast.error('Could not switch operating mode', describe(error));
+    }
+  };
+
   const ingest = snapshot?.ingest;
-  const connection = ingest
-    ? (CONNECTION_LABEL[ingest.state] ?? CONNECTION_LABEL.disconnected!)
-    : null;
+  const connection =
+    operatingMode === 'manual' || ingest?.source === 'manual'
+      ? {
+          label: 'Manual mode',
+          hint: 'Driven by operator controls',
+          tone: 'bg-amber-400',
+        }
+      : ingest
+        ? (CONNECTION_LABEL[ingest.state] ?? CONNECTION_LABEL.disconnected!)
+        : null;
 
   return (
     <div className="min-h-dvh">
@@ -260,6 +302,13 @@ export function AdminPage() {
        * operator glances at mid-broadcast, and it is no use only at the top of a long form.
        */}
       <div ref={chromeRef} className="bg-background sticky top-0 z-30">
+        {protocolMismatch !== null && (
+          <div className="bg-destructive text-destructive-foreground px-6 py-2 text-xs font-medium">
+            Admin UI is out of date — the server speaks protocol v{protocolMismatch}. Reload this
+            page.
+          </div>
+        )}
+
         <header className="flex flex-wrap items-center gap-4 border-b border-b-[var(--brand-gold)]/70 bg-[var(--brand-navy)] px-6 py-3">
           <img
             src="/images/app-logo-128.png"
@@ -273,6 +322,39 @@ export function AdminPage() {
               <span className="text-[var(--brand-gold)]">Chicken</span> Dinner Feed
             </h1>
             <p className="text-muted-foreground text-xs tracking-wide uppercase">Overlay control</p>
+          </div>
+
+          <div
+            className="flex items-center rounded border border-white/15 bg-black/25 p-0.5 text-xs"
+            role="group"
+            aria-label="Operating mode selector"
+          >
+            <button
+              type="button"
+              onClick={() => void changeMode('auto')}
+              aria-pressed={operatingMode === 'auto'}
+              className={`rounded px-2.5 py-1 font-medium transition-colors ${
+                operatingMode === 'auto'
+                  ? 'bg-[var(--brand-gold)] font-semibold text-black'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Obtain live match telemetry from PCOB API"
+            >
+              PCOB API
+            </button>
+            <button
+              type="button"
+              onClick={() => void changeMode('manual')}
+              aria-pressed={operatingMode === 'manual'}
+              className={`rounded px-2.5 py-1 font-medium transition-colors ${
+                operatingMode === 'manual'
+                  ? 'bg-[var(--brand-gold)] font-semibold text-black'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title="Drive live overlays from operator-entered manual team data"
+            >
+              Manual
+            </button>
           </div>
 
           {connection && (
@@ -290,6 +372,7 @@ export function AdminPage() {
           {(
             [
               ['overlays', 'Overlays'],
+              ['manual', 'Manual control'],
               ['teams', 'Teams'],
               ['scoring', 'Scoring'],
               ['fonts', 'Fonts'],
@@ -518,6 +601,14 @@ export function AdminPage() {
               </p>
             )}
           </div>
+        )}
+
+        {tab === 'manual' && teams && (
+          <ManualControl
+            roster={teams.teams}
+            mode={operatingMode}
+            onModeChanged={setOperatingMode}
+          />
         )}
 
         {tab === 'teams' && teams && (

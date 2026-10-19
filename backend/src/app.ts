@@ -23,9 +23,11 @@ import { feedbackRoutes } from './routes/feedback.js';
 import { fontRoutes } from './routes/fonts.js';
 import { logoRoutes } from './routes/logos.js';
 import { healthRoutes } from './routes/health.js';
+import { manualRoutes } from './routes/manual.js';
 import { overlayControlRoutes } from './routes/overlay-control.js';
 import { seriesRoutes } from './routes/series.js';
-import { MatchStore } from './state/match-store.js';
+import { ManualStore } from './state/manual-store.js';
+import { createDelegatingMatchStore, MatchStore } from './state/match-store.js';
 import { OverlayControlStore } from './state/overlay-control-store.js';
 import { SeriesStore } from './state/series-store.js';
 import { LiveHub } from './ws/live-hub.js';
@@ -106,14 +108,61 @@ export async function buildApp(): Promise<AppContext> {
   });
   await seriesStore.load();
 
+  const manualStore = new ManualStore({
+    dataDir: config.dataDir,
+    roster: configStore.teams.current.teams,
+    onWarn: (message, detail) => app.log.error({ detail }, message),
+  });
+  await manualStore.load();
+
   // The live pipeline: adapter → store → hub → sockets. Assembled here so nothing downstream has to
-  // know which ingestion source is in use (ADR-0006).
-  const store = new MatchStore({
+  // know which ingestion source is in use (ADR-0006). `autoMatchStore` and `manualMatchStore` are
+  // isolated so switching between PCOB and Manual mode never contaminates either match state.
+  const autoMatchStore = new MatchStore({
     source: config.ingestSource,
     roster: configStore.teams.current.teams,
     ruleset: configStore.scoring.current,
   });
-  store.setSeriesContext(seriesStore.getSeriesTotals(), seriesStore.getSeriesHasAppeared());
+  const manualMatchStore = new MatchStore({
+    source: 'manual',
+    roster: configStore.teams.current.teams,
+    ruleset: configStore.scoring.current,
+  });
+  const store = createDelegatingMatchStore(() =>
+    manualStore.getMode() === 'manual' ? manualMatchStore : autoMatchStore,
+  );
+
+  // Refreshes what `MatchStore` adds on top of this map's own points, after anything that can change
+  // the series total: a new ingest update, or an operator action on the Series control page (close
+  // now, add by hand, reset, edit, delete) — maps are recorded only by an explicit operator action,
+  // never on their own; see the note on `SeriesStore.observeMatch`.
+  //
+  // Also re-derives how much of the currently displayed match is *already* in that total, which is
+  // why this must run on every ingest update and not only on an operator action — the displayed
+  // match changes on its own.
+  const refreshSeriesContext = (): void => {
+    const totals = seriesStore.getSeriesTotals();
+    const hasAppeared = seriesStore.getSeriesHasAppeared();
+    autoMatchStore.setSeriesContext(
+      totals,
+      hasAppeared,
+      seriesStore.getBankedPointsForMatch(autoMatchStore.currentMatchId()),
+    );
+    manualMatchStore.setSeriesContext(
+      totals,
+      hasAppeared,
+      seriesStore.getBankedPointsForMatch(manualMatchStore.currentMatchId()),
+    );
+  };
+
+  const syncManualProjection = async (): Promise<void> => {
+    manualMatchStore.applyUpdate(manualStore.toIngestUpdate(configStore.teams.current.teams));
+    manualMatchStore.setStatus('connected', 'Manual mode active');
+    await seriesStore.observeMatch(manualMatchStore.project(), Date.now());
+    refreshSeriesContext();
+  };
+  await syncManualProjection();
+
   const overlayControl = new OverlayControlStore();
   const hub = new LiveHub({
     store,
@@ -135,17 +184,62 @@ export async function buildApp(): Promise<AppContext> {
     roster: configStore.teams.current.teams,
   });
 
+  let isStarted = false;
+  const startAutoIngest = (): void => {
+    ingestSource.start({
+      onUpdate(update) {
+        if (manualStore.getMode() !== 'auto') return;
+        autoMatchStore.applyUpdate(update);
+        const projection = autoMatchStore.project();
+
+        // Never closes a map itself — see the note on `SeriesStore.observeMatch`. Only tracks the
+        // current match's start time for a close, manual or automatic.
+        const observed = seriesStore.observeMatch(projection, Date.now());
+
+        // The one signal trusted to close a map on its own — see `shouldAutoCloseNow`. Reuses
+        // `closeMapNow` (same validation, same duplicate-close guard) with an ended-forced
+        // projection, exactly like a manual click, just triggered here instead of by hand.
+        const autoClose =
+          !autoMatchStore.isInWarmup() && seriesStore.shouldAutoCloseNow(projection)
+            ? seriesStore
+                .closeMapNow(autoMatchStore.projectAsEnded(), Date.now())
+                .catch((error: unknown) => app.log.error({ error }, 'Failed to auto-close the map'))
+            : Promise.resolve();
+
+        Promise.all([observed, autoClose])
+          .catch((error: unknown) => app.log.error({ error }, 'Failed to record series history'))
+          .finally(() => {
+            refreshSeriesContext();
+            hub.schedulePublish();
+          });
+      },
+      onStatus(state, message) {
+        if (manualStore.getMode() !== 'auto') return;
+        autoMatchStore.setStatus(state, message ?? null);
+        app.log.info({ state, message }, 'Ingest status changed');
+        hub.schedulePublish();
+      },
+    });
+  };
+
   // Configuration changes have to reach the live path immediately: a new scoring ruleset changes
   // the standings on air, and an appearance change must reach open browser sources without a reload.
   configStore.subscribe((change) => {
     switch (change) {
-      case 'teams':
-        store.setRoster(configStore.teams.current.teams);
-        ingestSource.setRoster?.(configStore.teams.current.teams);
-        hub.schedulePublish();
+      case 'teams': {
+        const nextRoster = configStore.teams.current.teams;
+        autoMatchStore.setRoster(nextRoster);
+        manualMatchStore.setRoster(nextRoster);
+        ingestSource.setRoster?.(nextRoster);
+        void manualStore
+          .syncRoster(nextRoster)
+          .then(() => syncManualProjection())
+          .finally(() => hub.schedulePublish());
         break;
+      }
       case 'scoring':
-        store.setRuleset(configStore.scoring.current);
+        autoMatchStore.setRuleset(configStore.scoring.current);
+        manualMatchStore.setRuleset(configStore.scoring.current);
         hub.schedulePublish();
         break;
       case 'instances':
@@ -167,7 +261,10 @@ export async function buildApp(): Promise<AppContext> {
     );
   }
 
-  await app.register(healthRoutes, { prefix: '/api' });
+  await app.register(healthRoutes, {
+    prefix: '/api',
+    getActiveSource: () => (manualStore.getMode() === 'manual' ? 'manual' : config.ingestSource),
+  });
   await app.register(overlayControlRoutes, {
     prefix: '/api',
     store: overlayControl,
@@ -175,21 +272,28 @@ export async function buildApp(): Promise<AppContext> {
   });
   await app.register(configRoutes, { prefix: '/api', store: configStore });
 
-  // Refreshes what `MatchStore` adds on top of this map's own points, after anything that can change
-  // the series total: a new ingest update, or an operator action on the Series control page (close
-  // now, add by hand, reset, edit, delete) — maps are recorded only by an explicit operator action,
-  // never on their own; see the note on `SeriesStore.observeMatch`.
-  //
-  // Also re-derives how much of the currently displayed match is *already* in that total, which is
-  // why this must run on every ingest update and not only on an operator action — the displayed
-  // match changes on its own.
-  const refreshSeriesContext = (): void => {
-    store.setSeriesContext(
-      seriesStore.getSeriesTotals(),
-      seriesStore.getSeriesHasAppeared(),
-      seriesStore.getBankedPointsForMatch(store.currentMatchId()),
-    );
-  };
+  await app.register(manualRoutes, {
+    prefix: '/api',
+    manual: manualStore,
+    manualMatch: manualMatchStore,
+    autoMatch: autoMatchStore,
+    onManualStateChanged: async () => {
+      await syncManualProjection();
+      hub.schedulePublish();
+    },
+    onModeChanged: async (mode) => {
+      if (mode === 'manual') {
+        await ingestSource.stop();
+        await syncManualProjection();
+      } else {
+        refreshSeriesContext();
+        if (isStarted) {
+          startAutoIngest();
+        }
+      }
+      hub.publish();
+    },
+  });
 
   await app.register(seriesRoutes, {
     prefix: '/api',
@@ -267,52 +371,15 @@ export async function buildApp(): Promise<AppContext> {
     app,
 
     start() {
+      isStarted = true;
       hub.start();
-      ingestSource.start({
-        onUpdate(update) {
-          store.applyUpdate(update);
-          const projection = store.project();
-
-          // Never closes a map itself — see the note on `SeriesStore.observeMatch`. Only tracks the
-          // current match's start time for a close, manual or automatic.
-          const observed = seriesStore.observeMatch(projection, Date.now());
-
-          // The one signal trusted to close a map on its own — see `shouldAutoCloseNow`. Reuses
-          // `closeMapNow` (same validation, same duplicate-close guard) with an ended-forced
-          // projection, exactly like a manual click, just triggered here instead of by hand.
-          //
-          // `!store.isInWarmup()` is not redundant with `shouldAutoCloseNow`'s own reasoning about
-          // `isEliminated`. Early in warmup, before every team's players have arrived even once,
-          // `standingTeamCount` (built from `hasAppeared`) can genuinely read <= 1 simply because
-          // most teams have not been *seen* yet, not because they are down to one survivor — and
-          // that can hold stable for a couple of polls while the lobby is still filling in. The
-          // manual route (`routes/series.ts`) already checks this before forcing a close; the
-          // automatic path needs the exact same guard.
-          const autoClose =
-            !store.isInWarmup() && seriesStore.shouldAutoCloseNow(projection)
-              ? seriesStore
-                  .closeMapNow(store.projectAsEnded(), Date.now())
-                  .catch((error: unknown) =>
-                    app.log.error({ error }, 'Failed to auto-close the map'),
-                  )
-              : Promise.resolve();
-
-          Promise.all([observed, autoClose])
-            .catch((error: unknown) => app.log.error({ error }, 'Failed to record series history'))
-            .finally(() => {
-              refreshSeriesContext();
-              hub.schedulePublish();
-            });
-        },
-        onStatus(state, message) {
-          store.setStatus(state, message ?? null);
-          app.log.info({ state, message }, 'Ingest status changed');
-          hub.schedulePublish();
-        },
-      });
+      if (manualStore.getMode() === 'auto') {
+        startAutoIngest();
+      }
     },
 
     async shutdown() {
+      isStarted = false;
       // Stop producing before tearing down consumers, so nothing publishes into a closed hub.
       await ingestSource.stop();
       hub.stop();

@@ -1,4 +1,4 @@
-import type { MatchState, OverlayAppearance } from '@cdf/shared';
+import type { IngestSourceKind, MatchState, OverlayAppearance } from '@cdf/shared';
 import { motion } from 'motion/react';
 import { appearanceToCssVariables, ROW_VARIANTS } from './appearance';
 import { LEADERBOARD_METRICS as M, u } from './overlay-scale';
@@ -13,6 +13,8 @@ const LEGEND = [
 export interface LeaderboardOverlayProps {
   match: MatchState;
   appearance: OverlayAppearance;
+  /** Active ingest source; when `'manual'`, the `KNOCKED` legend item is omitted (`D-05`). */
+  source?: IngestSourceKind;
   /**
    * Whether rows should fade in one after another once the panel has arrived. The timing itself is
    * orchestrated by the panel above, so this only decides whether a row takes part.
@@ -30,10 +32,13 @@ export interface LeaderboardOverlayProps {
 export function LeaderboardOverlay({
   match,
   appearance,
+  source,
   animateRows = false,
 }: LeaderboardOverlayProps) {
   const columns = `${u(M.rankColumn)} ${u(M.logoColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`;
   const teams = match.teams.slice(0, appearance.maxTeams);
+  const legendEntries =
+    source === 'manual' ? LEGEND.filter((entry) => entry.label !== 'KNOCKED') : LEGEND;
 
   return (
     <div
@@ -105,7 +110,7 @@ export function LeaderboardOverlay({
             letterSpacing: u(0.5),
           }}
         >
-          {LEGEND.map((entry) => (
+          {legendEntries.map((entry) => (
             <span key={entry.label} className="flex items-center" style={{ gap: u(5) }}>
               <span
                 style={{

@@ -69,7 +69,10 @@ export function AlivePlayerBars({ players }: AlivePlayerBarsProps) {
              */}
             <div
               className="absolute inset-0"
-              style={{ backgroundColor: 'var(--player-dead)', opacity: 0.28 }}
+              style={{
+                backgroundColor: 'var(--player-dead)',
+                opacity: isDead ? 0.5 : 0.28,
+              }}
             />
             <motion.div
               className="absolute right-0 bottom-0 left-0"

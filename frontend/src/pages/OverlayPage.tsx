@@ -117,6 +117,7 @@ export function OverlayPage({ instanceId }: OverlayPageProps) {
               <LeaderboardOverlay
                 match={snapshot.match}
                 appearance={appearance}
+                source={snapshot.ingest.source}
                 animateRows={animation.rowsEnabled}
               />
             </motion.div>

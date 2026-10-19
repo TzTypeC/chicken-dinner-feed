@@ -106,3 +106,18 @@ export {
   backupPreviewSchema,
 } from './domain/backup.js';
 export type { BackupManifest, BackupSummary, BackupPreview } from './domain/backup.js';
+
+export {
+  operatingModeSchema,
+  manualTeamStateSchema,
+  manualTeamPatchSchema,
+  manualMatchDocumentSchema,
+  createDefaultManualTeamState,
+  createDefaultManualMatchDocument,
+} from './domain/manual.js';
+export type {
+  OperatingMode,
+  ManualTeamState,
+  ManualTeamPatch,
+  ManualMatchDocument,
+} from './domain/manual.js';

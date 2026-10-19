@@ -1,14 +1,18 @@
-import { PROTOCOL_VERSION } from '@cdf/shared';
+import { ingestSourceKindSchema, PROTOCOL_VERSION, type IngestSourceKind } from '@cdf/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { APP_VERSION } from '../version.js';
 
+export interface HealthRoutesOptions {
+  getActiveSource?: () => IngestSourceKind;
+}
+
 const healthResponseSchema = z.object({
   status: z.literal('ok'),
   version: z.string(),
   protocolVersion: z.number().int(),
-  ingestSource: z.enum(['mock', 'pcob']),
+  ingestSource: ingestSourceKindSchema,
   uptimeSeconds: z.number(),
 });
 
@@ -16,7 +20,7 @@ const healthResponseSchema = z.object({
  * A liveness endpoint that `startup.bat` can poll to know when the server is actually ready,
  * rather than guessing with a sleep.
  */
-export const healthRoutes: FastifyPluginAsyncZod = async (app) => {
+export const healthRoutes: FastifyPluginAsyncZod<HealthRoutesOptions> = async (app, options) => {
   app.get(
     '/health',
     {
@@ -30,7 +34,7 @@ export const healthRoutes: FastifyPluginAsyncZod = async (app) => {
       status: 'ok' as const,
       version: APP_VERSION,
       protocolVersion: PROTOCOL_VERSION,
-      ingestSource: config.ingestSource,
+      ingestSource: options.getActiveSource?.() ?? config.ingestSource,
       uptimeSeconds: Math.round(process.uptime()),
     }),
   );

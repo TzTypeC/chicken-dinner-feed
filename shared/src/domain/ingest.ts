@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const ingestSourceKindSchema = z.enum(['mock', 'pcob']);
+export const ingestSourceKindSchema = z.enum(['mock', 'pcob', 'manual']);
 export type IngestSourceKind = z.infer<typeof ingestSourceKindSchema>;
 
 /**

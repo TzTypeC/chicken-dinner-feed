@@ -138,8 +138,12 @@ export class MatchStore {
 
   applyUpdate(update: IngestUpdate, now: number = Date.now()): void {
     // A new match resets the elimination history; carrying it over would award placement points
-    // from the previous game.
-    if (this.lastUpdate && this.lastUpdate.matchId !== update.matchId) {
+    // from the previous game. Manual mode also resets per-update because every manual edit is an
+    // authoritative snapshot (an accidental wipe or presence toggle must be reversible).
+    if (
+      this.options.source === 'manual' ||
+      (this.lastUpdate && this.lastUpdate.matchId !== update.matchId)
+    ) {
       this.resetMatch();
     }
     if (this.lastUpdate?.phase !== 'idle' && update.phase === 'idle') {
@@ -165,9 +169,11 @@ export class MatchStore {
    * Flip a connected source to `stale` when it has gone quiet for too long.
    *
    * Called on a timer rather than on update, because the whole point is detecting the *absence* of
-   * updates — usually the room host dropping, which the guideline warns stops all API data.
+   * updates — usually the room host dropping, which the guideline warns stops all API data. Manual
+   * mode is driven by an operator clicking only when something happens, so silence is normal there.
    */
   markStaleIfSilent(now: number = Date.now()): boolean {
+    if (this.options.source === 'manual') return false;
     if (this.connectionState !== 'connected') return false;
     if (this.lastUpdateAt === null) return false;
     if (now - this.lastUpdateAt < this.staleAfterMs) return false;
@@ -365,4 +371,20 @@ export class MatchStore {
 
     return placements;
   }
+}
+
+/**
+ * Returns a `MatchStore` facade that delegates every call to the currently active store (`auto` or
+ * `manual`) while keeping the underlying stores completely isolated.
+ */
+export function createDelegatingMatchStore(getActive: () => MatchStore): MatchStore {
+  return new Proxy({} as MatchStore, {
+    get(_target, prop) {
+      const active = getActive();
+      const value = Reflect.get(active, prop, active) as unknown;
+      return typeof value === 'function'
+        ? (value as (...args: unknown[]) => unknown).bind(active)
+        : value;
+    },
+  });
 }
