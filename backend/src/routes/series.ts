@@ -1,4 +1,4 @@
-import { seriesDocumentSchema, teamSchema } from '@cdf/shared';
+import { seriesDocumentSchema, seriesMatchInfoPatchSchema, teamSchema } from '@cdf/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { MatchStore } from '../state/match-store.js';
@@ -52,6 +52,23 @@ export const seriesRoutes: FastifyPluginAsyncZod<SeriesRoutesOptions> = async (a
       },
     },
     async () => ({ document: series.getState(), standings: match.project().match.teams }),
+  );
+
+  app.put(
+    '/series/match-info',
+    {
+      schema: {
+        summary: 'Update the active match number override and active map name',
+        tags: ['series'],
+        body: seriesMatchInfoPatchSchema,
+        response: { 200: seriesDocumentSchema },
+      },
+    },
+    async (request) => {
+      const updated = await series.setMatchInfo(request.body);
+      onSeriesChanged();
+      return updated;
+    },
   );
 
   app.post(

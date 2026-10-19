@@ -39,14 +39,14 @@ export function InstanceToolbar({
         <input
           id="overlay-name"
           type="text"
-          className="border-border bg-background min-w-0 flex-1 rounded border px-2 py-1.5 text-sm"
+          className="border-border bg-background min-h-9 min-w-0 flex-1 rounded border px-2 py-1.5 text-sm"
           value={instance.name}
           onChange={(event) => onRename(event.target.value)}
         />
 
         <button
           type="button"
-          className="text-destructive hover:bg-destructive/10 grid size-8 shrink-0 place-items-center rounded transition-colors"
+          className="text-destructive hover:bg-destructive/10 grid size-9 shrink-0 place-items-center rounded transition-colors"
           onClick={onDelete}
           aria-label={`Delete “${instance.name}”`}
           title={`Delete “${instance.name}”`}
@@ -60,19 +60,9 @@ export function InstanceToolbar({
           type="button"
           onClick={onSave}
           disabled={!isDirty}
-          /*
-           * The wording lives in the accessible name rather than on screen. `disabled` already
-           * exposes the state to assistive technology, so nothing is left resting on the pulse
-           * alone — but the label spells it out, and a hover explains it to everyone else.
-           */
           aria-label={isDirty ? 'Save — there are unsaved changes' : 'Save — nothing has changed'}
           title={isDirty ? 'There are unsaved changes' : 'Nothing has changed since the last save'}
-          /*
-           * The pulse is a CSS animation on purpose: the reduced-motion rule in globals.css already
-           * neutralises those on admin surfaces, so an operator who has asked for less movement
-           * gets a still button without any extra branch here.
-           */
-          className={`rounded px-3 py-1.5 text-sm font-medium transition-opacity ${
+          className={`min-h-9 rounded px-3.5 py-1.5 text-sm font-medium transition-opacity ${
             isDirty
               ? 'bg-primary text-primary-foreground cdf-attention'
               : 'bg-secondary text-muted-foreground cursor-not-allowed'
@@ -81,7 +71,7 @@ export function InstanceToolbar({
           Save
         </button>
 
-        <div className="border-border ml-auto flex items-center gap-2 rounded border px-2 py-1">
+        <div className="border-border ml-auto flex min-h-9 items-center gap-2 rounded border px-2 py-1">
           <OnAirBadge visible={visible} />
           <button
             type="button"

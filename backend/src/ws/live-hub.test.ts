@@ -197,4 +197,31 @@ describe('LiveHub', () => {
       expect(hub.sourceCountFor('main')).toBe(0);
     });
   });
+
+  it('broadcasts a new snapshot when matchInfo changes even if match state is unchanged', () => {
+    let currentMatchInfo = { matchNumber: 1, mapName: 'Erangel' };
+    const matchInfoHub = new LiveHub({
+      store,
+      resolveMatchInfo: () => currentMatchInfo,
+    });
+
+    store.applyUpdate(update());
+    matchInfoHub.publish();
+
+    const client = new FakeClient();
+    matchInfoHub.addClient(client);
+    const firstMsg = client.sent[0];
+    expect(firstMsg?.type).toBe('snapshot');
+    if (firstMsg?.type === 'snapshot') {
+      expect(firstMsg.snapshot.matchInfo).toEqual({ matchNumber: 1, mapName: 'Erangel' });
+    }
+
+    currentMatchInfo = { matchNumber: 3, mapName: 'Miramar' };
+    expect(matchInfoHub.publish()).toBe(true);
+    const secondMsg = client.sent[1];
+    expect(secondMsg?.type).toBe('snapshot');
+    if (secondMsg?.type === 'snapshot') {
+      expect(secondMsg.snapshot.matchInfo).toEqual({ matchNumber: 3, mapName: 'Miramar' });
+    }
+  });
 });

@@ -90,4 +90,3 @@ export function createDefaultManualMatchDocument(
     teams: sorted.map((entry) => createDefaultManualTeamState(entry.teamNo)),
   };
 }
-

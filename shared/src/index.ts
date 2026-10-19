@@ -38,8 +38,8 @@ export {
 } from './domain/ingest.js';
 export type { IngestSourceKind, IngestConnectionState, IngestStatus } from './domain/ingest.js';
 
-export { liveSnapshotSchema, serverMessageSchema } from './protocol/live.js';
-export type { LiveSnapshot, ServerMessage } from './protocol/live.js';
+export { liveMatchInfoSchema, liveSnapshotSchema, serverMessageSchema } from './protocol/live.js';
+export type { LiveMatchInfo, LiveSnapshot, ServerMessage } from './protocol/live.js';
 
 export {
   FEEDBACK_VERSION,
@@ -92,12 +92,20 @@ export {
 export type { TeamRosterEntry, TeamRosterDocument } from './config/team-roster.js';
 
 export {
+  PUBG_MAP_PRESETS,
   closedMapTeamResultSchema,
   closedMapResultSchema,
+  seriesMatchInfoPatchSchema,
   seriesDocumentSchema,
+  getEffectiveMatchNumber,
   createDefaultSeriesDocument,
 } from './domain/series.js';
-export type { ClosedMapTeamResult, ClosedMapResult, SeriesDocument } from './domain/series.js';
+export type {
+  ClosedMapTeamResult,
+  ClosedMapResult,
+  SeriesMatchInfoPatch,
+  SeriesDocument,
+} from './domain/series.js';
 
 export {
   BACKUP_FORMAT_VERSION,

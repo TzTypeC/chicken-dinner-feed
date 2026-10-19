@@ -42,7 +42,7 @@ export function ScoringEditor({ ruleset, onChange }: ScoringEditorProps) {
           </p>
         </div>
 
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-8">
+        <div className="grid grid-cols-2 gap-2 min-[380px]:grid-cols-3 sm:grid-cols-5 md:grid-cols-8">
           {ruleset.placementPoints.map((points, index) => (
             <label key={index} className="grid gap-1 text-xs">
               <span className="text-muted-foreground">
@@ -52,7 +52,7 @@ export function ScoringEditor({ ruleset, onChange }: ScoringEditorProps) {
               <input
                 type="number"
                 min={0}
-                className="border-border bg-background rounded border px-2 py-1.5 text-sm"
+                className="border-border bg-background min-h-9 rounded border px-2 py-1.5 text-sm"
                 value={points}
                 onChange={(event) => setPlacement(index, Number(event.target.value))}
               />
@@ -60,10 +60,10 @@ export function ScoringEditor({ ruleset, onChange }: ScoringEditorProps) {
           ))}
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className="border-border rounded border px-3 py-1.5 text-xs"
+            className="border-border hover:bg-secondary min-h-9 rounded border px-3 py-1.5 text-xs"
             onClick={() =>
               onChange({ ...ruleset, placementPoints: [...ruleset.placementPoints, 0] })
             }
@@ -72,7 +72,7 @@ export function ScoringEditor({ ruleset, onChange }: ScoringEditorProps) {
           </button>
           <button
             type="button"
-            className="border-border rounded border px-3 py-1.5 text-xs disabled:opacity-40"
+            className="border-border hover:bg-secondary min-h-9 rounded border px-3 py-1.5 text-xs disabled:opacity-40"
             disabled={ruleset.placementPoints.length <= 1}
             onClick={() =>
               onChange({ ...ruleset, placementPoints: ruleset.placementPoints.slice(0, -1) })

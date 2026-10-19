@@ -1,4 +1,10 @@
-import type { CustomFont, LiveSnapshot, OverlayInstance, ServerMessage } from '@cdf/shared';
+import type {
+  CustomFont,
+  LiveMatchInfo,
+  LiveSnapshot,
+  OverlayInstance,
+  ServerMessage,
+} from '@cdf/shared';
 import { PROTOCOL_VERSION } from '@cdf/shared';
 import type { MatchStore, Projection } from '../state/match-store.js';
 import type { OverlayControlStore } from '../state/overlay-control-store.js';
@@ -45,6 +51,8 @@ export interface LiveHubOptions {
   listInstanceIds?: () => string[];
   /** Uploaded fonts, sent with every overlay message so a browser source can register them. */
   listFonts?: () => CustomFont[];
+  /** Resolves the active match number and map name for the Match Information Overlay. */
+  resolveMatchInfo?: () => LiveMatchInfo;
   /**
    * Updates arriving faster than this collapse into one broadcast. Bounds client work regardless of
    * how the source behaves, and costs at most this much latency.
@@ -53,6 +61,8 @@ export interface LiveHubOptions {
   /** How often to check whether a connected source has gone quiet. */
   staleCheckMs?: number;
 }
+
+const DEFAULT_MATCH_INFO: LiveMatchInfo = { matchNumber: 1, mapName: 'Erangel' };
 
 /**
  * Owns the live fan-out: who is connected, what they were last sent, and when to send again.
@@ -73,6 +83,7 @@ export class LiveHub {
   private readonly resolveInstance: ((instanceId: string) => OverlayInstance | null) | undefined;
   private readonly listInstanceIds: (() => string[]) | undefined;
   private readonly listFonts: (() => CustomFont[]) | undefined;
+  private readonly resolveMatchInfo: (() => LiveMatchInfo) | undefined;
   private readonly coalesceMs: number;
   private readonly staleCheckMs: number;
 
@@ -90,6 +101,7 @@ export class LiveHub {
     this.resolveInstance = options.resolveInstance;
     this.listInstanceIds = options.listInstanceIds;
     this.listFonts = options.listFonts;
+    this.resolveMatchInfo = options.resolveMatchInfo;
     this.coalesceMs = options.coalesceMs ?? 50;
     this.staleCheckMs = options.staleCheckMs ?? 1000;
   }
@@ -124,7 +136,9 @@ export class LiveHub {
   ): void {
     this.clients.set(client, { instanceId, isPreview: options.isPreview ?? false });
 
-    const snapshot = this.lastSnapshot ?? this.buildSnapshot(this.store.project());
+    const snapshot =
+      this.lastSnapshot ??
+      this.buildSnapshot(this.store.project(), this.resolveMatchInfo?.() ?? DEFAULT_MATCH_INFO);
     this.sendTo(client, { type: 'snapshot', protocolVersion: PROTOCOL_VERSION, snapshot });
 
     if (!this.overlayControl) return;
@@ -221,12 +235,13 @@ export class LiveHub {
    */
   publish(): boolean {
     const projection = this.store.project();
-    const key = changeKeyOf(projection);
+    const matchInfo = this.resolveMatchInfo?.() ?? DEFAULT_MATCH_INFO;
+    const key = changeKeyOf(projection, matchInfo);
 
     if (key === this.lastChangeKey) return false;
     this.lastChangeKey = key;
 
-    const snapshot = this.buildSnapshot(projection);
+    const snapshot = this.buildSnapshot(projection, matchInfo);
     this.lastSnapshot = snapshot;
 
     const message: ServerMessage = {
@@ -239,12 +254,13 @@ export class LiveHub {
     return true;
   }
 
-  private buildSnapshot(projection: Projection): LiveSnapshot {
+  private buildSnapshot(projection: Projection, matchInfo: LiveMatchInfo): LiveSnapshot {
     return {
       revision: ++this.revision,
       generatedAt: Date.now(),
       ingest: projection.ingest,
       match: projection.match,
+      matchInfo,
     };
   }
 
@@ -268,7 +284,7 @@ export class LiveHub {
  * exact behaviour ADR-0007's change detection exists to prevent. Clients that display "last update
  * N seconds ago" tick that locally from the value they already hold.
  */
-function changeKeyOf(projection: Projection): string {
+function changeKeyOf(projection: Projection, matchInfo: LiveMatchInfo): string {
   const { lastUpdateAt: _ignored, ...ingest } = projection.ingest;
-  return JSON.stringify({ ingest, match: projection.match });
+  return JSON.stringify({ ingest, match: projection.match, matchInfo });
 }

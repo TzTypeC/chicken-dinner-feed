@@ -38,6 +38,11 @@ const overlayFeedbackAppearanceSchema = z.object({
   fontFamily: z.string(),
   maxTeams: z.number().int(),
   showLegend: z.boolean(),
+  showLogos: z.boolean().default(true),
+  showEliminationAlerts: z.boolean().default(true),
+  showEliminationAlertElims: z.boolean().default(true),
+  showMatchInfo: z.boolean().default(true),
+  showMatchInfoMapName: z.boolean().default(true),
   colors: overlayColorsSchema,
   animation: overlayAnimationSchema,
 });

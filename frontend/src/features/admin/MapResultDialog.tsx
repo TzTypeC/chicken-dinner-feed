@@ -77,14 +77,14 @@ export function MapResultDialog({
       className="bg-card text-foreground border-border m-auto w-[min(48rem,calc(100vw-2rem))] rounded-lg border p-0 shadow-xl backdrop:bg-black/50"
     >
       {open && (
-        <div className="grid gap-3 p-5">
+        <div className="grid gap-3 p-3 sm:p-5">
           <h2 className="text-base font-semibold">{title}</h2>
           <p className="text-muted-foreground text-sm">{description}</p>
 
           {children}
 
           <div className="grid max-h-[60vh] gap-1 overflow-y-auto">
-            <div className="text-muted-foreground grid grid-cols-[1fr_6rem_6rem] gap-2 px-1 text-xs">
+            <div className="text-muted-foreground grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] gap-2 px-1 text-xs sm:grid-cols-[minmax(0,1fr)_6rem_6rem]">
               <span>Team</span>
               <span>Placement</span>
               <span>Elims</span>
@@ -92,14 +92,14 @@ export function MapResultDialog({
             {teamNos.map((teamNo) => (
               <div
                 key={teamNo}
-                className="grid grid-cols-[1fr_6rem_6rem] items-center gap-2 px-1 py-0.5"
+                className="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] items-center gap-2 px-1 py-0.5 sm:grid-cols-[minmax(0,1fr)_6rem_6rem]"
               >
                 <span className="truncate text-sm">{teamName(teamNo)}</span>
                 <input
                   type="number"
                   min={1}
                   aria-label={`${teamName(teamNo)} placement`}
-                  className="border-border bg-background rounded border px-2 py-1.5 text-sm"
+                  className="border-border bg-background min-h-9 rounded border px-2 py-1 text-sm"
                   value={values[teamNo]?.placement ?? 1}
                   onChange={(event) =>
                     onChange(teamNo, {
@@ -111,7 +111,7 @@ export function MapResultDialog({
                   type="number"
                   min={0}
                   aria-label={`${teamName(teamNo)} eliminations`}
-                  className="border-border bg-background rounded border px-2 py-1.5 text-sm"
+                  className="border-border bg-background min-h-9 rounded border px-2 py-1 text-sm"
                   value={values[teamNo]?.eliminations ?? 0}
                   onChange={(event) =>
                     onChange(teamNo, {
@@ -123,18 +123,18 @@ export function MapResultDialog({
             ))}
           </div>
 
-          <div className="mt-2 flex justify-end gap-2">
+          <div className="mt-2 flex flex-wrap justify-end gap-2">
             <button
               type="button"
               onClick={onCancel}
-              className="border-border hover:bg-secondary rounded border px-3 py-1.5 text-sm"
+              className="border-border hover:bg-secondary min-h-9 rounded border px-3 py-1.5 text-sm"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={onConfirm}
-              className="bg-primary text-primary-foreground rounded px-3 py-1.5 text-sm font-medium"
+              className="bg-primary text-primary-foreground min-h-9 rounded px-3 py-1.5 text-sm font-medium"
             >
               {confirmLabel}
             </button>

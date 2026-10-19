@@ -5,6 +5,7 @@ import { api, ApiError } from '@/lib/api';
 import { useLiveStore } from '@/stores/live-store';
 import { toast } from '@/stores/toast-store';
 import { MapResultDialog, type MapTeamResultValue } from './MapResultDialog';
+import { MatchConfigBar } from './MatchConfigBar';
 
 function describe(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -273,24 +274,26 @@ export function SeriesControl() {
         </p>
       </ConfirmDialog>
 
+      <MatchConfigBar seriesDocument={seriesDocument} onSeriesUpdated={setSeriesDocument} />
+
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          className="border-border rounded border px-3 py-1.5 text-sm"
+          className="border-border hover:bg-secondary min-h-10 rounded border px-3 py-1.5 text-sm transition-colors"
           onClick={() => setPendingCloseMap(true)}
         >
           Close current map now
         </button>
         <button
           type="button"
-          className="border-border rounded border px-3 py-1.5 text-sm"
+          className="border-border hover:bg-secondary min-h-10 rounded border px-3 py-1.5 text-sm transition-colors"
           onClick={startAdding}
         >
           Add map by hand
         </button>
         <button
           type="button"
-          className="bg-destructive rounded px-3 py-1.5 text-sm font-medium text-white"
+          className="bg-destructive min-h-10 rounded px-3 py-1.5 text-sm font-medium text-white"
           onClick={() => setPendingReset(true)}
         >
           Reset series
@@ -300,22 +303,24 @@ export function SeriesControl() {
       <section className="grid gap-2">
         <h3 className="text-sm font-medium">Current standings</h3>
         <div className="grid gap-1">
-          <div className="text-muted-foreground grid grid-cols-[2rem_1fr_5rem_5rem] gap-2 px-2 text-xs">
+          <div className="text-muted-foreground grid grid-cols-[2rem_minmax(0,1fr)_3.75rem_3.75rem] gap-2 px-2 text-xs sm:grid-cols-[2rem_minmax(0,1fr)_5rem_5rem]">
             <span>#</span>
             <span>Team</span>
-            <span>PTS</span>
-            <span>ELIMS</span>
+            <span className="text-right sm:text-left">PTS</span>
+            <span className="text-right sm:text-left">ELIMS</span>
           </div>
           {currentStandings.map((team) => (
             <div
               key={team.teamNo}
-              className="border-border grid grid-cols-[2rem_1fr_5rem_5rem] items-center gap-2 rounded border px-2 py-1.5 text-sm"
+              className="border-border grid grid-cols-[2rem_minmax(0,1fr)_3.75rem_3.75rem] items-center gap-2 rounded border px-2 py-1.5 text-sm sm:grid-cols-[2rem_minmax(0,1fr)_5rem_5rem]"
               style={{ opacity: !team.hasAppeared ? 0.25 : team.isEliminated ? 0.45 : 1 }}
             >
               <span className="tabular-nums">{team.rank}</span>
               <span className="truncate">{team.name}</span>
-              <span className="tabular-nums font-semibold">{team.totalPoints}</span>
-              <span className="tabular-nums">{team.eliminations}</span>
+              <span className="text-right font-semibold tabular-nums sm:text-left">
+                {team.totalPoints}
+              </span>
+              <span className="text-right tabular-nums sm:text-left">{team.eliminations}</span>
             </div>
           ))}
         </div>

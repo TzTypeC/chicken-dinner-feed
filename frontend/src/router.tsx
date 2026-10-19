@@ -6,7 +6,13 @@ import {
   redirect,
 } from '@tanstack/react-router';
 import { AdminPage } from '@/pages/AdminPage';
-import { OverlayRoute } from '@/pages/OverlayRoute';
+import {
+  OverlayEliminationRoute,
+  OverlayInstanceEliminationRoute,
+  OverlayInstanceMatchInfoRoute,
+  OverlayMatchInfoRoute,
+  OverlayRoute,
+} from '@/pages/OverlayRoute';
 
 const rootRoute = createRootRoute({ component: Outlet });
 
@@ -20,6 +26,18 @@ const homeRoute = createRoute({
   },
 });
 
+const overlayEliminationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/elimination',
+  component: OverlayEliminationRoute,
+});
+
+const overlayMatchInfoRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/match-info',
+  component: OverlayMatchInfoRoute,
+});
+
 /**
  * One route per overlay instance. The instance id is the whole addressing scheme: a director copies
  * this URL into a browser source, and the same id is what Companion calls at
@@ -31,13 +49,33 @@ const overlayRoute = createRoute({
   component: OverlayRoute,
 });
 
+const overlayInstanceEliminationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$instanceId/elimination',
+  component: OverlayInstanceEliminationRoute,
+});
+
+const overlayInstanceMatchInfoRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$instanceId/match-info',
+  component: OverlayInstanceMatchInfoRoute,
+});
+
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin',
   component: AdminPage,
 });
 
-const routeTree = rootRoute.addChildren([homeRoute, overlayRoute, adminRoute]);
+const routeTree = rootRoute.addChildren([
+  homeRoute,
+  overlayEliminationRoute,
+  overlayMatchInfoRoute,
+  overlayInstanceEliminationRoute,
+  overlayInstanceMatchInfoRoute,
+  overlayRoute,
+  adminRoute,
+]);
 
 export const router = createRouter({ routeTree });
 

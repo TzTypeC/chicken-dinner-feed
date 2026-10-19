@@ -54,12 +54,93 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
   return (
     <div className="grid gap-6">
       <section className="grid gap-3">
+        <div>
+          <h3 className="text-sm font-medium">Broadcast elements &amp; overlay toggles</h3>
+          <p className="text-muted-foreground text-xs">
+            Turn individual overlay elements on or off for this instance. Press Save to apply to all
+            connected browser sources.
+          </p>
+        </div>
+
+        <div className="grid gap-2">
+          {(
+            [
+              {
+                key: 'showLogos',
+                label: 'Team logos',
+                description:
+                  'Show team logos on the leaderboard (6 columns) and elimination alert. When OFF, the logo column collapses cleanly (5 columns).',
+                value: appearance.showLogos ?? true,
+              },
+              {
+                key: 'showLegend',
+                label: 'Player status legend',
+                description:
+                  'Show the Alive / Knocked / Eliminated colour legend in the leaderboard header.',
+                value: appearance.showLegend,
+              },
+              {
+                key: 'showEliminationAlerts',
+                label: 'Elimination notification overlay',
+                description:
+                  'Master switch for live team-elimination banners on /overlay/elimination.',
+                value: appearance.showEliminationAlerts ?? true,
+              },
+              {
+                key: 'showEliminationAlertElims',
+                label: 'Elimination count on alert',
+                description:
+                  'Display the eliminated squad’s match kill total (ELIMS) on the elimination banner.',
+                value: appearance.showEliminationAlertElims ?? true,
+              },
+              {
+                key: 'showMatchInfo',
+                label: 'Match information overlay',
+                description: 'Master switch for the MATCH N · MAP pill on /overlay/match-info.',
+                value: appearance.showMatchInfo ?? true,
+              },
+              {
+                key: 'showMatchInfoMapName',
+                label: 'Map name on match info',
+                description: 'Show the map name alongside the match number on /overlay/match-info.',
+                value: appearance.showMatchInfoMapName ?? true,
+              },
+            ] as const
+          ).map((item) => (
+            <div
+              key={item.key}
+              className="border-border bg-secondary/15 flex items-center justify-between gap-3 rounded border px-3 py-2"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">{item.label}</div>
+                <p className="text-muted-foreground text-xs">{item.description}</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={item.value}
+                aria-label={item.label}
+                onClick={() => patch({ [item.key]: !item.value })}
+                className={`min-h-9 min-w-[4.25rem] shrink-0 rounded border px-3 py-1 text-xs font-semibold transition-colors ${
+                  item.value
+                    ? 'border-[var(--brand-gold)] bg-[var(--brand-gold)] text-black'
+                    : 'border-border bg-background text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                {item.value ? 'ON' : 'OFF'}
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid gap-3">
         <h3 className="text-sm font-medium">Placement</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs">
             <span className="text-muted-foreground">Side</span>
             <select
-              className="border-border bg-background rounded border px-2 py-1.5 text-sm"
+              className="border-border bg-background min-h-9 rounded border px-2 py-1.5 text-sm"
               value={appearance.anchor}
               onChange={(event) => patch({ anchor: event.target.value as 'left' | 'right' })}
             >
@@ -74,13 +155,13 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
               type="number"
               min={0}
               max={1800}
-              className="border-border bg-background rounded border px-2 py-1.5 text-sm"
+              className="border-border bg-background min-h-9 rounded border px-2 py-1.5 text-sm"
               value={appearance.offsetX}
               onChange={(event) => patch({ offsetX: Number(event.target.value) })}
             />
           </label>
 
-          <label className="col-span-2 flex items-center gap-2 text-sm">
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
             <input
               type="checkbox"
               checked={appearance.offsetY === null}
@@ -96,7 +177,7 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
                 type="number"
                 min={0}
                 max={1000}
-                className="border-border bg-background rounded border px-2 py-1.5 text-sm"
+                className="border-border bg-background min-h-9 rounded border px-2 py-1.5 text-sm"
                 value={appearance.offsetY}
                 onChange={(event) => patch({ offsetY: Number(event.target.value) })}
               />
@@ -125,11 +206,11 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
 
       <section className="grid gap-3">
         <h3 className="text-sm font-medium">Type and rows</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs">
             <span className="text-muted-foreground">Font</span>
             <select
-              className="border-border bg-background rounded border px-2 py-1.5 text-sm"
+              className="border-border bg-background min-h-9 rounded border px-2 py-1.5 text-sm"
               value={appearance.fontFamily}
               onChange={(event) => patch({ fontFamily: event.target.value })}
             >
@@ -149,11 +230,6 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
                   ))}
                 </optgroup>
               )}
-              {/*
-               * A value that matches neither list means the font it referred to was removed. Kept
-               * as an option so the select does not silently jump to something else and quietly
-               * change what is on air.
-               */}
               {!FONT_OPTIONS.some((option) => option.value === appearance.fontFamily) &&
                 !customFonts.some(
                   (font) => fontFamilyValue(font.family) === appearance.fontFamily,
@@ -171,19 +247,10 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
               type="number"
               min={1}
               max={25}
-              className="border-border bg-background rounded border px-2 py-1.5 text-sm"
+              className="border-border bg-background min-h-9 rounded border px-2 py-1.5 text-sm"
               value={appearance.maxTeams}
               onChange={(event) => patch({ maxTeams: Number(event.target.value) })}
             />
-          </label>
-
-          <label className="col-span-2 flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={appearance.showLegend}
-              onChange={(event) => patch({ showLegend: event.target.checked })}
-            />
-            Show the colour legend
           </label>
         </div>
       </section>
@@ -195,7 +262,7 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
             These sit over live video, so their opacity matters as much as their colour.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <ColorField
             label="Background"
             hint="Behind the team rows"
@@ -229,7 +296,7 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
 
       <section className="grid gap-3">
         <h3 className="text-sm font-medium">Players and type</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <ColorField
             label="Alive"
             hint="Health bar for a player still up"
@@ -263,11 +330,11 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
 
       <section className="grid gap-3">
         <h3 className="text-sm font-medium">Show / hide animation</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label className="grid gap-1 text-xs">
             <span className="text-muted-foreground">Type</span>
             <select
-              className="border-border bg-background rounded border px-2 py-1.5 text-sm"
+              className="border-border bg-background min-h-9 rounded border px-2 py-1.5 text-sm"
               value={animation.type}
               onChange={(event) =>
                 patchAnimation({ type: event.target.value as OverlayAnimationType })
@@ -280,15 +347,11 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
             </select>
           </label>
 
-          {/*
-           * Only two of the four types have an edge to come from. Showing the control for the
-           * others would be a control that does nothing.
-           */}
           {hasDirection ? (
             <label className="grid gap-1 text-xs">
               <span className="text-muted-foreground">From</span>
               <select
-                className="border-border bg-background rounded border px-2 py-1.5 text-sm"
+                className="border-border bg-background min-h-9 rounded border px-2 py-1.5 text-sm"
                 value={animation.direction}
                 onChange={(event) =>
                   patchAnimation({ direction: event.target.value as OverlayAnimationDirection })
@@ -301,13 +364,13 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
               </select>
             </label>
           ) : (
-            <span />
+            <span className="hidden sm:block" />
           )}
 
           <label className="grid gap-1 text-xs">
             <span className="text-muted-foreground">Easing</span>
             <select
-              className="border-border bg-background rounded border px-2 py-1.5 text-sm"
+              className="border-border bg-background min-h-9 rounded border px-2 py-1.5 text-sm"
               value={animation.easing}
               onChange={(event) =>
                 patchAnimation({ easing: event.target.value as OverlayAnimation['easing'] })
@@ -333,7 +396,7 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
             />
           </label>
 
-          <label className="col-span-2 flex items-center gap-2 text-sm">
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
             <input
               type="checkbox"
               checked={animation.withFade}
@@ -365,7 +428,7 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
         </label>
 
         {animation.rows.enabled && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="grid gap-1 text-xs">
               <span className="text-muted-foreground">
                 Gap between rows &mdash; {animation.rows.staggerMs} ms

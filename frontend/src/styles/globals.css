@@ -181,6 +181,34 @@
     cdf-breathe 1.4s ease-in-out infinite;
 }
 
+/*
+ * Responsive Overlays workspace grid:
+ * - < 768px (mobile): single-column stack
+ * - 768px–1023px (tablet): 2-column editor + preview, with instance bar spanning top
+ * - >= 1024px (desktop): 3-column layout with smooth animated collapsible instance sidebar
+ */
+.cdf-overlays-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@media (min-width: 768px) and (max-width: 1023.98px) {
+  .cdf-overlays-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .cdf-overlays-layout {
+    grid-template-columns: 17rem minmax(0, 1fr) minmax(0, 1fr);
+    transition: grid-template-columns 320ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .cdf-overlays-layout[data-sidebar='collapsed'] {
+    grid-template-columns: 2.75rem minmax(0, 1fr) minmax(0, 1.6fr);
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

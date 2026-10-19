@@ -170,6 +170,13 @@ export async function buildApp(): Promise<AppContext> {
     resolveInstance: (instanceId) => configStore.findInstance(instanceId),
     listFonts: () => configStore.fonts.current.fonts,
     listInstanceIds: () => configStore.instances.current.instances.map((instance) => instance.id),
+    resolveMatchInfo: () => {
+      const currentSeries = seriesStore.getState();
+      return {
+        matchNumber: currentSeries.activeMatchNumber ?? currentSeries.closedMaps.length + 1,
+        mapName: currentSeries.activeMapName,
+      };
+    },
   });
   const ingestSource = createIngestSource(config.ingestSource, {
     pcobBaseUrl: config.pcobBaseUrl,

@@ -687,4 +687,27 @@ describe('SeriesStore', () => {
       expect(store.getState().closedMaps).toEqual([]);
     });
   });
+
+  describe('setMatchInfo & mapName stamping', () => {
+    it('defaults to activeMatchNumber = null and activeMapName = Erangel, and stamps activeMapName on closeMapNow', async () => {
+      const store = makeStore();
+      await store.load();
+      expect(store.getState().activeMatchNumber).toBeNull();
+      expect(store.getState().activeMapName).toBe('Erangel');
+
+      await store.setMatchInfo({ activeMatchNumber: 4, activeMapName: 'Miramar' });
+      expect(store.getState().activeMatchNumber).toBe(4);
+      expect(store.getState().activeMapName).toBe('Miramar');
+
+      const match = new MatchStore({ source: 'pcob', roster: roster(1) });
+      match.applyUpdate(
+        update({ matchId: 'm-miramar', players: [player({ teamNo: 1, slot: 1 })] }),
+      );
+
+      const closed = await store.closeMapNow(match.projectAsEnded(), 1_000);
+      expect(closed.mapName).toBe('Miramar');
+      // Overridden match number advances automatically to 5 after closing the map.
+      expect(store.getState().activeMatchNumber).toBe(5);
+    });
+  });
 });

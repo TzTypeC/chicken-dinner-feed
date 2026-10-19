@@ -165,4 +165,3 @@ export const manualRoutes: FastifyPluginAsyncZod<ManualRoutesOptions> = async (a
     },
   );
 };
-

@@ -9,6 +9,7 @@ import type {
   OverlayInstancesDocument,
   ScoringRuleset,
   SeriesDocument,
+  SeriesMatchInfoPatch,
   Team,
   TeamRosterDocument,
   TeamRosterEntry,
@@ -132,6 +133,12 @@ export const api = {
     ),
 
   getSeries: () => request<{ document: SeriesDocument; standings: Team[] }>('/series'),
+
+  updateSeriesMatchInfo: (patch: SeriesMatchInfoPatch) =>
+    request<SeriesDocument>('/series/match-info', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
 
   closeMapNow: () => request<SeriesDocument>('/series/close-map', { method: 'POST' }),
 

@@ -47,7 +47,7 @@ export function TeamRosterEditor({ document, onChange }: TeamRosterEditorProps) 
           .map((team) => (
             <div
               key={team.teamNo}
-              className="grid grid-cols-[2.5rem_4.5rem_1fr_2rem] items-center gap-2"
+              className="grid grid-cols-[2rem_3.75rem_minmax(0,1fr)_2.25rem] items-center gap-1.5 sm:grid-cols-[2.5rem_4.5rem_minmax(0,1fr)_2.25rem] sm:gap-2"
             >
               <span className="text-muted-foreground text-center text-sm tabular-nums">
                 {team.teamNo}
@@ -67,14 +67,14 @@ export function TeamRosterEditor({ document, onChange }: TeamRosterEditorProps) 
                 type="text"
                 aria-label={`Team ${team.teamNo} name`}
                 maxLength={24}
-                className="border-border bg-background rounded border px-2 py-1.5 text-sm font-semibold"
+                className="border-border bg-background min-h-9 min-w-0 rounded border px-2 py-1.5 text-sm font-semibold"
                 value={team.name}
                 onChange={(event) => patch(team.teamNo, { name: event.target.value })}
               />
               <button
                 type="button"
                 aria-label={`Remove team ${team.teamNo}`}
-                className="text-muted-foreground hover:text-destructive text-sm"
+                className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 grid min-h-9 min-w-9 place-items-center rounded text-base"
                 onClick={() =>
                   onChange({
                     ...document,
@@ -90,7 +90,7 @@ export function TeamRosterEditor({ document, onChange }: TeamRosterEditorProps) 
 
       <button
         type="button"
-        className="border-border w-fit rounded border px-3 py-1.5 text-xs disabled:opacity-40"
+        className="border-border hover:bg-secondary min-h-9 w-fit rounded border px-3 py-1.5 text-xs disabled:opacity-40"
         disabled={document.teams.length >= 25}
         onClick={() => {
           const teamNo = nextFreeTeamNo();

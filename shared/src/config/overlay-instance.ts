@@ -91,6 +91,16 @@ export const overlayAppearanceSchema = z.object({
   animation: overlayAnimationSchema,
 
   showLegend: z.boolean(),
+  /** Whether team logos and the logo column are shown on the leaderboard and elimination alerts. */
+  showLogos: z.boolean().default(true),
+  /** Master switch for the Team Elimination Notification Overlay (/overlay/elimination). */
+  showEliminationAlerts: z.boolean().default(true),
+  /** Whether the eliminated team's match kill/elimination count is shown on the alert banner. */
+  showEliminationAlertElims: z.boolean().default(true),
+  /** Master switch for the Match Information Overlay (/overlay/match-info). */
+  showMatchInfo: z.boolean().default(true),
+  /** Whether the map name is shown alongside the match number on the Match Information Overlay. */
+  showMatchInfoMapName: z.boolean().default(true),
   /** Trim the table for formats with fewer than 25 teams. */
   maxTeams: z.number().int().min(1).max(25),
 });
@@ -153,6 +163,11 @@ export const DEFAULT_OVERLAY_APPEARANCE: OverlayAppearance = {
     rows: { enabled: false, staggerMs: 60, reverseOnHide: false },
   },
   showLegend: true,
+  showLogos: true,
+  showEliminationAlerts: true,
+  showEliminationAlertElims: true,
+  showMatchInfo: true,
+  showMatchInfoMapName: true,
   maxTeams: 16,
 };
 

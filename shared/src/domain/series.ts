@@ -60,6 +60,35 @@ export const closedMapResultSchema = z.object({
 export type ClosedMapResult = z.infer<typeof closedMapResultSchema>;
 
 /**
+ * Built-in competitive PUBG / PUBG Mobile map presets offered in the Admin Match Configuration bar.
+ * Operators may also type any custom map or stage name.
+ */
+export const PUBG_MAP_PRESETS = [
+  'Erangel',
+  'Miramar',
+  'Sanhok',
+  'Vikendi',
+  'Rondo',
+  'Taego',
+  'Deston',
+  'Livik',
+  'Karakin',
+] as const;
+
+export const seriesMatchInfoPatchSchema = z.object({
+  /**
+   * Explicit 1-based match number override. When `null`, the active match number is derived
+   * automatically as `closedMaps.length + 1`.
+   */
+  activeMatchNumber: z.number().int().min(1).max(99).nullable(),
+  /**
+   * Active map name displayed on the Match Information Overlay and stamped onto the next closed map.
+   */
+  activeMapName: z.string().trim().max(64),
+});
+export type SeriesMatchInfoPatch = z.infer<typeof seriesMatchInfoPatchSchema>;
+
+/**
  * The persisted series/tournament history (ADR-0004).
  *
  * `seriesId` changes on every reset — a cheap, unambiguous way for a client to notice "this is a
@@ -69,8 +98,27 @@ export const seriesDocumentSchema = z.object({
   schemaVersion: z.number().int().min(1),
   seriesId: z.string().min(1),
   closedMaps: z.array(closedMapResultSchema),
+  /**
+   * Optional operator override for the current match number. When `null`, the effective match
+   * number is `closedMaps.length + 1`. Defaulted so existing `series.json` files load seamlessly.
+   */
+  activeMatchNumber: z.number().int().min(1).max(99).nullable().default(null),
+  /**
+   * Active map name for the current match (e.g. "Erangel", "Miramar", "Sanhok"). Defaulted so
+   * existing `series.json` files load seamlessly.
+   */
+  activeMapName: z.string().trim().max(64).default('Erangel'),
 });
 export type SeriesDocument = z.infer<typeof seriesDocumentSchema>;
+
+/**
+ * Resolves the effective 1-based match number for display on overlays and admin headers.
+ */
+export function getEffectiveMatchNumber(
+  series: Pick<SeriesDocument, 'closedMaps' | 'activeMatchNumber'>,
+): number {
+  return series.activeMatchNumber ?? series.closedMaps.length + 1;
+}
 
 /**
  * Takes the new id as a parameter rather than generating one: this package has no Node-only or
@@ -82,5 +130,7 @@ export function createDefaultSeriesDocument(seriesId: string): SeriesDocument {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     seriesId,
     closedMaps: [],
+    activeMatchNumber: null,
+    activeMapName: 'Erangel',
   };
 }

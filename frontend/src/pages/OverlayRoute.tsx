@@ -9,5 +9,23 @@ import { OverlayPage } from './OverlayPage';
  */
 export function OverlayRoute() {
   const { instanceId } = useParams({ from: '/overlay/$instanceId' });
-  return <OverlayPage instanceId={instanceId} />;
+  return <OverlayPage instanceId={instanceId} surfaceMode="leaderboard" />;
+}
+
+export function OverlayEliminationRoute() {
+  return <OverlayPage surfaceMode="elimination" />;
+}
+
+export function OverlayInstanceEliminationRoute() {
+  const { instanceId } = useParams({ from: '/overlay/$instanceId/elimination' });
+  return <OverlayPage instanceId={instanceId} surfaceMode="elimination" />;
+}
+
+export function OverlayMatchInfoRoute() {
+  return <OverlayPage surfaceMode="match-info" />;
+}
+
+export function OverlayInstanceMatchInfoRoute() {
+  const { instanceId } = useParams({ from: '/overlay/$instanceId/match-info' });
+  return <OverlayPage instanceId={instanceId} surfaceMode="match-info" />;
 }

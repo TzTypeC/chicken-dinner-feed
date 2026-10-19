@@ -5,6 +5,12 @@ import { customFontSchema } from '../config/fonts.js';
 import { overlayInstanceSchema } from '../config/overlay-instance.js';
 import { overlayVisibilitySchema } from '../domain/overlay.js';
 
+export const liveMatchInfoSchema = z.object({
+  matchNumber: z.number().int().min(1),
+  mapName: z.string(),
+});
+export type LiveMatchInfo = z.infer<typeof liveMatchInfoSchema>;
+
 /**
  * The complete live state, sent as a whole rather than as a delta (ADR-0007).
  *
@@ -22,6 +28,8 @@ export const liveSnapshotSchema = z.object({
   generatedAt: z.number().int(),
   ingest: ingestStatusSchema,
   match: matchStateSchema,
+  /** Current match number and map name for the Match Information Overlay. */
+  matchInfo: liveMatchInfoSchema.default({ matchNumber: 1, mapName: 'Erangel' }),
 });
 export type LiveSnapshot = z.infer<typeof liveSnapshotSchema>;
 

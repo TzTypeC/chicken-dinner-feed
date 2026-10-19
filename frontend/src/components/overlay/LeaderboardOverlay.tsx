@@ -35,7 +35,10 @@ export function LeaderboardOverlay({
   source,
   animateRows = false,
 }: LeaderboardOverlayProps) {
-  const columns = `${u(M.rankColumn)} ${u(M.logoColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`;
+  const showLogos = appearance.showLogos ?? true;
+  const columns = showLogos
+    ? `${u(M.rankColumn)} ${u(M.logoColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`
+    : `${u(M.rankColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`;
   const teams = match.teams.slice(0, appearance.maxTeams);
   const legendEntries =
     source === 'manual' ? LEGEND.filter((entry) => entry.label !== 'KNOCKED') : LEGEND;
@@ -73,8 +76,8 @@ export function LeaderboardOverlay({
         }}
       >
         <span className="font-bold">#</span>
-        {/* The logo column has no heading; TEAM labels the name column beside it. */}
-        <span />
+        {/* The logo column has no heading; omitted cleanly when logos are toggled off. */}
+        {showLogos && <span />}
         <span className="font-bold">TEAM</span>
         <span className="text-center font-bold">ALIVE</span>
         <span className="text-center font-bold">PTS</span>
@@ -90,10 +93,15 @@ export function LeaderboardOverlay({
              * two opacities simply multiply, which is the behaviour we want anyway.
              */
             <motion.div key={team.teamNo} variants={ROW_VARIANTS}>
-              <TeamRow team={team} isAlternate={index % 2 === 1} />
+              <TeamRow team={team} isAlternate={index % 2 === 1} showLogo={showLogos} />
             </motion.div>
           ) : (
-            <TeamRow key={team.teamNo} team={team} isAlternate={index % 2 === 1} />
+            <TeamRow
+              key={team.teamNo}
+              team={team}
+              isAlternate={index % 2 === 1}
+              showLogo={showLogos}
+            />
           ),
         )}
       </div>

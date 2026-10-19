@@ -252,6 +252,8 @@ export function AdminPage() {
     }
   };
 
+  const [useScopedOverlayUrls, setUseScopedOverlayUrls] = useState(false);
+
   const ingest = snapshot?.ingest;
   const connection =
     operatingMode === 'manual' || ingest?.source === 'manual'
@@ -265,7 +267,7 @@ export function AdminPage() {
         : null;
 
   return (
-    <div className="min-h-dvh">
+    <div className="min-h-dvh overflow-x-clip">
       {/*
        * Mounted here rather than at the router root on purpose: the overlay routes render onto a
        * broadcast surface, and a toast appearing there would go out on air.
@@ -286,42 +288,35 @@ export function AdminPage() {
           afterwards, and Stream Deck buttons for it will stop working.
         </p>
         {pendingDelete && overlayStates[pendingDelete.id]?.visible && (
-          // Worth saying plainly: this one is not merely configured, it is on screen right now.
           <p className="text-destructive font-medium">
             This overlay is on air at the moment. Deleting it will take it off.
           </p>
         )}
       </ConfirmDialog>
 
-      {/*
-       * The gold rule under the header echoes the accent strip on the overlay itself, so the tool
-       * and what it puts on screen read as the same product.
-       */}
-      {/*
-       * Header and tabs travel together and stay put: the connection indicator is the thing an
-       * operator glances at mid-broadcast, and it is no use only at the top of a long form.
-       */}
       <div ref={chromeRef} className="bg-background sticky top-0 z-30">
         {protocolMismatch !== null && (
-          <div className="bg-destructive text-destructive-foreground px-6 py-2 text-xs font-medium">
+          <div className="bg-destructive text-destructive-foreground px-3 py-2 text-xs font-medium sm:px-6">
             Admin UI is out of date — the server speaks protocol v{protocolMismatch}. Reload this
             page.
           </div>
         )}
 
-        <header className="flex flex-wrap items-center gap-4 border-b border-b-[var(--brand-gold)]/70 bg-[var(--brand-navy)] px-6 py-3">
+        <header className="flex flex-wrap items-center gap-2.5 border-b border-b-[var(--brand-gold)]/70 bg-[var(--brand-navy)] px-3 py-2.5 sm:gap-4 sm:px-6 sm:py-3">
           <img
             src="/images/app-logo-128.png"
             alt=""
-            width={44}
-            height={44}
-            className="shrink-0 drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)]"
+            width={40}
+            height={40}
+            className="size-9 shrink-0 drop-shadow-[0_2px_6px_rgba(0,0,0,0.6)] sm:size-11"
           />
-          <div className="mr-auto">
-            <h1 className="text-lg font-semibold tracking-tight">
+          <div className="mr-auto min-w-0">
+            <h1 className="truncate text-base font-semibold tracking-tight sm:text-lg">
               <span className="text-[var(--brand-gold)]">Chicken</span> Dinner Feed
             </h1>
-            <p className="text-muted-foreground text-xs tracking-wide uppercase">Overlay control</p>
+            <p className="text-muted-foreground hidden text-xs tracking-wide uppercase min-[400px]:block">
+              Overlay control
+            </p>
           </div>
 
           <div
@@ -333,7 +328,7 @@ export function AdminPage() {
               type="button"
               onClick={() => void changeMode('auto')}
               aria-pressed={operatingMode === 'auto'}
-              className={`rounded px-2.5 py-1 font-medium transition-colors ${
+              className={`min-h-8 rounded px-2.5 py-1 font-medium transition-colors ${
                 operatingMode === 'auto'
                   ? 'bg-[var(--brand-gold)] font-semibold text-black'
                   : 'text-muted-foreground hover:text-foreground'
@@ -346,7 +341,7 @@ export function AdminPage() {
               type="button"
               onClick={() => void changeMode('manual')}
               aria-pressed={operatingMode === 'manual'}
-              className={`rounded px-2.5 py-1 font-medium transition-colors ${
+              className={`min-h-8 rounded px-2.5 py-1 font-medium transition-colors ${
                 operatingMode === 'manual'
                   ? 'bg-[var(--brand-gold)] font-semibold text-black'
                   : 'text-muted-foreground hover:text-foreground'
@@ -359,16 +354,19 @@ export function AdminPage() {
 
           {connection && (
             <div className="flex items-center gap-2" title={connection.hint}>
-              <span className={`size-2 rounded-full ${connection.tone}`} />
-              <span className="text-sm">{connection.label}</span>
-              <span className="text-muted-foreground hidden text-xs sm:inline">
+              <span className={`size-2 shrink-0 rounded-full ${connection.tone}`} />
+              <span className="text-xs sm:text-sm">{connection.label}</span>
+              <span className="text-muted-foreground hidden text-xs lg:inline">
                 — {connection.hint}
               </span>
             </div>
           )}
         </header>
 
-        <nav className="border-border flex gap-1 border-b px-6">
+        <nav
+          className="border-border flex gap-1 overflow-x-auto border-b px-3 whitespace-nowrap sm:px-6"
+          aria-label="Admin sections"
+        >
           {(
             [
               ['overlays', 'Overlays'],
@@ -384,9 +382,9 @@ export function AdminPage() {
               key={value}
               type="button"
               onClick={() => setTab(value)}
-              className={`border-b-2 px-3 py-2 text-sm transition-colors ${
+              className={`min-h-[42px] shrink-0 border-b-2 px-3 py-2 text-sm transition-colors ${
                 tab === value
-                  ? 'border-[var(--brand-gold)] text-[var(--brand-gold)]'
+                  ? 'border-[var(--brand-gold)] font-medium text-[var(--brand-gold)]'
                   : 'text-muted-foreground hover:text-foreground border-transparent'
               }`}
             >
@@ -396,26 +394,81 @@ export function AdminPage() {
         </nav>
       </div>
 
-      <main className="p-6">
+      <main className="p-3 sm:p-6">
         {tab === 'overlays' && overlays && (
           <div
-            className="grid gap-6"
-            style={{
-              // Explicit lengths rather than `auto`, because `auto` cannot be interpolated — this is
-              // what makes the collapse animate instead of snap.
-              gridTemplateColumns: sidebarOpen
-                ? '17rem minmax(0, 1fr) minmax(0, 1fr)'
-                : '2.75rem minmax(0, 1fr) minmax(0, 1.6fr)',
-              transition: 'grid-template-columns 320ms cubic-bezier(0.22, 1, 0.36, 1)',
-            }}
+            className="cdf-overlays-layout gap-5 lg:gap-6"
+            data-sidebar={sidebarOpen ? 'open' : 'collapsed'}
           >
-            <aside className="border-border relative border-r pr-5">
-              {/*
-               * The toggle sits outside the clipped container on purpose. Clipping the content is
-               * what lets it slide away cleanly, but `overflow: hidden` on an ancestor kills
-               * `position: sticky` — so the sticky control has to be a sibling of the clip, not a
-               * child of it.
-               */}
+            {/* Mobile & Tablet Instance Switcher (< 1024px) */}
+            <div className="border-border bg-card grid gap-3 rounded-lg border p-3 md:col-span-2 lg:hidden">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-medium tracking-wide uppercase">
+                  Overlay instances
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  className="border-border hover:bg-secondary min-h-8 rounded border px-2.5 py-1 text-xs"
+                >
+                  {sidebarOpen ? 'Hide new instance form' : '+ New / Duplicate instance'}
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {overlays.instances.map((instance) => (
+                  <button
+                    key={instance.id}
+                    type="button"
+                    onClick={() => setSelectedId(instance.id)}
+                    className={`inline-flex min-h-9 items-center gap-2 rounded border px-3 py-1.5 text-left text-xs transition-colors ${
+                      instance.id === selectedId
+                        ? 'border-[var(--brand-gold)] bg-secondary font-medium'
+                        : 'border-border hover:bg-secondary/60'
+                    }`}
+                  >
+                    <span className="truncate">{instance.name}</span>
+                    <OnAirBadge visible={overlayStates[instance.id]?.visible} size="sm" />
+                  </button>
+                ))}
+              </div>
+
+              {sidebarOpen && (
+                <div className="border-border/70 grid gap-2 border-t pt-2.5 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+                  <label className="grid gap-1 text-xs">
+                    <span className="text-muted-foreground">New overlay name</span>
+                    <input
+                      type="text"
+                      placeholder="Second leaderboard"
+                      className="border-border bg-background min-h-9 rounded border px-2.5 py-1.5 text-sm"
+                      value={newName}
+                      onChange={(event) => setNewName(event.target.value)}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    className="border-border hover:bg-secondary min-h-9 rounded border px-3 py-1.5 text-xs disabled:opacity-40"
+                    disabled={!newInstanceId}
+                    onClick={() => void createOverlay(newInstanceId, newName.trim())}
+                  >
+                    Create
+                  </button>
+                  <button
+                    type="button"
+                    className="border-border hover:bg-secondary min-h-9 rounded border px-3 py-1.5 text-xs disabled:opacity-40"
+                    disabled={!newInstanceId || !selected}
+                    onClick={() =>
+                      selected && void createOverlay(newInstanceId, newName.trim(), selected.id)
+                    }
+                  >
+                    Duplicate
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Desktop Collapsible Sidebar (>= 1024px) */}
+            <aside className="border-border relative hidden border-r pr-5 lg:block">
               <div className="bg-background sticky top-4 z-10 flex items-center gap-2 pb-3">
                 <button
                   type="button"
@@ -444,13 +497,6 @@ export function AdminPage() {
                 </h2>
               </div>
 
-              {/*
-               * Kept mounted and clipped rather than unmounted, so it slides rather than pops. Its
-               * inner width is fixed at the open width, so the contents do not reflow while the
-               * column is mid-animation.
-               *
-               * `inert` while collapsed: invisible controls must not be reachable by keyboard.
-               */}
               <div className="overflow-hidden">
                 <div
                   className="grid w-[15.25rem] content-start gap-3 transition-opacity duration-200"
@@ -480,18 +526,13 @@ export function AdminPage() {
                       ))}
                     </ul>
 
-                    {/*
-                     * The operator names the overlay; the id is derived. Asking for a URL-safe id and
-                     * rejecting "Szép tabella 2" is the wrong question — they are naming a thing, not
-                     * writing a URL. The derived address is shown so nothing is hidden from them.
-                     */}
                     <div className="grid gap-2">
                       <label className="grid gap-1 text-xs">
                         <span className="text-muted-foreground">New overlay name</span>
                         <input
                           type="text"
                           placeholder="Second leaderboard"
-                          className="border-border bg-background rounded border px-2 py-1.5 text-sm"
+                          className="border-border bg-background min-h-9 rounded border px-2 py-1.5 text-sm"
                           value={newName}
                           onChange={(event) => setNewName(event.target.value)}
                         />
@@ -513,7 +554,7 @@ export function AdminPage() {
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          className="border-border rounded border px-3 py-1.5 text-xs disabled:opacity-40"
+                          className="border-border hover:bg-secondary min-h-9 rounded border px-3 py-1.5 text-xs disabled:opacity-40"
                           disabled={!newInstanceId}
                           onClick={() => void createOverlay(newInstanceId, newName.trim())}
                           title="Create an overlay with the default appearance"
@@ -522,7 +563,7 @@ export function AdminPage() {
                         </button>
                         <button
                           type="button"
-                          className="border-border rounded border px-3 py-1.5 text-xs disabled:opacity-40"
+                          className="border-border hover:bg-secondary min-h-9 rounded border px-3 py-1.5 text-xs disabled:opacity-40"
                           disabled={!newInstanceId || !selected}
                           onClick={() =>
                             selected &&
@@ -550,7 +591,7 @@ export function AdminPage() {
 
             {selected ? (
               <>
-                <section className="grid content-start gap-5">
+                <section className="order-2 grid min-w-0 content-start gap-5 md:order-1">
                   <AppearanceEditor
                     appearance={selected.appearance}
                     customFonts={fonts}
@@ -558,17 +599,12 @@ export function AdminPage() {
                   />
                 </section>
 
-                {/*
-                 * Toolbar, preview and address travel together and stick below the chrome, so an
-                 * animation adjusted at the bottom of the form can still be watched and saved
-                 * without scrolling back up. It scrolls internally on a short window rather than
-                 * being cut off.
-                 */}
                 <aside
-                  className="grid content-start gap-3 self-start overflow-y-auto lg:sticky"
+                  className="order-1 grid min-w-0 content-start gap-3 self-start overflow-y-auto md:order-2 lg:sticky"
                   style={{
                     top: `calc(${chromeHeight}px + 1rem)`,
-                    maxHeight: `calc(100dvh - ${chromeHeight}px - 2rem)`,
+                    maxHeight:
+                      chromeHeight > 0 ? `calc(100dvh - ${chromeHeight}px - 2rem)` : undefined,
                   }}
                 >
                   <InstanceToolbar
@@ -589,10 +625,49 @@ export function AdminPage() {
                     settings, because that is what is on air: press Save to see a change here.
                   </p>
 
-                  <CopyableUrl
-                    label="Browser source address"
-                    url={`${window.location.origin}/overlay/${selected.id}`}
-                  />
+                  <div className="border-border bg-card/50 grid gap-2.5 rounded-lg border p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-xs font-medium">
+                        OBS Browser Source URLs (1920×1080)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setUseScopedOverlayUrls((prev) => !prev)}
+                        aria-pressed={useScopedOverlayUrls}
+                        className={`min-h-7 rounded border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                          useScopedOverlayUrls
+                            ? 'border-[var(--brand-gold)]/60 bg-[var(--brand-gold)]/15 text-[var(--brand-gold)]'
+                            : 'border-border text-muted-foreground hover:text-foreground'
+                        }`}
+                        title="Toggle between default URLs (/overlay/elimination) and instance-scoped URLs"
+                      >
+                        Scope to “{selected.id}”: {useScopedOverlayUrls ? 'ON' : 'OFF'}
+                      </button>
+                    </div>
+
+                    <CopyableUrl
+                      label="1. Live Leaderboard Overlay"
+                      url={`${window.location.origin}/overlay/${selected.id}`}
+                    />
+
+                    <CopyableUrl
+                      label="2. Team Elimination Notification Overlay"
+                      url={
+                        useScopedOverlayUrls || selected.id !== 'main'
+                          ? `${window.location.origin}/overlay/${selected.id}/elimination`
+                          : `${window.location.origin}/overlay/elimination`
+                      }
+                    />
+
+                    <CopyableUrl
+                      label="3. Match Information Overlay (Match # & Map)"
+                      url={
+                        useScopedOverlayUrls || selected.id !== 'main'
+                          ? `${window.location.origin}/overlay/${selected.id}/match-info`
+                          : `${window.location.origin}/overlay/match-info`
+                      }
+                    />
+                  </div>
                 </aside>
               </>
             ) : (
@@ -617,7 +692,7 @@ export function AdminPage() {
             <TeamRosterEditor document={teams} onChange={setTeams} />
             <button
               type="button"
-              className="bg-primary text-primary-foreground w-fit rounded px-3 py-1.5 text-sm"
+              className="bg-primary text-primary-foreground min-h-10 w-fit rounded px-3.5 py-1.5 text-sm font-medium"
               onClick={async () => {
                 try {
                   setTeams(await api.saveTeams(teams));
@@ -643,7 +718,7 @@ export function AdminPage() {
             <ScoringEditor ruleset={scoring} onChange={setScoring} />
             <button
               type="button"
-              className="bg-primary text-primary-foreground w-fit rounded px-3 py-1.5 text-sm"
+              className="bg-primary text-primary-foreground min-h-10 w-fit rounded px-3.5 py-1.5 text-sm font-medium"
               onClick={async () => {
                 try {
                   setScoring(await api.saveScoring(scoring));

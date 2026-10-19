@@ -1,5 +1,7 @@
-import { useRef, useState } from 'react';
+import { BellRing } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useElementWidth } from '@/hooks/useElementWidth';
+import type { OverlayPreviewLayerConfig, OverlayPreviewMessage } from '@/pages/OverlayPage';
 
 type PreviewMode = 'canvas' | 'actual';
 
@@ -14,49 +16,109 @@ export interface OverlayPreviewProps {
 /**
  * The overlay itself, embedded.
  *
- * Not a rendering of the same components — **the actual page**, loaded from the same address a
- * broadcast browser source uses. That makes it identical by construction rather than by
- * maintenance: it holds its own WebSocket connection, its own visibility state, its own fonts and
- * its own animations, so a show/hide triggered from anywhere — this screen, a Stream Deck, a `curl`
- * — plays here exactly as it plays on air. Every overlay feature added later appears here for free.
- *
- * The cost, accepted deliberately: this shows **saved** settings, because that is what is on air.
- * Editing appearance no longer updates the preview as you type; you save and watch. Rehearsing on
- * air is the intended workflow — that is what the test window before a broadcast is for, and the
- * director can key the layer out meanwhile.
- *
- * The frame is rendered at true 1920×1080 and scaled optically, rather than rendered small. Layout
- * rounding therefore happens at broadcast resolution, so what you judge here is what the canvas
- * produces.
+ * Includes multi-layer preview toggles (`Leaderboard`, `Match Info`, `Elimination Alert`) and a
+ * `Test Elimination Alert` button so operators can rehearse all three broadcast layers on the
+ * 16:9 canvas without affecting on-air browser sources.
  */
 export function OverlayPreview({ instanceId }: OverlayPreviewProps) {
   const [mode, setMode] = useState<PreviewMode>('canvas');
+  const [layers, setLayers] = useState<OverlayPreviewLayerConfig>({
+    leaderboard: true,
+    matchInfo: true,
+    elimination: true,
+  });
+
   const boxRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const boxWidth = useElementWidth(boxRef);
 
   const isCanvas = mode === 'canvas';
   const scale = isCanvas && boxWidth > 0 ? boxWidth / CANVAS_WIDTH : 1;
 
+  const postToIframe = (message: OverlayPreviewMessage) => {
+    const win = iframeRef.current?.contentWindow;
+    if (!win) return;
+    win.postMessage(message, window.location.origin);
+  };
+
+  useEffect(() => {
+    postToIframe({ type: 'cdf:preview-layers', layers });
+  }, [layers]);
+
+  const toggleLayer = (key: keyof OverlayPreviewLayerConfig) => {
+    setLayers((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      return next;
+    });
+  };
+
+  const handleTestEliminationAlert = () => {
+    setLayers((prev) => ({ ...prev, elimination: true }));
+    postToIframe({ type: 'cdf:test-elimination-alert' });
+  };
+
   return (
     <div className="grid gap-2">
-      <div className="flex items-center gap-1 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+        <div className="flex flex-wrap items-center gap-1">
+          {(
+            [
+              ['canvas', 'Full canvas'],
+              ['actual', 'Actual size'],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setMode(value)}
+              className={`min-h-8 rounded px-2.5 py-1 ${
+                mode === value
+                  ? 'bg-secondary font-medium'
+                  : 'text-muted-foreground hover:bg-secondary/60'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={handleTestEliminationAlert}
+          className="border-border hover:bg-secondary inline-flex min-h-8 items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium text-[var(--brand-gold)] transition-colors"
+          title="Fire a simulated elimination banner in this preview window only"
+        >
+          <BellRing className="size-3.5" aria-hidden />
+          <span>Test Elimination Alert</span>
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <span className="text-muted-foreground mr-1">Preview layers:</span>
         {(
           [
-            ['canvas', 'Full canvas'],
-            ['actual', 'Actual size'],
+            ['leaderboard', 'Leaderboard'],
+            ['matchInfo', 'Match Info'],
+            ['elimination', 'Elimination Alert'],
           ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setMode(value)}
-            className={`rounded px-2 py-1 ${
-              mode === value ? 'bg-secondary' : 'text-muted-foreground hover:bg-secondary/60'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+        ).map(([key, label]) => {
+          const active = layers[key];
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => toggleLayer(key)}
+              aria-pressed={active}
+              className={`min-h-7 rounded border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                active
+                  ? 'border-[var(--brand-gold)]/60 bg-[var(--brand-gold)]/15 text-[var(--brand-gold)]'
+                  : 'border-border text-muted-foreground hover:text-foreground bg-transparent'
+              }`}
+            >
+              {label}: {active ? 'ON' : 'OFF'}
+            </button>
+          );
+        })}
       </div>
 
       <div
@@ -64,27 +126,23 @@ export function OverlayPreview({ instanceId }: OverlayPreviewProps) {
         className="border-border relative w-full rounded border"
         style={{
           backgroundColor: '#0a1420',
-          // Canvas mode fits the whole frame; actual size shows a window onto it and scrolls.
           ...(isCanvas
             ? { aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}`, overflow: 'hidden' }
             : { height: 520, overflow: 'auto' }),
         }}
       >
         <iframe
+          ref={iframeRef}
           key={instanceId}
-          // `preview` asks the overlay to draw its own backdrop — see the note in OverlayPage.
           src={`/overlay/${instanceId}?preview=1`}
+          onLoad={() => postToIframe({ type: 'cdf:preview-layers', layers })}
           title={`Live preview of the ${instanceId} overlay`}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
-          // The preview is for looking at. Letting clicks through would also mean scroll events
-          // landing inside the frame instead of scrolling the box in actual-size mode.
           className="pointer-events-none block border-0"
           style={{
             transform: `scale(${scale})`,
             transformOrigin: 'top left',
-            // The frame keeps its 1920×1080 layout box after scaling, which would otherwise
-            // reserve space for the unscaled size in the scrolling mode.
             position: isCanvas ? 'absolute' : 'static',
             top: 0,
             left: 0,

@@ -2,14 +2,36 @@ import { DEFAULT_OVERLAY_APPEARANCE } from '@cdf/shared';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState, type CSSProperties } from 'react';
 import { appearanceToAnimation, appearanceToPosition } from '@/components/overlay/appearance';
+import { EliminationOverlay } from '@/components/overlay/EliminationOverlay';
 import { LeaderboardOverlay } from '@/components/overlay/LeaderboardOverlay';
+import { MatchInfoOverlay } from '@/components/overlay/MatchInfoOverlay';
 import { u } from '@/components/overlay/overlay-scale';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
+import { useEliminationQueue, type EliminationAlertItem } from '@/hooks/useEliminationQueue';
 import { useLiveStore } from '@/stores/live-store';
 
+export type OverlaySurfaceMode = 'leaderboard' | 'elimination' | 'match-info';
+
 export interface OverlayPageProps {
-  instanceId: string;
+  instanceId?: string;
+  surfaceMode?: OverlaySurfaceMode;
 }
+
+export interface OverlayPreviewLayerConfig {
+  leaderboard: boolean;
+  matchInfo: boolean;
+  elimination: boolean;
+}
+
+export type OverlayPreviewMessage =
+  | {
+      type: 'cdf:preview-layers';
+      layers: OverlayPreviewLayerConfig;
+    }
+  | {
+      type: 'cdf:test-elimination-alert';
+      alert?: Partial<EliminationAlertItem>;
+    };
 
 /**
  * A checkerboard drawn behind the panel when the page is embedded in the admin preview.
@@ -32,40 +54,95 @@ const PREVIEW_BACKDROP: CSSProperties = {
 };
 
 /**
- * A single overlay instance, rendered for consumption as a broadcast browser source.
+ * A single overlay surface, rendered for consumption as a broadcast browser source.
  *
- * Nobody is looking at this page in a browser — it is composited over live video. That shapes every
- * decision here: transparent background, no interaction, and nothing rendered until we actually
- * know what should be on screen.
+ * Supports three independent broadcast routes:
+ * - `'leaderboard'` (`/overlay/:instanceId`)
+ * - `'elimination'` (`/overlay/elimination` or `/overlay/:instanceId/elimination`)
+ * - `'match-info'`  (`/overlay/match-info` or `/overlay/:instanceId/match-info`)
  */
-export function OverlayPage({ instanceId }: OverlayPageProps) {
-  // Read once: the address does not change while the page is open.
-  const [isPreview] = useState(() => new URLSearchParams(window.location.search).has('preview'));
+export function OverlayPage({ instanceId, surfaceMode = 'leaderboard' }: OverlayPageProps) {
+  // Read URL search params once on mount.
+  const [searchConfig] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      isPreview: params.has('preview'),
+      queryInstanceId: params.get('instance') ?? undefined,
+    };
+  });
+
+  const isPreview = searchConfig.isPreview;
+
+  // Multi-layer preview state when embedded in the admin OverlayPreview iframe.
+  const [previewLayers, setPreviewLayers] = useState<OverlayPreviewLayerConfig>({
+    leaderboard: true,
+    matchInfo: false,
+    elimination: true,
+  });
 
   const snapshot = useLiveStore((state) => state.snapshot);
-  const overlay = useLiveStore((state) => state.overlayStates[instanceId]);
-  const instance = useLiveStore((state) => state.instances[instanceId] ?? null);
+  const instances = useLiveStore((state) => state.instances);
+
+  // Resolve effective instance ID: route param -> ?instance= query param -> 'main' -> first available instance
+  const requestedId = instanceId ?? searchConfig.queryInstanceId;
+  const resolvedInstanceId =
+    requestedId ?? (instances['main'] ? 'main' : (Object.keys(instances)[0] ?? 'main'));
+
+  const overlay = useLiveStore((state) => state.overlayStates[resolvedInstanceId]);
+  const instance = useLiveStore((state) => state.instances[resolvedInstanceId] ?? null);
   const protocolMismatch = useLiveStore((state) => state.protocolMismatch);
   const connect = useLiveStore((state) => state.connect);
 
   useEffect(() => {
     // Marks the whole document as a broadcast surface: transparent, no cursor, no scrollbars.
-    // Applied to the root because the browser source captures the entire page.
     document.documentElement.dataset.surface = 'overlay';
     return () => {
       delete document.documentElement.dataset.surface;
     };
   }, []);
 
-  useEffect(() => connect(instanceId, { isPreview }), [connect, instanceId, isPreview]);
+  useEffect(
+    () => connect(resolvedInstanceId, { isPreview }),
+    [connect, resolvedInstanceId, isPreview],
+  );
 
-  // Falls back to the id until the configuration arrives, so a tab is never nameless — and an
-  // unconfigured overlay is still identifiable by the address it was opened with.
-  useDocumentTitle(instance?.name ?? instanceId);
+  const appearance = instance?.appearance ?? DEFAULT_OVERLAY_APPEARANCE;
+  const eliminationEnabled =
+    (surfaceMode === 'elimination' || (isPreview && previewLayers.elimination)) &&
+    (appearance.showEliminationAlerts ?? true);
+
+  const { activeAlert, triggerTestAlert } = useEliminationQueue(snapshot?.match ?? null, {
+    enabled: eliminationEnabled,
+  });
+
+  // Listen for preview control messages from the parent Admin OverlayPreview component.
+  useEffect(() => {
+    if (!isPreview) return;
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const data = event.data as OverlayPreviewMessage | null;
+      if (!data || typeof data !== 'object' || !('type' in data)) return;
+
+      if (data.type === 'cdf:preview-layers' && data.layers) {
+        setPreviewLayers(data.layers);
+      } else if (data.type === 'cdf:test-elimination-alert') {
+        setPreviewLayers((prev) => ({ ...prev, elimination: true }));
+        triggerTestAlert(data.alert);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [isPreview, triggerTestAlert]);
+
+  const titlePrefix =
+    surfaceMode === 'elimination'
+      ? 'Elimination Alert'
+      : surfaceMode === 'match-info'
+        ? 'Match Info'
+        : (instance?.name ?? resolvedInstanceId);
+  useDocumentTitle(titlePrefix);
 
   if (protocolMismatch !== null) {
-    // Deliberately visible rather than silent (ADR-0007). A browser source left open across an
-    // upgrade would otherwise render subtly wrong data, which is worse than an obvious error.
     return (
       <div
         style={{
@@ -86,44 +163,69 @@ export function OverlayPage({ instanceId }: OverlayPageProps) {
     );
   }
 
-  // Render nothing until both the match state and the visibility are known. Assuming "visible"
-  // while waiting would flash the overlay on air whenever a hidden one is reloaded.
-  if (!snapshot || !overlay) return null;
+  if (!snapshot) return null;
+  if (surfaceMode === 'leaderboard' && !overlay) return null;
 
-  // An unconfigured id still renders, using the defaults. Showing nothing would look identical to a
-  // broken connection, and the operator has no way to tell them apart mid-broadcast.
-  const appearance = instance?.appearance ?? DEFAULT_OVERLAY_APPEARANCE;
   const animation = appearanceToAnimation(appearance);
+  const matchInfo = snapshot.matchInfo ?? { matchNumber: 1, mapName: 'Erangel' };
+
+  if (surfaceMode === 'elimination') {
+    return (
+      <>
+        {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
+        <EliminationOverlay alert={activeAlert} appearance={appearance} />
+      </>
+    );
+  }
+
+  if (surfaceMode === 'match-info') {
+    return (
+      <>
+        {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
+        <MatchInfoOverlay matchInfo={matchInfo} appearance={appearance} />
+      </>
+    );
+  }
 
   return (
     <>
       {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
 
-      <div style={appearanceToPosition(appearance)}>
-        {/*
-         * `initial={false}` suppresses the animation on first paint only: an overlay that was already
-         * on air when the page loaded must simply be there, not slide in as though a director had
-         * just triggered it. Later show/hide transitions animate normally.
-         */}
-        <AnimatePresence initial={false}>
-          {overlay.visible && (
-            <motion.div
-              key="panel"
-              variants={animation.variants}
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-            >
-              <LeaderboardOverlay
-                match={snapshot.match}
-                appearance={appearance}
-                source={snapshot.ingest.source}
-                animateRows={animation.rowsEnabled}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      {isPreview && previewLayers.matchInfo && (
+        <MatchInfoOverlay matchInfo={matchInfo} appearance={appearance} />
+      )}
+
+      {isPreview && previewLayers.elimination && (
+        <EliminationOverlay alert={activeAlert} appearance={appearance} />
+      )}
+
+      {(!isPreview || previewLayers.leaderboard) && overlay && (
+        <div style={appearanceToPosition(appearance)}>
+          {/*
+           * `initial={false}` suppresses the animation on first paint only: an overlay that was already
+           * on air when the page loaded must simply be there, not slide in as though a director had
+           * just triggered it. Later show/hide transitions animate normally.
+           */}
+          <AnimatePresence initial={false}>
+            {overlay.visible && (
+              <motion.div
+                key="panel"
+                variants={animation.variants}
+                initial="hidden"
+                animate="visible"
+                exit="hidden"
+              >
+                <LeaderboardOverlay
+                  match={snapshot.match}
+                  appearance={appearance}
+                  source={snapshot.ingest.source}
+                  animateRows={animation.rowsEnabled}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
     </>
   );
 }

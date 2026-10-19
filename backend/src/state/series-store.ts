@@ -5,6 +5,7 @@ import type {
   ClosedMapTeamResult,
   ScoringRuleset,
   SeriesDocument,
+  SeriesMatchInfoPatch,
 } from '@cdf/shared';
 import { createDefaultSeriesDocument, seriesDocumentSchema } from '@cdf/shared';
 import type { Projection } from './match-store.js';
@@ -431,6 +432,24 @@ export class SeriesStore {
     });
   }
 
+  /**
+   * Updates the active match number override and active map name for the current match.
+   *
+   * Used by the Match Information Overlay (`/overlay/match-info`) and automatically stamped onto
+   * the next closed map (`ClosedMapResult.mapName`).
+   */
+  setMatchInfo(patch: SeriesMatchInfoPatch): Promise<SeriesDocument> {
+    return this.mutate(async () => {
+      const current = this.document.current;
+      const trimmedMap = patch.activeMapName.trim();
+      return this.document.write({
+        ...current,
+        activeMatchNumber: patch.activeMatchNumber,
+        activeMapName: trimmedMap,
+      });
+    });
+  }
+
   private resetObservation(): void {
     this.candidateMatchId = null;
     this.candidateStableCount = 0;
@@ -461,17 +480,25 @@ export class SeriesStore {
         totalPoints: team.killPoints + team.placementPoints,
       }));
 
+    const activeMapName = current.activeMapName.trim();
     const closedMap: ClosedMapResult = {
       id: randomUUID(),
       mapNumber: current.closedMaps.length + 1,
-      mapName: null,
+      mapName: activeMapName.length > 0 ? activeMapName : null,
       matchId: projection.match.matchId,
       startedAt: this.currentMapStartedAt,
       endedAt: now,
       teams,
     };
 
-    await this.document.write({ ...current, closedMaps: [...current.closedMaps, closedMap] });
+    const nextActiveMatchNumber =
+      current.activeMatchNumber !== null ? Math.min(99, current.activeMatchNumber + 1) : null;
+
+    await this.document.write({
+      ...current,
+      closedMaps: [...current.closedMaps, closedMap],
+      activeMatchNumber: nextActiveMatchNumber,
+    });
     return closedMap;
   }
 }

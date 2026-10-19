@@ -88,3 +88,52 @@ Chronological record of phases, tasks, files changed, and verification results.
 - **Issues Encountered:** None.
 - **Next Steps:** Deliver final verification report to user.
 
+---
+
+## Entry 5 — 2026-10-19 — UI/UX Audit, Design Research, Specifications & Phase 10 Gate
+
+- **Phase:** Phase 1 – Phase 11 (UI/UX & Broadcast Overlays Task)
+- **Task:** Complete UI/UX responsiveness audit, external design reference research, specification authoring, Phase 10 user approval gate, and Phase 11 workstream planning (`WS-1`–`WS-4`).
+- **Status:** `COMPLETED`
+- **Files Affected:**
+  - `docs/ui-responsive-audit.md` (created)
+  - `docs/broadcast-overlay-requirements.md` (created)
+  - `docs/match-configuration-design.md` (created)
+  - `docs/ui-design-references.md` (created)
+  - `docs/ui-implementation-decisions.md` (created)
+  - `docs/implementation-plan.md` (updated with `WS-1`–`WS-4`)
+  - `docs/checkpoint.md` (updated)
+  - `docs/progress.md` (updated)
+- **Changes Made:** Diagnosed root causes of admin responsiveness issues across all 6 viewport bands; designed Elimination Notification Overlay, Match Information Overlay, Match/Map Configuration workflow, and Logo Visibility Toggle; recorded user approvals (`D-UI-01`–`D-UI-06`, including toggleable elimination count and ON/OFF switches for all features).
+- **Tests Executed:** None yet (pre-implementation gate).
+- **Issues Encountered:** None.
+- **Next Steps:** Execute `WS-1` (`@cdf/shared` and `@cdf/backend` schema and store updates).
+
+---
+
+## Entry 6 — 2026-10-20 — Phase 12: Implementation & Verification of `WS-1` through `WS-4`
+
+- **Phase:** Phase 12
+- **Task:** Execute `WS-1` (Shared Schemas & Backend Match/Map Config), `WS-2` (Broadcast Overlays), `WS-3` (Admin Match/Map Config, Appearance Toggles, Multi-Layer Preview & OBS URLs), and `WS-4` (Responsive Admin Redesign & Verification).
+- **Status:** `COMPLETED`
+- **Files Affected:**
+  - `shared/src/versions.ts`, `shared/src/config/overlay-instance.ts`, `shared/src/protocol/feedback.ts`, `shared/src/domain/series.ts`, `shared/src/protocol/live.ts`, `shared/src/index.ts`
+  - `backend/src/state/series-store.ts`, `backend/src/routes/series.ts`, `backend/src/routes/feedback.ts`, `backend/src/ws/live-hub.ts`, `backend/src/app.ts`
+  - `backend/src/state/series-store.test.ts`, `backend/src/routes/series.test.ts`, `backend/src/ws/live-hub.test.ts`
+  - `frontend/src/components/overlay/TeamRow.tsx`, `frontend/src/components/overlay/LeaderboardOverlay.tsx`, `frontend/src/components/overlay/EliminationOverlay.tsx`, `frontend/src/components/overlay/MatchInfoOverlay.tsx`, `frontend/src/components/overlay/overlays.test.tsx`
+  - `frontend/src/hooks/useEliminationQueue.ts`, `frontend/src/hooks/useEliminationQueue.test.ts`
+  - `frontend/src/pages/OverlayPage.tsx`, `frontend/src/pages/OverlayRoute.tsx`, `frontend/src/router.tsx`
+  - `frontend/src/lib/api.ts`, `frontend/src/features/admin/MatchConfigBar.tsx`, `frontend/src/features/admin/AppearanceEditor.tsx`, `frontend/src/features/admin/OverlayPreview.tsx`
+  - `frontend/src/pages/AdminPage.tsx`, `frontend/src/features/admin/ManualControl.tsx`, `frontend/src/features/admin/SeriesControl.tsx`, `frontend/src/features/admin/ScoringEditor.tsx`, `frontend/src/features/admin/TeamRosterEditor.tsx`, `frontend/src/features/admin/MapResultDialog.tsx`, `frontend/src/features/admin/InstanceToolbar.tsx`, `frontend/src/styles/globals.css`
+- **Changes Made:**
+  - Bumped `PROTOCOL_VERSION` to `8`; added `showLogos`, `showEliminationAlerts`, `showEliminationAlertElims`, `showMatchInfo`, and `showMatchInfoMapName` to `OverlayAppearance` and `/feedback`; added `activeMatchNumber`, `activeMapName`, `PUBG_MAP_PRESETS`, `PUT /api/series/match-info`, and `LiveSnapshot.matchInfo`.
+  - Implemented `EliminationOverlay`, `MatchInfoOverlay`, 5-column logo-free `LeaderboardOverlay` / `TeamRow` mode, `useEliminationQueue` state machine with baseline deduplication, and routes `/overlay/elimination`, `/overlay/:instanceId/elimination`, `/overlay/match-info`, and `/overlay/:instanceId/match-info`.
+  - Created `MatchConfigBar.tsx` with Draft → "Apply to Live" workflow in both `Series control` and `Manual control`, added `[ON / OFF]` toggles in `AppearanceEditor.tsx`, added preview layer toggles and `Test Elimination Alert` button in `OverlayPreview.tsx`, and added copyable OBS URLs for all 3 overlays in `AdminPage.tsx`.
+  - Redesigned Admin Panel responsiveness (`320px`–`1440px+`): `.cdf-overlays-layout` responsive grid, horizontally scrollable 7-tab `<nav>`, Mobile Operator Cards (`< 768px`) + sticky-column Desktop Table (`>= 768px`) with View Mode toggle and status filter pills in `ManualControl.tsx`, and responsive grids across `AppearanceEditor`, `ScoringEditor`, `TeamRosterEditor`, `SeriesControl`, and `MapResultDialog`.
+- **Tests Executed:**
+  - `npm test`: **26 test files passed, 317 tests passed** (`21` backend test files / `273` tests; `5` frontend test files / `44` tests).
+  - `npm run typecheck`: Passed (`0` errors across `@cdf/shared`, `@cdf/backend`, `@cdf/frontend`).
+  - `npm run lint`: Passed (`0` warnings, `0` errors).
+  - `npm run build` & `npm run format:check`: Passed.
+- **Issues Encountered:** Resolved `MatchState.phase === 'idle'` warmup check in `useEliminationQueue.ts` and `showEliminationAlerts` gating in `EliminationOverlay.tsx` caught by unit tests.
+- **Next Steps:** Task complete.

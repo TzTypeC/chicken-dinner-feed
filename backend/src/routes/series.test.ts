@@ -269,4 +269,21 @@ describe('series routes', () => {
     expect(response.statusCode).toBe(400);
     expect(series.getState().closedMaps).toEqual([]);
   });
+
+  it('PUT /series/match-info updates activeMatchNumber and activeMapName and notifies listeners', async () => {
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/api/series/match-info',
+      payload: {
+        activeMatchNumber: 3,
+        activeMapName: 'Sanhok',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.activeMatchNumber).toBe(3);
+    expect(body.activeMapName).toBe('Sanhok');
+    expect(seriesChanged).toBe(1);
+  });
 });
