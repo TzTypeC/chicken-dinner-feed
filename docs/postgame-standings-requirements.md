@@ -3,6 +3,7 @@
 ## 1. Repository Audit: Closed Map Results & Series Persistence
 
 ### 1.1 How Closed Map Data Is Stored and Calculated
+
 - **Shared Schema (`shared/src/domain/series.ts`):**
   - `SeriesDocument` (`backend/data/series.json`) stores:
     - `seriesStartedAt: number`
@@ -30,6 +31,7 @@
   - Because `SeriesStore` persists `closedMaps` to `backend/data/series.json` immediately on map close (whether auto-closed after 2 stability ticks in PCOB mode or manually closed via `POST /api/series/close-map` in Manual/PCOB mode), `closedMaps` survives match resets, lobby transitions, and server restarts.
 
 ### 1.2 Gap Identified in Real-Time WebSocket Delivery (`LiveSnapshot`)
+
 - Currently, `LiveSnapshot` (`shared/src/protocol/live.ts`) includes `match`, `ingest`, and `matchInfo`, **but does NOT include the latest `ClosedMapResult` or `closedMaps` summary**!
 - If an OBS Browser Source is pointed at `/overlay/postgame`, it needs to automatically receive the closed map results over `/ws/live` the instant a map closes, is corrected (`PUT /api/series/maps/:mapId`), is added by hand (`POST /api/series/maps`), or is deleted (`DELETE /api/series/maps/:mapId`) — without requiring someone to manually refresh the OBS Browser Source!
 - **Architectural Fix:**
@@ -40,11 +42,13 @@
 ## 2. Feature 4 Specification — Post-Game Detailed Standings Screen (`/overlay/postgame`)
 
 ### 2.1 Routes & Addressing
+
 - **Default Route:** `/overlay/postgame` (uses `main` / first overlay instance or `?instance=<id>`).
 - **Instance-Specific Route:** `/overlay/:instanceId/postgame` (inherits `:instanceId` appearance colors, custom fonts, logo visibility, team-number visibility, and post-game background settings).
 - **Optional Map Selector Query Parameter:** `?map=latest` (default) or `?map=<mapNumber>` so operators can also display a specific historical map if needed.
 
 ### 2.2 Data Source & Fallback Rules
+
 1. **Primary Source (Persisted `ClosedMapResult`):**
    - Reads the target `ClosedMapResult` (`series.closedMaps.at(-1)` by default), joining each row's `teamNo` against the current team roster (`snapshot.match.teams` / `TeamRosterDocument`) for `name` and `logoUrl`.
    - Also computes each team's cumulative **Series Points** up through that map (`seriesPoints`) so the table can clearly distinguish **Match Points** (`PLACE PTS + ELIM PTS = MATCH PTS`) from optional **Series Total**.
@@ -54,6 +58,7 @@
    - Renders a clean, broadcast-styled PMCC holding board (`WAITING FOR MATCH RESULTS — MATCH N • MAP`) rather than a blank error screen or dummy data.
 
 ### 2.3 Screen Composition on `1920×1080` Canvas
+
 Designed as an asymmetric 2-zone championship broadcast board inside the `1920×1080` safe area (`padding: 44px 56px`, content area `1808px × 992px`):
 
 ```
@@ -112,7 +117,9 @@ Designed as an asymmetric 2-zone championship broadcast board inside the `1920×
 ## 3. Feature 5 Specification — Customizable Post-Game Background Media
 
 ### 3.1 Supported Media Types & Backend Persistence (`BackgroundMediaStore`)
+
 Following the exact architectural pattern of `LogoStore` (`backend/src/persistence/logo-store.ts`) and `FontStore` (`backend/src/persistence/font-store.ts`):
+
 - **Storage Directory:** `backend/data/backgrounds/`
 - **Served Static Path:** `/backgrounds/<instanceId>.<ext>?v=<timestamp>`
 - **Magic-Byte Validation (No Trust in Client `Content-Type`):**
@@ -130,6 +137,7 @@ Following the exact architectural pattern of `LogoStore` (`backend/src/persisten
   - Include `backgrounds/` directory in backup ZIP exports/imports alongside `logos/` and `fonts/` so tournament packages remain self-contained!
 
 ### 3.2 Schema on `OverlayAppearance` (`shared/src/config/overlay-instance.ts`)
+
 ```ts
 export const postGameBackgroundModeSchema = z.enum(['disabled', 'image', 'video']);
 
@@ -144,6 +152,7 @@ export const postGameBackgroundSchema = z.object({
 ```
 
 ### 3.3 Strict 3-Layer Isolation in `PostGameOverlay.tsx`
+
 To guarantee that **blur and opacity affect ONLY the background media layer** and never soften foreground text or leak blur edges outside the `1920×1080` canvas:
 
 ```tsx
@@ -196,5 +205,5 @@ To guarantee that **blur and opacity affect ONLY the background media layer** an
   </div>
 </div>
 ```
-- When `bg.mode === 'disabled'` or `bg.mediaUrl === null` or `bg.opacity === 0`, Layers 1 & 2 do not render, leaving the surrounding `1920×1080` canvas **100% transparent** for OBS scene compositing!
 
+- When `bg.mode === 'disabled'` or `bg.mediaUrl === null` or `bg.opacity === 0`, Layers 1 & 2 do not render, leaving the surrounding `1920×1080` canvas **100% transparent** for OBS scene compositing!

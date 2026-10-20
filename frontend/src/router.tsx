@@ -10,8 +10,12 @@ import {
   OverlayEliminationRoute,
   OverlayInstanceEliminationRoute,
   OverlayInstanceMatchInfoRoute,
+  OverlayInstancePostGameRoute,
+  OverlayInstanceWwcdRoute,
   OverlayMatchInfoRoute,
+  OverlayPostGameRoute,
   OverlayRoute,
+  OverlayWwcdRoute,
 } from '@/pages/OverlayRoute';
 
 const rootRoute = createRootRoute({ component: Outlet });
@@ -38,6 +42,18 @@ const overlayMatchInfoRoute = createRoute({
   component: OverlayMatchInfoRoute,
 });
 
+const overlayWwcdRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/wwcd',
+  component: OverlayWwcdRoute,
+});
+
+const overlayPostGameRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/postgame',
+  component: OverlayPostGameRoute,
+});
+
 /**
  * One route per overlay instance. The instance id is the whole addressing scheme: a director copies
  * this URL into a browser source, and the same id is what Companion calls at
@@ -61,6 +77,18 @@ const overlayInstanceMatchInfoRoute = createRoute({
   component: OverlayInstanceMatchInfoRoute,
 });
 
+const overlayInstanceWwcdRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$instanceId/wwcd',
+  component: OverlayInstanceWwcdRoute,
+});
+
+const overlayInstancePostGameRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$instanceId/postgame',
+  component: OverlayInstancePostGameRoute,
+});
+
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin',
@@ -71,8 +99,12 @@ const routeTree = rootRoute.addChildren([
   homeRoute,
   overlayEliminationRoute,
   overlayMatchInfoRoute,
+  overlayWwcdRoute,
+  overlayPostGameRoute,
   overlayInstanceEliminationRoute,
   overlayInstanceMatchInfoRoute,
+  overlayInstanceWwcdRoute,
+  overlayInstancePostGameRoute,
   overlayRoute,
   adminRoute,
 ]);

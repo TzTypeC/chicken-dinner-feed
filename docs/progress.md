@@ -138,7 +138,6 @@ Chronological record of phases, tasks, files changed, and verification results.
 - **Issues Encountered:** Resolved `MatchState.phase === 'idle'` warmup check in `useEliminationQueue.ts` and `showEliminationAlerts` gating in `EliminationOverlay.tsx` caught by unit tests.
 - **Next Steps:** Task complete.
 
-
 ---
 
 ## Entry 7 — 2026-10-20 — Part 3 Phases 1–2: PMCC 2026 Visual Audit, Broadcast Reference Research & Feature Specifications
@@ -162,3 +161,34 @@ Chronological record of phases, tasks, files changed, and verification results.
 - **Tests Executed:** Read-only pixel sampling script; no source code changes yet.
 - **Issues Encountered:** None.
 - **Next Steps:** Present Phase 2 Review Gate findings and questions to user and await approval before Phase 3 implementation.
+
+---
+
+## Entry 8 — 2026-10-20 — Part 3 Phases 3–4: Implementation & Verification of `WS-3.1` through `WS-3.4`
+
+- **Phase:** Part 3 — Phase 3 (Implementation) & Phase 4 (Verification)
+- **Task:** Execute `WS-3.1`, `WS-3.2`, `WS-3.3`, and `WS-3.4` according to approved decisions `D-PMCC-01` through `D-PMCC-07`.
+- **Status:** `COMPLETED`
+- **Files Affected:**
+  - `shared/src/versions.ts`, `shared/src/config/overlay-instance.ts`, `shared/src/protocol/live.ts`, `shared/src/protocol/feedback.ts`, `shared/src/index.ts`
+  - `backend/src/persistence/migrations.ts`, `backend/src/persistence/migrations.test.ts`
+  - `backend/src/persistence/background-store.ts`, `backend/src/persistence/background-store.test.ts`
+  - `backend/src/routes/backgrounds.ts`, `backend/src/routes/backgrounds.test.ts`, `backend/src/routes/feedback.ts`
+  - `backend/src/backup/export.ts`, `backend/src/backup/import.ts`
+  - `backend/src/ws/live-hub.ts`, `backend/src/ws/live-hub.test.ts`, `backend/src/app.ts`
+  - `frontend/src/styles/globals.css`, `frontend/src/components/overlay/overlay-scale.ts`, `frontend/src/components/overlay/broadcast-state.ts`
+  - `frontend/src/components/overlay/TeamRow.tsx`, `frontend/src/components/overlay/LeaderboardOverlay.tsx`, `frontend/src/components/overlay/FinalFourOverlay.tsx`, `frontend/src/components/overlay/WwcdOverlay.tsx`, `frontend/src/components/overlay/PostGameOverlay.tsx`, `frontend/src/components/overlay/MatchInfoOverlay.tsx`, `frontend/src/components/overlay/EliminationOverlay.tsx`, `frontend/src/components/overlay/overlays.test.tsx`
+  - `frontend/src/pages/OverlayPage.tsx`, `frontend/src/pages/OverlayRoute.tsx`, `frontend/src/router.tsx`
+  - `frontend/src/lib/api.ts`, `frontend/src/features/admin/AppearanceEditor.tsx`, `frontend/src/features/admin/OverlayPreview.tsx`, `frontend/src/pages/AdminPage.tsx`
+- **Changes Made:**
+  - **`WS-3.1`:** Bumped `PROTOCOL_VERSION = 9` and `CONFIG_SCHEMA_VERSION = 4`; added `PMCC_2026_OVERLAY_COLORS`, `LEGACY_FACTORY_OVERLAY_COLORS`, `postGameBackgroundSchema`, `showTeamNumbers`, `showFinalFourLayout`, and `showWwcdOverlay`; implemented v3→v4 factory palette migration in `migrations.ts`; implemented `BackgroundStore` with magic-byte validation (`PNG`, `JPEG`, `WebP`, `MP4`, `WebM`) and Backup ZIP integration; added `POST / DELETE /api/overlays/:instanceId/background` and `/api/backgrounds/:file` static serving; added `lastClosedMap` to `LiveSnapshot` in `LiveHub`.
+  - **`WS-3.2`:** Applied PMCC 2026 visual identity tokens across admin and overlays; added persistent `T01`–`T25` slot badge (`formatTeamSlot`) to `TeamRow`, `FinalFourOverlay`, `WwcdOverlay`, `PostGameOverlay`, and `EliminationOverlay`; implemented `FinalFourOverlay` with 4-card top-center retention and grayed-out knocked/eliminated state at 3 and 2 alive teams (`D-PMCC-02` / `A1`); implemented `WwcdOverlay` with automatic transition at 1 remaining team plus dedicated routes `/overlay/wwcd` & `/overlay/:instanceId/wwcd`, rendering real PCOB player cards vs. Manual Mode survivor bars (`D-PMCC-03` / `A2`).
+  - **`WS-3.3`:** Implemented `PostGameOverlay` (`/overlay/postgame` and `/overlay/:instanceId/postgame`) backed by `snapshot.lastClosedMap` (with live finished-match fallback), displaying the `#1 WWCD Winner` spotlight card on the left and all teams (`#1–#25`) in a 1-or-2-column standings table on the right (`D-PMCC-04` / `A3`), plus an isolated `z-0` background `<img>`/`<video>` layer with `opacity` and `blur` (`D-PMCC-05`).
+  - **`WS-3.4`:** Added `uploadOverlayBackground` and `deleteOverlayBackground` to `frontend/src/lib/api.ts`; updated `AppearanceEditor.tsx` with switches for `showTeamNumbers`, `showFinalFourLayout`, `showWwcdOverlay`, an **"Apply PMCC 2026 Theme"** button, and the **Post-game standings background** uploader and sliders; added **Preview screen** mode selector (`Auto (Live)`, `Tower`, `Final-4`, `WWCD`, `Post-Game`) to `OverlayPreview.tsx`; added copyable OBS URLs for WWCD and Post-Game overlays in `AdminPage.tsx`.
+- **Tests Executed:**
+  - `npm test`: **28 test files passed, 334 tests passed** (`23` backend test files / `283` tests; `5` frontend test files / `51` tests).
+  - `npm run typecheck`: Passed (`0` errors across `@cdf/shared`, `@cdf/backend`, `@cdf/frontend`).
+  - `npm run lint`: Passed (`0` warnings, `0` errors).
+  - `npm run format:check` & `npm run build`: Passed (`0` errors).
+- **Issues Encountered:** None remaining.
+- **Next Steps:** Task complete.

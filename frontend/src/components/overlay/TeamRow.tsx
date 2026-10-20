@@ -1,12 +1,13 @@
 import type { Team } from '@cdf/shared';
 import { motion } from 'motion/react';
 import { AlivePlayerBars } from './AlivePlayerBars';
-import { LEADERBOARD_METRICS as M, u } from './overlay-scale';
+import { formatTeamSlot, LEADERBOARD_METRICS as M, u } from './overlay-scale';
 
 export interface TeamRowProps {
   team: Team;
   isAlternate: boolean;
   showLogo?: boolean;
+  showTeamNumber?: boolean;
 }
 
 /** A number that draws attention to itself when it changes, without moving the layout. */
@@ -24,8 +25,15 @@ function CountingValue({ value }: { value: number }) {
   );
 }
 
-export function TeamRow({ team, isAlternate, showLogo = true }: TeamRowProps) {
+export function TeamRow({
+  team,
+  isAlternate,
+  showLogo = true,
+  showTeamNumber = true,
+}: TeamRowProps) {
+  const isLeader = team.rank === 1 && !team.isEliminated;
   const textColor = team.isEliminated ? 'var(--overlay-text-muted)' : 'var(--overlay-text)';
+  const rankColor = isLeader ? 'var(--overlay-accent)' : textColor;
   const columns = showLogo
     ? `${u(M.rankColumn)} ${u(M.logoColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`
     : `${u(M.rankColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`;
@@ -42,7 +50,13 @@ export function TeamRow({ team, isAlternate, showLogo = true }: TeamRowProps) {
         paddingInline: u(M.paddingX),
         gridTemplateColumns: columns,
         columnGap: u(6),
-        backgroundColor: isAlternate ? 'var(--overlay-row-alt-bg)' : 'transparent',
+        backgroundColor: isLeader
+          ? 'rgba(229, 169, 60, 0.11)'
+          : isAlternate
+            ? 'var(--overlay-row-alt-bg)'
+            : 'transparent',
+        borderLeft: isLeader ? `${u(2)} solid var(--overlay-accent)` : `${u(2)} solid transparent`,
+        borderBottom: `${u(1)} solid rgba(129, 96, 54, 0.16)`,
         // Eliminated teams recede rather than disappear — the director still needs to see where a
         // team finished. A team that has never actually shown up this match recedes further still:
         // it is a roster slot nobody has played, not a competitor, and must read as visibly
@@ -52,7 +66,7 @@ export function TeamRow({ team, isAlternate, showLogo = true }: TeamRowProps) {
         transition: 'opacity 400ms ease',
       }}
     >
-      <span className="font-semibold tabular-nums" style={{ fontSize: u(17), color: textColor }}>
+      <span className="font-extrabold tabular-nums" style={{ fontSize: u(16), color: rankColor }}>
         {team.rank}
       </span>
 
@@ -71,22 +85,43 @@ export function TeamRow({ team, isAlternate, showLogo = true }: TeamRowProps) {
               style={{
                 width: u(M.logoColumn - 6),
                 height: u(M.logoColumn - 6),
-                borderRadius: u(3),
+                borderRadius: u(2),
                 backgroundColor: 'var(--overlay-row-alt-bg)',
-                border: `${u(1)} solid var(--overlay-text-muted)`,
-                opacity: 0.5,
+                border: `${u(1)} solid rgba(129, 96, 54, 0.55)`,
+                opacity: 0.65,
               }}
             />
           )}
         </div>
       )}
 
-      <span
-        className="truncate font-bold tracking-wide"
-        style={{ fontSize: u(16), color: textColor }}
-      >
-        {team.name}
-      </span>
+      <div className="flex min-w-0 items-center" style={{ gap: u(5) }}>
+        {showTeamNumber && (
+          <span
+            data-testid={`team-slot-${team.teamNo}`}
+            className="shrink-0 font-bold uppercase tabular-nums"
+            style={{
+              fontSize: u(9.5),
+              lineHeight: 1,
+              paddingInline: u(4),
+              paddingBlock: u(2.5),
+              borderRadius: u(2),
+              backgroundColor: 'rgba(61, 54, 43, 0.78)',
+              border: `${u(1)} solid rgba(129, 96, 54, 0.55)`,
+              color: 'var(--overlay-text-muted)',
+              letterSpacing: u(0.35),
+            }}
+          >
+            {formatTeamSlot(team.teamNo)}
+          </span>
+        )}
+        <span
+          className="truncate font-bold uppercase tracking-wide"
+          style={{ fontSize: u(15), color: textColor }}
+        >
+          {team.name}
+        </span>
+      </div>
 
       <div className="flex justify-center">
         <AlivePlayerBars players={team.players} />

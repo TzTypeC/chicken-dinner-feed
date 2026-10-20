@@ -36,6 +36,7 @@ export function LeaderboardOverlay({
   animateRows = false,
 }: LeaderboardOverlayProps) {
   const showLogos = appearance.showLogos ?? true;
+  const showTeamNumbers = appearance.showTeamNumbers ?? true;
   const columns = showLogos
     ? `${u(M.rankColumn)} ${u(M.logoColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`
     : `${u(M.rankColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`;
@@ -50,16 +51,23 @@ export function LeaderboardOverlay({
         width: u(M.panelWidth),
         backgroundColor: 'var(--overlay-bg)',
         fontFamily: 'var(--overlay-font-family)',
-        borderRadius: u(4),
+        borderRadius: u(3),
+        border: `${u(1)} solid rgba(129, 96, 54, 0.55)`,
+        boxShadow: `0 ${u(10)} ${u(28)} rgba(0, 0, 0, 0.52)`,
         overflow: 'hidden',
       }}
     >
       {/*
-       * The accent strip. This is the branding hook — the one colour that makes an overlay look
-       * like a particular tournament's rather than generic, which is exactly what the client asked
-       * for when they wanted branded and generic versions of the same data.
+       * The accent strip. Styled with the PMCC 2026 championship gold gradient and subtle diamond
+       * centre accent while respecting the operator's `--overlay-accent` colour.
        */}
-      <div style={{ height: u(M.accentBarHeight), backgroundColor: 'var(--overlay-accent)' }} />
+      <div
+        style={{
+          height: u(M.accentBarHeight),
+          background:
+            'linear-gradient(90deg, rgba(129, 96, 54, 0.85) 0%, var(--overlay-accent) 50%, rgba(129, 96, 54, 0.85) 100%)',
+        }}
+      />
 
       <div
         className="grid items-center"
@@ -69,9 +77,9 @@ export function LeaderboardOverlay({
           gridTemplateColumns: columns,
           columnGap: u(6),
           backgroundColor: 'var(--overlay-header-bg)',
-          color: 'var(--overlay-text)',
-          fontSize: u(12),
-          letterSpacing: u(0.6),
+          color: 'var(--overlay-text-muted)',
+          fontSize: u(11),
+          letterSpacing: u(0.8),
           borderBottom: `${u(1)} solid var(--overlay-accent)`,
         }}
       >
@@ -93,7 +101,12 @@ export function LeaderboardOverlay({
              * two opacities simply multiply, which is the behaviour we want anyway.
              */
             <motion.div key={team.teamNo} variants={ROW_VARIANTS}>
-              <TeamRow team={team} isAlternate={index % 2 === 1} showLogo={showLogos} />
+              <TeamRow
+                team={team}
+                isAlternate={index % 2 === 1}
+                showLogo={showLogos}
+                showTeamNumber={showTeamNumbers}
+              />
             </motion.div>
           ) : (
             <TeamRow
@@ -101,6 +114,7 @@ export function LeaderboardOverlay({
               team={team}
               isAlternate={index % 2 === 1}
               showLogo={showLogos}
+              showTeamNumber={showTeamNumbers}
             />
           ),
         )}

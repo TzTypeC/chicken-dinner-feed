@@ -5,8 +5,15 @@ import type {
   OverlayAnimationType,
   OverlayAppearance,
   OverlayColors,
+  PostGameBackground,
+  PostGameBackgroundMode,
 } from '@cdf/shared';
-import { fontFamilyValue } from '@cdf/shared';
+import {
+  DEFAULT_POST_GAME_BACKGROUND,
+  fontFamilyValue,
+  PMCC_2026_OVERLAY_COLORS,
+} from '@cdf/shared';
+import { useRef, useState } from 'react';
 import { ColorField } from './ColorField';
 
 /**
@@ -31,12 +38,28 @@ export interface AppearanceEditorProps {
   /** Uploaded fonts, offered alongside the built-in choices. */
   customFonts: CustomFont[];
   onChange(appearance: OverlayAppearance): void;
+  onUploadBackground?(file: File): Promise<void>;
+  onRemoveBackground?(): Promise<void>;
 }
 
-export function AppearanceEditor({ appearance, customFonts, onChange }: AppearanceEditorProps) {
+export function AppearanceEditor({
+  appearance,
+  customFonts,
+  onChange,
+  onUploadBackground,
+  onRemoveBackground,
+}: AppearanceEditorProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingBg, setUploadingBg] = useState(false);
+
   const patch = (changes: Partial<OverlayAppearance>) => onChange({ ...appearance, ...changes });
   const patchColor = (key: keyof OverlayColors, value: string) =>
     patch({ colors: { ...appearance.colors, [key]: value } });
+
+  const postGameBg: PostGameBackground =
+    appearance.postGameBackground ?? DEFAULT_POST_GAME_BACKGROUND;
+  const patchPostGameBg = (changes: Partial<PostGameBackground>) =>
+    patch({ postGameBackground: { ...postGameBg, ...changes } });
 
   const animation = appearance.animation;
   const patchAnimation = (changes: Partial<OverlayAnimation>) =>
@@ -71,6 +94,27 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
                 description:
                   'Show team logos on the leaderboard (6 columns) and elimination alert. When OFF, the logo column collapses cleanly (5 columns).',
                 value: appearance.showLogos ?? true,
+              },
+              {
+                key: 'showTeamNumbers',
+                label: 'Persistent team slot badges (T01–T25)',
+                description:
+                  'Display each squad’s fixed tournament slot identifier (T01–T25) alongside its live placement rank (#1–#25) across all broadcast screens.',
+                value: appearance.showTeamNumbers ?? true,
+              },
+              {
+                key: 'showFinalFourLayout',
+                label: 'Automatic Final-4 top bar',
+                description:
+                  'Automatically transition the live leaderboard to the 4-column top-center Final-4 squad bar when 4, 3, or 2 teams remain alive.',
+                value: appearance.showFinalFourLayout ?? true,
+              },
+              {
+                key: 'showWwcdOverlay',
+                label: 'Automatic WWCD victory screen on main overlay',
+                description:
+                  'Automatically transition the main leaderboard route to the Winner Winner Chicken Dinner celebration when 1 team remains alive.',
+                value: appearance.showWwcdOverlay ?? true,
               },
               {
                 key: 'showLegend',
@@ -256,11 +300,21 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
       </section>
 
       <section className="grid gap-3">
-        <div>
-          <h3 className="text-sm font-medium">Panel</h3>
-          <p className="text-muted-foreground text-xs">
-            These sit over live video, so their opacity matters as much as their colour.
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-medium">Panel &amp; championship palette</h3>
+            <p className="text-muted-foreground text-xs">
+              These sit over live video, so their opacity matters as much as their colour.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => patch({ colors: { ...PMCC_2026_OVERLAY_COLORS } })}
+            className="border-border hover:bg-secondary min-h-8 shrink-0 rounded border px-2.5 py-1 text-xs font-medium text-[var(--brand-gold)] transition-colors"
+            title="Apply the PMCC 2026 Championship Gold & Mahogany palette to this instance"
+          >
+            Apply PMCC 2026 Theme
+          </button>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <ColorField
@@ -325,6 +379,128 @@ export function AppearanceEditor({ appearance, customFonts, onChange }: Appearan
             value={appearance.colors.textMuted}
             onChange={(value) => patchColor('textMuted', value)}
           />
+        </div>
+      </section>
+
+      <section className="grid gap-3">
+        <div>
+          <h3 className="text-sm font-medium">Post-game standings background</h3>
+          <p className="text-muted-foreground text-xs">
+            Optional full-canvas image or looping video behind the post-game standings board (
+            <code className="font-mono">/overlay/postgame</code>). Leave Disabled for a transparent
+            OBS canvas.
+          </p>
+        </div>
+
+        <div className="border-border bg-secondary/15 grid gap-3 rounded border p-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="grid gap-1 text-xs">
+              <span className="text-muted-foreground">Background mode</span>
+              <select
+                aria-label="Post-game background mode"
+                className="border-border bg-background min-h-9 rounded border px-2 py-1.5 text-sm"
+                value={postGameBg.mode}
+                onChange={(event) =>
+                  patchPostGameBg({ mode: event.target.value as PostGameBackgroundMode })
+                }
+              >
+                <option value="disabled">Disabled (Transparent OBS canvas)</option>
+                <option value="image">Image (PNG / JPEG / WebP)</option>
+                <option value="video">Looping Video (MP4 / WebM)</option>
+              </select>
+            </label>
+
+            <div className="grid gap-1 text-xs">
+              <span className="text-muted-foreground">Background asset</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,video/mp4,video/webm"
+                  className="hidden"
+                  onChange={async (event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = '';
+                    if (!file || !onUploadBackground) return;
+                    setUploadingBg(true);
+                    try {
+                      await onUploadBackground(file);
+                    } finally {
+                      setUploadingBg(false);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={!onUploadBackground || uploadingBg}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-border hover:bg-secondary min-h-9 rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+                >
+                  {uploadingBg
+                    ? 'Uploading…'
+                    : postGameBg.mediaUrl
+                      ? 'Replace image / video'
+                      : 'Upload image / video'}
+                </button>
+                {postGameBg.mediaUrl && onRemoveBackground && (
+                  <button
+                    type="button"
+                    disabled={uploadingBg}
+                    onClick={async () => {
+                      setUploadingBg(true);
+                      try {
+                        await onRemoveBackground();
+                      } finally {
+                        setUploadingBg(false);
+                      }
+                    }}
+                    className="border-border hover:bg-secondary text-destructive min-h-9 rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-40"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              {postGameBg.mediaUrl ? (
+                <span className="text-muted-foreground truncate font-mono text-[11px]">
+                  Active: {postGameBg.mediaUrl.split('?')[0]}
+                </span>
+              ) : (
+                <span className="text-muted-foreground text-[11px]">
+                  No custom background uploaded yet (max 32 MB).
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="grid gap-1 text-xs">
+              <span className="text-muted-foreground">
+                Media opacity &mdash; {postGameBg.opacity}%
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={postGameBg.opacity}
+                onChange={(event) => patchPostGameBg({ opacity: Number(event.target.value) })}
+              />
+            </label>
+
+            <label className="grid gap-1 text-xs">
+              <span className="text-muted-foreground">
+                Background blur &mdash; {postGameBg.blur} px
+              </span>
+              <input
+                type="range"
+                min={0}
+                max={24}
+                step={1}
+                value={postGameBg.blur}
+                onChange={(event) => patchPostGameBg({ blur: Number(event.target.value) })}
+              />
+            </label>
+          </div>
         </div>
       </section>
 

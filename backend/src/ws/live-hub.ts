@@ -1,4 +1,5 @@
 import type {
+  ClosedMapResult,
   CustomFont,
   LiveMatchInfo,
   LiveSnapshot,
@@ -53,6 +54,8 @@ export interface LiveHubOptions {
   listFonts?: () => CustomFont[];
   /** Resolves the active match number and map name for the Match Information Overlay. */
   resolveMatchInfo?: () => LiveMatchInfo;
+  /** The most recently recorded map, for the post-game and WWCD screens. */
+  resolveLastClosedMap?: () => ClosedMapResult | null;
   /**
    * Updates arriving faster than this collapse into one broadcast. Bounds client work regardless of
    * how the source behaves, and costs at most this much latency.
@@ -84,6 +87,7 @@ export class LiveHub {
   private readonly listInstanceIds: (() => string[]) | undefined;
   private readonly listFonts: (() => CustomFont[]) | undefined;
   private readonly resolveMatchInfo: (() => LiveMatchInfo) | undefined;
+  private readonly resolveLastClosedMap: (() => ClosedMapResult | null) | undefined;
   private readonly coalesceMs: number;
   private readonly staleCheckMs: number;
 
@@ -102,6 +106,7 @@ export class LiveHub {
     this.listInstanceIds = options.listInstanceIds;
     this.listFonts = options.listFonts;
     this.resolveMatchInfo = options.resolveMatchInfo;
+    this.resolveLastClosedMap = options.resolveLastClosedMap;
     this.coalesceMs = options.coalesceMs ?? 50;
     this.staleCheckMs = options.staleCheckMs ?? 1000;
   }
@@ -138,7 +143,11 @@ export class LiveHub {
 
     const snapshot =
       this.lastSnapshot ??
-      this.buildSnapshot(this.store.project(), this.resolveMatchInfo?.() ?? DEFAULT_MATCH_INFO);
+      this.buildSnapshot(
+        this.store.project(),
+        this.resolveMatchInfo?.() ?? DEFAULT_MATCH_INFO,
+        this.resolveLastClosedMap?.() ?? null,
+      );
     this.sendTo(client, { type: 'snapshot', protocolVersion: PROTOCOL_VERSION, snapshot });
 
     if (!this.overlayControl) return;
@@ -236,12 +245,13 @@ export class LiveHub {
   publish(): boolean {
     const projection = this.store.project();
     const matchInfo = this.resolveMatchInfo?.() ?? DEFAULT_MATCH_INFO;
-    const key = changeKeyOf(projection, matchInfo);
+    const lastClosedMap = this.resolveLastClosedMap?.() ?? null;
+    const key = changeKeyOf(projection, matchInfo, lastClosedMap);
 
     if (key === this.lastChangeKey) return false;
     this.lastChangeKey = key;
 
-    const snapshot = this.buildSnapshot(projection, matchInfo);
+    const snapshot = this.buildSnapshot(projection, matchInfo, lastClosedMap);
     this.lastSnapshot = snapshot;
 
     const message: ServerMessage = {
@@ -254,13 +264,18 @@ export class LiveHub {
     return true;
   }
 
-  private buildSnapshot(projection: Projection, matchInfo: LiveMatchInfo): LiveSnapshot {
+  private buildSnapshot(
+    projection: Projection,
+    matchInfo: LiveMatchInfo,
+    lastClosedMap: ClosedMapResult | null,
+  ): LiveSnapshot {
     return {
       revision: ++this.revision,
       generatedAt: Date.now(),
       ingest: projection.ingest,
       match: projection.match,
       matchInfo,
+      lastClosedMap,
     };
   }
 
@@ -284,7 +299,11 @@ export class LiveHub {
  * exact behaviour ADR-0007's change detection exists to prevent. Clients that display "last update
  * N seconds ago" tick that locally from the value they already hold.
  */
-function changeKeyOf(projection: Projection, matchInfo: LiveMatchInfo): string {
+function changeKeyOf(
+  projection: Projection,
+  matchInfo: LiveMatchInfo,
+  lastClosedMap: ClosedMapResult | null,
+): string {
   const { lastUpdateAt: _ignored, ...ingest } = projection.ingest;
-  return JSON.stringify({ ingest, match: projection.match, matchInfo });
+  return JSON.stringify({ ingest, match: projection.match, matchInfo, lastClosedMap });
 }

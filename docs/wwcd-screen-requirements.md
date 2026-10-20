@@ -3,6 +3,7 @@
 ## 1. Repository Audit: How a Match Winner Is Determined
 
 ### 1.1 Live Match Winner Detection (`MatchStore` & `computeStandings`)
+
 - In `backend/src/state/match-store.ts`:
   - `teams` are computed on every tick by `computeStandings()`.
   - Each team has `hasAppeared: boolean`, `isEliminated: boolean`, `aliveCount: number` (`0..4`), `players: PlayerState[]`, `eliminations: number`, `killPoints: number`, `placementPoints: number`, and `totalPoints: number`.
@@ -19,27 +20,29 @@
 
 ### 1.2 Verified Data Availability for the WWCD Screen
 
-| Data Element | Available in PCOB Mode? | Available in Manual Mode? | Source Field | Fallback / Handling |
-| :--- | :--- | :--- | :--- | :--- |
-| **Winner Team Name** | Yes | Yes | `team.name` | Roster name or `Team ${teamNo}` |
-| **Winner Team Slot (`teamNo`)** | Yes | Yes | `team.teamNo` (`1..25`) | Formatted as `SLOT T05` / `T05` |
-| **Winner Team Logo** | Yes | Yes | `team.logoUrl` | Respects `appearance.showLogos`; renders PMCC championship crest placeholder if `logoUrl === null` |
-| **Match Number** | Yes | Yes | `snapshot.matchInfo.matchNumber` | `MATCH N` |
-| **Map Name** | Yes | Yes | `snapshot.matchInfo.mapName` | `ERANGEL` (uppercase) |
-| **Placement (`#1`)** | Yes | Yes | Confirmed winner (`#1`) | Displayed as `#1 VICTORY` |
-| **Match Eliminations** | Yes | Yes | `team.eliminations` | Exact eliminations in this match |
-| **Match Placement Points** | Yes | Yes | `team.placementPoints` (or `scoring.placementPoints[0]`) | Points awarded for `#1` placement |
-| **Total Match Points** | Yes | Yes | `team.killPoints + scoring.placementPoints[0]` | Single-match points earned (`ELIM PTS + PLACE PTS`) |
-| **Total Series Points** | Yes | Yes | `team.totalPoints` (with #1 placement points applied) | Cumulative tournament points |
-| **Surviving / Roster Players** | **Yes** (`player.name`, `kills`, `liveState`) | **Count only** (`aliveCount` `1..4`; synthetic names `Slot 1..4`) | `team.players` + `snapshot.ingest.source` | In PCOB Mode: render the 4 squad player cards with real player names, alive/eliminated state, and individual kills. In Manual Mode: render the 4-segment visual `AlivePlayerBars` + `SURVIVORS: X / 4` (never show synthetic `"Slot 1"` names!). |
-| **Damage / Knocks / Survival Time** | **No** | **No** | Not provided by PCOB `/gettotalplayerlist` | **Omitted** (strictly no fabricated stats). |
+| Data Element                        | Available in PCOB Mode?                       | Available in Manual Mode?                                         | Source Field                                             | Fallback / Handling                                                                                                                                                                                                                              |
+| :---------------------------------- | :-------------------------------------------- | :---------------------------------------------------------------- | :------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Winner Team Name**                | Yes                                           | Yes                                                               | `team.name`                                              | Roster name or `Team ${teamNo}`                                                                                                                                                                                                                  |
+| **Winner Team Slot (`teamNo`)**     | Yes                                           | Yes                                                               | `team.teamNo` (`1..25`)                                  | Formatted as `SLOT T05` / `T05`                                                                                                                                                                                                                  |
+| **Winner Team Logo**                | Yes                                           | Yes                                                               | `team.logoUrl`                                           | Respects `appearance.showLogos`; renders PMCC championship crest placeholder if `logoUrl === null`                                                                                                                                               |
+| **Match Number**                    | Yes                                           | Yes                                                               | `snapshot.matchInfo.matchNumber`                         | `MATCH N`                                                                                                                                                                                                                                        |
+| **Map Name**                        | Yes                                           | Yes                                                               | `snapshot.matchInfo.mapName`                             | `ERANGEL` (uppercase)                                                                                                                                                                                                                            |
+| **Placement (`#1`)**                | Yes                                           | Yes                                                               | Confirmed winner (`#1`)                                  | Displayed as `#1 VICTORY`                                                                                                                                                                                                                        |
+| **Match Eliminations**              | Yes                                           | Yes                                                               | `team.eliminations`                                      | Exact eliminations in this match                                                                                                                                                                                                                 |
+| **Match Placement Points**          | Yes                                           | Yes                                                               | `team.placementPoints` (or `scoring.placementPoints[0]`) | Points awarded for `#1` placement                                                                                                                                                                                                                |
+| **Total Match Points**              | Yes                                           | Yes                                                               | `team.killPoints + scoring.placementPoints[0]`           | Single-match points earned (`ELIM PTS + PLACE PTS`)                                                                                                                                                                                              |
+| **Total Series Points**             | Yes                                           | Yes                                                               | `team.totalPoints` (with #1 placement points applied)    | Cumulative tournament points                                                                                                                                                                                                                     |
+| **Surviving / Roster Players**      | **Yes** (`player.name`, `kills`, `liveState`) | **Count only** (`aliveCount` `1..4`; synthetic names `Slot 1..4`) | `team.players` + `snapshot.ingest.source`                | In PCOB Mode: render the 4 squad player cards with real player names, alive/eliminated state, and individual kills. In Manual Mode: render the 4-segment visual `AlivePlayerBars` + `SURVIVORS: X / 4` (never show synthetic `"Slot 1"` names!). |
+| **Damage / Knocks / Survival Time** | **No**                                        | **No**                                                            | Not provided by PCOB `/gettotalplayerlist`               | **Omitted** (strictly no fabricated stats).                                                                                                                                                                                                      |
 
 ---
 
 ## 2. Routing & Trigger Architecture
 
 ### 2.1 Dual-Mode Delivery (Automatic In-Game Transition + Dedicated OBS Route)
+
 To support both single-source OBS workflows and multi-scene OBS production switchers:
+
 1. **Automatic Transition on Main Leaderboard Overlay (`/overlay/:instanceId`):**
    - Controlled by `appearance.showWwcdOverlay: boolean` (default `true`).
    - When the confirmed single-winner condition is reached (`match.phase !== 'idle'`, `standingTeamCount === 1`, `eliminatedCount >= 1`), the main overlay automatically transitions from the Final-4 / Leaderboard layout into the **WWCD Victory Screen**.
@@ -53,6 +56,7 @@ To support both single-source OBS workflows and multi-scene OBS production switc
 ## 3. Visual Composition & Motion Specification (`1920×1080`)
 
 ### 3.1 PMCC 2026 Art-Directed Layout
+
 Positioned at the center-stage of the `1920×1080` broadcast canvas (`width: 1160px`, centered horizontally and vertically at `top: 50%; left: 50%; transform: translate(-50%, -50%)`), leaving outer margins transparent so live camera or observer drone shots remain visible behind the ceremony frame:
 
 1. **Top Architectural Crest & Match Context Ribbon:**
@@ -77,9 +81,9 @@ Positioned at the center-stage of the `1920×1080` broadcast canvas (`width: 116
      - **SERIES PTS:** `{totalSeriesPoints}` (accumulated tournament total)
 
 ### 3.2 Entry & Exit Animation
+
 - **Entry (`600ms cubic-bezier(0.16, 1, 0.3, 1)`):**
   - Stage 1 (`0–180ms`): Architectural horizontal bronze hairlines expand outward from center (`scaleX(0) → scaleX(1)`).
   - Stage 2 (`120–420ms`): `WINNER WINNER CHICKEN DINNER` banner and central Winner Spotlight card scale and rise into place (`translateY(18px) scale(0.97) → translateY(0) scale(1)`, `opacity: 0 → 1`).
   - Stage 3 (`260–560ms`): Stat callout columns and squad player strip stagger in (`60ms` step).
 - **Exit (`260ms ease-in`):** Clean fade and subtle scale-down (`opacity: 0, scale(0.985)`).
-

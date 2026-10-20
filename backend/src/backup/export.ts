@@ -7,12 +7,15 @@ import type { ConfigStore } from '../persistence/config-store.js';
 import type { SeriesStore } from '../state/series-store.js';
 import type { LogoStore } from '../persistence/logo-store.js';
 import type { FontStore } from '../persistence/font-store.js';
+import type { BackgroundStore } from '../persistence/background-store.js';
 
 export interface ExportDependencies {
   config: ConfigStore;
   series: SeriesStore;
   logos: LogoStore;
   fonts: FontStore;
+  /** Optional so older callers (and tests) that predate post-game backgrounds keep working. */
+  backgrounds?: BackgroundStore;
 }
 
 /** Every entry name the export/import pipeline agrees on — the single source of truth for both. */
@@ -25,6 +28,8 @@ export const BACKUP_ENTRIES = {
   series: 'series.json',
   logosDir: 'logos/',
   fontsDir: 'fonts/',
+  /** Post-game background media. Absent from backups made before it existed — that is fine. */
+  backgroundsDir: 'backgrounds/',
 } as const;
 
 /**
@@ -56,6 +61,9 @@ export async function buildExportZip(deps: ExportDependencies): Promise<Buffer> 
 
   await addDirectory(zip, BACKUP_ENTRIES.logosDir, deps.logos.root);
   await addDirectory(zip, BACKUP_ENTRIES.fontsDir, deps.fonts.root);
+  if (deps.backgrounds) {
+    await addDirectory(zip, BACKUP_ENTRIES.backgroundsDir, deps.backgrounds.root);
+  }
 
   return zip.toBuffer();
 }

@@ -2,7 +2,7 @@ import type { OverlayAppearance } from '@cdf/shared';
 import { AnimatePresence, motion } from 'motion/react';
 import type { EliminationAlertItem } from '@/hooks/useEliminationQueue';
 import { appearanceToCssVariables } from './appearance';
-import { u } from './overlay-scale';
+import { formatTeamSlot, u } from './overlay-scale';
 
 export interface EliminationOverlayProps {
   alert: EliminationAlertItem | null;
@@ -24,6 +24,7 @@ export function EliminationOverlay({ alert, appearance }: EliminationOverlayProp
   const showAlerts = appearance.showEliminationAlerts ?? true;
   const showLogos = appearance.showLogos ?? true;
   const showElims = appearance.showEliminationAlertElims ?? true;
+  const showTeamNumbers = appearance.showTeamNumbers ?? true;
 
   const placementValue = alert ? (alert.placement ?? alert.rank) : null;
 
@@ -49,21 +50,22 @@ export function EliminationOverlay({ alert, appearance }: EliminationOverlayProp
             exit={{ opacity: 0, y: -10, scale: 0.98 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
             style={{
-              minWidth: u(440),
-              maxWidth: u(620),
+              minWidth: u(460),
+              maxWidth: u(640),
               backgroundColor: 'var(--overlay-bg)',
               color: 'var(--overlay-text)',
-              borderRadius: u(5),
+              borderRadius: u(3),
               overflow: 'hidden',
-              boxShadow: `0 ${u(10)} ${u(28)} rgba(0, 0, 0, 0.55)`,
-              border: `${u(1)} solid rgba(255, 255, 255, 0.12)`,
+              boxShadow: `0 ${u(12)} ${u(32)} rgba(0, 0, 0, 0.62)`,
+              border: `${u(1)} solid rgba(129, 96, 54, 0.68)`,
             }}
           >
-            {/* Top accent bar */}
+            {/* Top PMCC crimson-to-gold elimination bar */}
             <div
               style={{
                 height: u(4),
-                backgroundColor: 'var(--overlay-accent)',
+                background:
+                  'linear-gradient(90deg, #a83820 0%, var(--overlay-accent) 50%, #a83820 100%)',
               }}
             />
 
@@ -154,16 +156,35 @@ export function EliminationOverlay({ alert, appearance }: EliminationOverlayProp
                 )}
 
                 <div className="flex min-w-0 flex-1 flex-col justify-center">
-                  <span
-                    className="truncate font-extrabold uppercase tracking-wide"
-                    style={{
-                      fontSize: u(20),
-                      lineHeight: 1.15,
-                      color: 'var(--overlay-text)',
-                    }}
-                  >
-                    {alert.teamName}
-                  </span>
+                  <div className="flex min-w-0 items-center" style={{ gap: u(7) }}>
+                    {showTeamNumbers && (
+                      <span
+                        className="shrink-0 font-bold uppercase tabular-nums"
+                        style={{
+                          fontSize: u(10),
+                          lineHeight: 1,
+                          paddingInline: u(5),
+                          paddingBlock: u(3),
+                          borderRadius: u(2),
+                          backgroundColor: 'rgba(61, 54, 43, 0.85)',
+                          border: `${u(1)} solid rgba(129, 96, 54, 0.6)`,
+                          color: 'var(--overlay-text-muted)',
+                        }}
+                      >
+                        {formatTeamSlot(alert.teamNo)}
+                      </span>
+                    )}
+                    <span
+                      className="truncate font-extrabold uppercase tracking-wide"
+                      style={{
+                        fontSize: u(20),
+                        lineHeight: 1.15,
+                        color: 'var(--overlay-text)',
+                      }}
+                    >
+                      {alert.teamName}
+                    </span>
+                  </div>
                   <div
                     className="flex items-center"
                     style={{
@@ -176,7 +197,7 @@ export function EliminationOverlay({ alert, appearance }: EliminationOverlayProp
                         width: u(7),
                         height: u(7),
                         borderRadius: '50%',
-                        backgroundColor: 'var(--overlay-accent)',
+                        backgroundColor: '#c4462a',
                       }}
                     />
                     <span

@@ -29,3 +29,21 @@ export function OverlayInstanceMatchInfoRoute() {
   const { instanceId } = useParams({ from: '/overlay/$instanceId/match-info' });
   return <OverlayPage instanceId={instanceId} surfaceMode="match-info" />;
 }
+
+export function OverlayWwcdRoute() {
+  return <OverlayPage surfaceMode="wwcd" />;
+}
+
+export function OverlayInstanceWwcdRoute() {
+  const { instanceId } = useParams({ from: '/overlay/$instanceId/wwcd' });
+  return <OverlayPage instanceId={instanceId} surfaceMode="wwcd" />;
+}
+
+export function OverlayPostGameRoute() {
+  return <OverlayPage surfaceMode="postgame" />;
+}
+
+export function OverlayInstancePostGameRoute() {
+  const { instanceId } = useParams({ from: '/overlay/$instanceId/postgame' });
+  return <OverlayPage instanceId={instanceId} surfaceMode="postgame" />;
+}

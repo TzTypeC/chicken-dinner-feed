@@ -61,6 +61,13 @@ export {
   overlayInstanceIdSchema,
   overlayInstanceSchema,
   overlayInstancesDocumentSchema,
+  postGameBackgroundModeSchema,
+  postGameBackgroundSchema,
+  backgroundMediaKind,
+  BACKGROUND_MEDIA_URL_PATTERN,
+  DEFAULT_POST_GAME_BACKGROUND,
+  LEGACY_FACTORY_OVERLAY_COLORS,
+  PMCC_2026_OVERLAY_COLORS,
   DEFAULT_OVERLAY_APPEARANCE,
   DEFAULT_OVERLAY_INSTANCES,
 } from './config/overlay-instance.js';
@@ -73,6 +80,8 @@ export type {
   OverlayAppearance,
   OverlayInstance,
   OverlayInstancesDocument,
+  PostGameBackground,
+  PostGameBackgroundMode,
 } from './config/overlay-instance.js';
 
 export {

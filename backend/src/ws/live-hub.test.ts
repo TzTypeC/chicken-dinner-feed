@@ -224,4 +224,49 @@ describe('LiveHub', () => {
       expect(secondMsg.snapshot.matchInfo).toEqual({ matchNumber: 3, mapName: 'Miramar' });
     }
   });
+
+  it('broadcasts a new snapshot when lastClosedMap changes so /overlay/postgame updates live', () => {
+    let closedMap: import('@cdf/shared').ClosedMapResult | null = null;
+    const postGameHub = new LiveHub({
+      store,
+      resolveLastClosedMap: () => closedMap,
+    });
+
+    store.applyUpdate(update());
+    postGameHub.publish();
+
+    const client = new FakeClient();
+    postGameHub.addClient(client);
+    const firstMsg = client.sent[0];
+    expect(firstMsg?.type).toBe('snapshot');
+    if (firstMsg?.type === 'snapshot') {
+      expect(firstMsg.snapshot.lastClosedMap).toBeNull();
+    }
+
+    closedMap = {
+      id: 'map-1',
+      mapNumber: 1,
+      mapName: 'Erangel',
+      matchId: 'match-1',
+      startedAt: 1000,
+      endedAt: 2000,
+      teams: [
+        {
+          teamNo: 1,
+          placement: 1,
+          eliminations: 10,
+          killPoints: 10,
+          placementPoints: 10,
+          totalPoints: 20,
+        },
+      ],
+    };
+    expect(postGameHub.publish()).toBe(true);
+    const secondMsg = client.sent[1];
+    expect(secondMsg?.type).toBe('snapshot');
+    if (secondMsg?.type === 'snapshot') {
+      expect(secondMsg.snapshot.lastClosedMap?.id).toBe('map-1');
+      expect(secondMsg.snapshot.lastClosedMap?.teams[0]?.totalPoints).toBe(20);
+    }
+  });
 });

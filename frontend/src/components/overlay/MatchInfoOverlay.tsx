@@ -43,18 +43,19 @@ export function MatchInfoOverlay({ matchInfo, appearance, visible = true }: Matc
             className="flex items-stretch overflow-hidden"
             style={{
               height: u(42),
-              borderRadius: u(4),
+              borderRadius: u(3),
               backgroundColor: 'var(--overlay-bg)',
               color: 'var(--overlay-text)',
-              boxShadow: `0 ${u(6)} ${u(18)} rgba(0, 0, 0, 0.42)`,
-              border: `${u(1)} solid rgba(255, 255, 255, 0.12)`,
+              boxShadow: `0 ${u(8)} ${u(22)} rgba(0, 0, 0, 0.52)`,
+              border: `${u(1)} solid rgba(129, 96, 54, 0.65)`,
             }}
           >
-            {/* Left Accent Strip */}
+            {/* Left PMCC Collegiate Gold Banner Strip */}
             <div
               style={{
                 width: u(4),
-                backgroundColor: 'var(--overlay-accent)',
+                background:
+                  'linear-gradient(180deg, var(--overlay-accent) 0%, rgba(129, 96, 54, 0.9) 100%)',
               }}
             />
 
@@ -63,14 +64,25 @@ export function MatchInfoOverlay({ matchInfo, appearance, visible = true }: Matc
               className="flex items-center justify-center font-extrabold uppercase tabular-nums"
               style={{
                 paddingInline: u(14),
+                gap: u(6),
                 backgroundColor: 'var(--overlay-header-bg)',
                 fontSize: u(15),
                 letterSpacing: u(1.1),
                 color: 'var(--overlay-text)',
-                borderRight: showMapName ? `${u(1)} solid var(--overlay-accent)` : 'none',
+                borderRight: showMapName ? `${u(1)} solid rgba(129, 96, 54, 0.65)` : 'none',
               }}
             >
-              MATCH {matchInfo.matchNumber}
+              <span
+                aria-hidden
+                style={{
+                  fontSize: u(10),
+                  color: 'var(--overlay-accent)',
+                  lineHeight: 1,
+                }}
+              >
+                ◇
+              </span>
+              <span>MATCH {matchInfo.matchNumber}</span>
             </div>
 
             {/* Map Name Segment */}
@@ -81,7 +93,7 @@ export function MatchInfoOverlay({ matchInfo, appearance, visible = true }: Matc
                   paddingInline: u(16),
                   fontSize: u(15),
                   letterSpacing: u(1.2),
-                  color: 'var(--overlay-text)',
+                  color: 'var(--overlay-accent)',
                 }}
               >
                 {matchInfo.mapName.trim()}

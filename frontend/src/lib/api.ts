@@ -80,6 +80,18 @@ export const api = {
   deleteOverlay: (instanceId: string) =>
     request<void>(`/config/overlays/${instanceId}`, { method: 'DELETE' }),
 
+  uploadOverlayBackground: (instanceId: string, file: File) => {
+    const body = new FormData();
+    body.append('background', file);
+    return request<OverlayInstance>(`/overlays/${instanceId}/background`, {
+      method: 'POST',
+      body,
+    });
+  },
+
+  deleteOverlayBackground: (instanceId: string) =>
+    request<OverlayInstance>(`/overlays/${instanceId}/background`, { method: 'DELETE' }),
+
   getTeams: () => request<TeamRosterDocument>('/config/teams'),
   saveTeams: (document: TeamRosterDocument) =>
     request<TeamRosterDocument>('/config/teams', { method: 'PUT', body: JSON.stringify(document) }),

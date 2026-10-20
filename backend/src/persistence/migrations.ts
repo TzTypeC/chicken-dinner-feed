@@ -1,4 +1,8 @@
-import { CONFIG_SCHEMA_VERSION } from '@cdf/shared';
+import {
+  CONFIG_SCHEMA_VERSION,
+  LEGACY_FACTORY_OVERLAY_COLORS,
+  PMCC_2026_OVERLAY_COLORS,
+} from '@cdf/shared';
 
 /**
  * Forward migrations for persisted configuration.
@@ -56,12 +60,38 @@ function migrateAnimationV1(raw: unknown): Record<string, unknown> {
 }
 
 /**
+ * v3 → v4: the factory palette moved to the PMCC 2026 identity (decision D-PMCC-06 / A4).
+ *
+ * Only an instance whose colours are still *exactly* the old factory set is moved — that is an
+ * instance nobody recoloured, so following the new default is what its operator would expect. Any
+ * palette that differs in even one value was chosen by someone and is left untouched.
+ */
+function migrateFactoryColorsV3ToV4(appearance: Record<string, unknown>): Record<string, unknown> {
+  const colors = appearance['colors'];
+  if (!isRecord(colors)) return appearance;
+
+  const legacy = LEGACY_FACTORY_OVERLAY_COLORS as Record<string, string>;
+  const keys = Object.keys(legacy);
+  const isUntouchedFactory =
+    Object.keys(colors).length === keys.length &&
+    keys.every(
+      (key) =>
+        typeof colors[key] === 'string' &&
+        (colors[key] as string).toLowerCase() === legacy[key]?.toLowerCase(),
+    );
+
+  return isUntouchedFactory
+    ? { ...appearance, colors: { ...PMCC_2026_OVERLAY_COLORS } }
+    : appearance;
+}
+
+/**
  * Bring an overlay-instances document up to the current schema version.
  *
  * `CONFIG_SCHEMA_VERSION` is one number shared by every persisted document (ADR-0004), so bumping
  * it for an unrelated document's shape change still runs this function again on an
- * already-migrated one. The animation rewrite below is gated on `version < 2` for exactly that
- * reason: applying `migrateAnimationV1` a second time to an already-v2 animation silently discards
+ * already-migrated one. Each rewrite below is therefore gated on the version it migrates *from*:
+ * applying `migrateAnimationV1` a second time to an already-v2 animation silently discards
  * whatever `type`, non-`slide` `direction`, `withFade: false` or enabled row stagger the operator
  * had configured, because that function assumes v1 input unconditionally.
  */
@@ -80,17 +110,18 @@ export function migrateOverlayInstances(raw: unknown): unknown {
     schemaVersion: CONFIG_SCHEMA_VERSION,
     instances: raw['instances'].map((instance) => {
       if (!isRecord(instance)) return instance;
-      if (version >= 2) return instance; // Already past the only shape change this function makes.
 
-      const appearance = isRecord(instance['appearance']) ? instance['appearance'] : {};
+      let appearance = isRecord(instance['appearance']) ? instance['appearance'] : null;
+      if (appearance === null) return instance;
 
-      return {
-        ...instance,
-        appearance: {
-          ...appearance,
-          animation: migrateAnimationV1(appearance['animation']),
-        },
-      };
+      if (version < 2) {
+        appearance = { ...appearance, animation: migrateAnimationV1(appearance['animation']) };
+      }
+      if (version < 4) {
+        appearance = migrateFactoryColorsV3ToV4(appearance);
+      }
+
+      return { ...instance, appearance };
     }),
   };
 }

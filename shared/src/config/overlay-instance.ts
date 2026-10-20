@@ -76,6 +76,48 @@ export const overlayAnimationSchema = z.object({
 });
 export type OverlayAnimation = z.infer<typeof overlayAnimationSchema>;
 
+/**
+ * Where an uploaded post-game background lives. Only files the backend itself stored are accepted —
+ * never an arbitrary URL — so a browser source can only ever be pointed at media that passed the
+ * magic-byte check in `BackgroundStore` (docs/postgame-standings-requirements.md §3).
+ */
+export const BACKGROUND_MEDIA_URL_PATTERN =
+  /^\/api\/backgrounds\/[a-z0-9][a-z0-9-]{0,31}\.(png|jpg|webp|mp4|webm)(\?v=\d+)?$/;
+
+export const postGameBackgroundModeSchema = z.enum(['disabled', 'image', 'video']);
+export type PostGameBackgroundMode = z.infer<typeof postGameBackgroundModeSchema>;
+
+/**
+ * Optional media behind the post-game standings screen (D-PMCC-05).
+ *
+ * Opacity and blur apply to the media layer only; the foreground standings are never blurred, and
+ * with the mode disabled the canvas stays fully transparent for OBS compositing.
+ */
+export const postGameBackgroundSchema = z.object({
+  mode: postGameBackgroundModeSchema.default('disabled'),
+  mediaUrl: z.string().regex(BACKGROUND_MEDIA_URL_PATTERN).nullable().default(null),
+  /** 0 (invisible) to 100 (fully opaque). */
+  opacity: z.number().int().min(0).max(100).default(65),
+  /** Gaussian blur radius in design-canvas pixels. */
+  blur: z.number().int().min(0).max(24).default(4),
+});
+export type PostGameBackground = z.infer<typeof postGameBackgroundSchema>;
+
+export const DEFAULT_POST_GAME_BACKGROUND: PostGameBackground = {
+  mode: 'disabled',
+  mediaUrl: null,
+  opacity: 65,
+  blur: 4,
+};
+
+/** The media kind a stored background URL refers to, judged from the extension the backend gave it. */
+export function backgroundMediaKind(mediaUrl: string | null): 'image' | 'video' | null {
+  if (!mediaUrl) return null;
+  const match = BACKGROUND_MEDIA_URL_PATTERN.exec(mediaUrl);
+  if (!match) return null;
+  return match[1] === 'mp4' || match[1] === 'webm' ? 'video' : 'image';
+}
+
 export const overlayAppearanceSchema = z.object({
   /** Which edge the panel is pinned to. */
   anchor: z.enum(['left', 'right']),
@@ -101,6 +143,14 @@ export const overlayAppearanceSchema = z.object({
   showMatchInfo: z.boolean().default(true),
   /** Whether the map name is shown alongside the match number on the Match Information Overlay. */
   showMatchInfoMapName: z.boolean().default(true),
+  /** Whether the stable roster slot (`teamNo`, shown as T01–T25) appears beside each team name. */
+  showTeamNumbers: z.boolean().default(true),
+  /** Whether the leaderboard switches to the top-centre Final-4 bar once four teams remain. */
+  showFinalFourLayout: z.boolean().default(true),
+  /** Whether the leaderboard route switches to the WWCD screen once a single winner remains. */
+  showWwcdOverlay: z.boolean().default(true),
+  /** Media behind the post-game standings screen. */
+  postGameBackground: postGameBackgroundSchema.default(DEFAULT_POST_GAME_BACKGROUND),
   /** Trim the table for formats with fewer than 25 teams. */
   maxTeams: z.number().int().min(1).max(25),
 });
@@ -136,24 +186,49 @@ export const overlayInstancesDocumentSchema = z.object({
 });
 export type OverlayInstancesDocument = z.infer<typeof overlayInstancesDocumentSchema>;
 
-/** Approximates `specs/example.png`, so a fresh install looks right before anything is configured. */
+/**
+ * The factory palette every install shipped with before the PMCC 2026 theme (zinc + rose). Kept so
+ * the v3 → v4 migration can recognise an instance nobody recoloured and move it to the new default,
+ * while leaving any operator-chosen palette exactly as it was (decision D-PMCC-06 / A4).
+ */
+export const LEGACY_FACTORY_OVERLAY_COLORS: OverlayColors = {
+  background: 'rgba(24, 24, 27, 0.82)',
+  headerBackground: 'rgba(12, 12, 14, 0.92)',
+  rowAltBackground: 'rgba(39, 39, 42, 0.55)',
+  text: '#fafafa',
+  textMuted: '#a1a1aa',
+  accent: '#e11d48',
+  playerAlive: '#ef2b2b',
+  playerKnocked: '#f5a524',
+  playerDead: '#52525b',
+};
+
+/**
+ * PMCC 2026 palette, sampled from `assets/KV_2026 PMCC ID.png`
+ * (docs/pmcc-visual-identity-analysis.md): espresso-obsidian surfaces, mahogany header, gunmetal
+ * alternate rows, parchment-ivory text, champagne labels, nib-trophy gold accent, airdrop crimson
+ * for knocked players.
+ */
+export const PMCC_2026_OVERLAY_COLORS: OverlayColors = {
+  background: 'rgba(22, 15, 10, 0.88)',
+  headerBackground: 'rgba(38, 24, 15, 0.95)',
+  rowAltBackground: 'rgba(61, 54, 43, 0.35)',
+  text: '#f9edd9',
+  textMuted: '#c9b68e',
+  accent: '#e5a93c',
+  playerAlive: '#f9edd9',
+  playerKnocked: '#c4462a',
+  playerDead: '#4a4136',
+};
+
+/** Fresh installs start on the PMCC 2026 identity. */
 export const DEFAULT_OVERLAY_APPEARANCE: OverlayAppearance = {
   anchor: 'left',
   offsetX: 24,
   offsetY: null,
   scale: 1,
   fontFamily: "'Inter', system-ui, sans-serif",
-  colors: {
-    background: 'rgba(24, 24, 27, 0.82)',
-    headerBackground: 'rgba(12, 12, 14, 0.92)',
-    rowAltBackground: 'rgba(39, 39, 42, 0.55)',
-    text: '#fafafa',
-    textMuted: '#a1a1aa',
-    accent: '#e11d48',
-    playerAlive: '#ef2b2b',
-    playerKnocked: '#f5a524',
-    playerDead: '#52525b',
-  },
+  colors: PMCC_2026_OVERLAY_COLORS,
   animation: {
     type: 'slide',
     direction: 'left',
@@ -168,6 +243,10 @@ export const DEFAULT_OVERLAY_APPEARANCE: OverlayAppearance = {
   showEliminationAlertElims: true,
   showMatchInfo: true,
   showMatchInfoMapName: true,
+  showTeamNumbers: true,
+  showFinalFourLayout: true,
+  showWwcdOverlay: true,
+  postGameBackground: DEFAULT_POST_GAME_BACKGROUND,
   maxTeams: 16,
 };
 

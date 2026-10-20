@@ -188,6 +188,74 @@ export function AdminPage() {
     }
   };
 
+  const uploadBackground = async (instance: OverlayInstance, file: File) => {
+    try {
+      const updated = await api.uploadOverlayBackground(instance.id, file);
+      const nextBg = updated.appearance.postGameBackground;
+      setOverlays((prev) =>
+        prev
+          ? {
+              ...prev,
+              instances: prev.instances.map((entry) =>
+                entry.id === instance.id
+                  ? {
+                      ...entry,
+                      appearance: {
+                        ...entry.appearance,
+                        postGameBackground: {
+                          ...nextBg,
+                          opacity: entry.appearance.postGameBackground.opacity,
+                          blur: entry.appearance.postGameBackground.blur,
+                        },
+                      },
+                    }
+                  : entry,
+              ),
+            }
+          : prev,
+      );
+      setSavedOverlays((prev) => prev.map((entry) => (entry.id === instance.id ? updated : entry)));
+      toast.success(
+        'Post-game background uploaded',
+        `Applied to “${instance.name}” (${nextBg.mode}).`,
+      );
+    } catch (error) {
+      toast.error('Could not upload post-game background', describe(error));
+    }
+  };
+
+  const removeBackground = async (instance: OverlayInstance) => {
+    try {
+      const updated = await api.deleteOverlayBackground(instance.id);
+      const nextBg = updated.appearance.postGameBackground;
+      setOverlays((prev) =>
+        prev
+          ? {
+              ...prev,
+              instances: prev.instances.map((entry) =>
+                entry.id === instance.id
+                  ? {
+                      ...entry,
+                      appearance: {
+                        ...entry.appearance,
+                        postGameBackground: nextBg,
+                      },
+                    }
+                  : entry,
+              ),
+            }
+          : prev,
+      );
+      setSavedOverlays((prev) => prev.map((entry) => (entry.id === instance.id ? updated : entry)));
+      toast.success(
+        'Post-game background removed',
+        `Cleared custom background on “${instance.name}”.`,
+      );
+    } catch (error) {
+      toast.error('Could not remove post-game background', describe(error));
+    }
+  };
+
   const createOverlay = async (id: string, name: string, copyFrom?: string) => {
     try {
       await api.createOverlay({ id, name, ...(copyFrom ? { copyAppearanceFrom: copyFrom } : {}) });
@@ -596,6 +664,8 @@ export function AdminPage() {
                     appearance={selected.appearance}
                     customFonts={fonts}
                     onChange={(appearance) => patchSelected({ appearance })}
+                    onUploadBackground={(file) => uploadBackground(selected, file)}
+                    onRemoveBackground={() => removeBackground(selected)}
                   />
                 </section>
 
@@ -665,6 +735,24 @@ export function AdminPage() {
                         useScopedOverlayUrls || selected.id !== 'main'
                           ? `${window.location.origin}/overlay/${selected.id}/match-info`
                           : `${window.location.origin}/overlay/match-info`
+                      }
+                    />
+
+                    <CopyableUrl
+                      label="4. WWCD Victory Screen Overlay"
+                      url={
+                        useScopedOverlayUrls || selected.id !== 'main'
+                          ? `${window.location.origin}/overlay/${selected.id}/wwcd`
+                          : `${window.location.origin}/overlay/wwcd`
+                      }
+                    />
+
+                    <CopyableUrl
+                      label="5. Post-Game Detailed Standings Overlay"
+                      url={
+                        useScopedOverlayUrls || selected.id !== 'main'
+                          ? `${window.location.origin}/overlay/${selected.id}/postgame`
+                          : `${window.location.origin}/overlay/postgame`
                       }
                     />
                   </div>

@@ -4,6 +4,7 @@ import { matchStateSchema } from '../domain/match.js';
 import { customFontSchema } from '../config/fonts.js';
 import { overlayInstanceSchema } from '../config/overlay-instance.js';
 import { overlayVisibilitySchema } from '../domain/overlay.js';
+import { closedMapResultSchema } from '../domain/series.js';
 
 export const liveMatchInfoSchema = z.object({
   matchNumber: z.number().int().min(1),
@@ -30,6 +31,13 @@ export const liveSnapshotSchema = z.object({
   match: matchStateSchema,
   /** Current match number and map name for the Match Information Overlay. */
   matchInfo: liveMatchInfoSchema.default({ matchNumber: 1, mapName: 'Erangel' }),
+  /**
+   * The most recently recorded map, exactly as persisted in the series history (or null before any
+   * map has closed). Lets the post-game standings and WWCD screens read *saved* results — which
+   * survive the next lobby loading — and update the moment a map is closed, corrected, added or
+   * deleted, without a reload.
+   */
+  lastClosedMap: closedMapResultSchema.nullable().default(null),
 });
 export type LiveSnapshot = z.infer<typeof liveSnapshotSchema>;
 

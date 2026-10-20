@@ -43,6 +43,9 @@ const overlayFeedbackAppearanceSchema = z.object({
   showEliminationAlertElims: z.boolean().default(true),
   showMatchInfo: z.boolean().default(true),
   showMatchInfoMapName: z.boolean().default(true),
+  showTeamNumbers: z.boolean().default(true),
+  showFinalFourLayout: z.boolean().default(true),
+  showWwcdOverlay: z.boolean().default(true),
   colors: overlayColorsSchema,
   animation: overlayAnimationSchema,
 });

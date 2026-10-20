@@ -1,6 +1,8 @@
 import {
   CONFIG_SCHEMA_VERSION,
+  LEGACY_FACTORY_OVERLAY_COLORS,
   overlayInstancesDocumentSchema,
+  PMCC_2026_OVERLAY_COLORS,
   teamRosterDocumentSchema,
 } from '@cdf/shared';
 import { describe, expect, it } from 'vitest';
@@ -230,6 +232,55 @@ describe('migrateOverlayInstances', () => {
     };
 
     expect(migrateAndParse(noAnimation).instances[0]?.appearance.animation.type).toBe('slide');
+  });
+
+  it('upgrades untouched v3 factory colors to the PMCC 2026 palette while preserving custom colors', () => {
+    const v3WithFactoryAndCustom = {
+      schemaVersion: 3,
+      instances: [
+        {
+          id: 'main',
+          name: 'Main Factory',
+          type: 'leaderboard',
+          appearance: {
+            ...V1_DOCUMENT.instances[0]!.appearance,
+            colors: { ...LEGACY_FACTORY_OVERLAY_COLORS },
+            animation: {
+              type: 'slide',
+              direction: 'left',
+              durationMs: 420,
+              easing: 'smooth',
+              withFade: true,
+              rows: { enabled: false, staggerMs: 60, reverseOnHide: false },
+            },
+          },
+        },
+        {
+          id: 'custom',
+          name: 'Custom Branded',
+          type: 'leaderboard',
+          appearance: {
+            ...V1_DOCUMENT.instances[0]!.appearance,
+            colors: { ...LEGACY_FACTORY_OVERLAY_COLORS, accent: '#00ffcc' },
+            animation: {
+              type: 'slide',
+              direction: 'left',
+              durationMs: 420,
+              easing: 'smooth',
+              withFade: true,
+              rows: { enabled: false, staggerMs: 60, reverseOnHide: false },
+            },
+          },
+        },
+      ],
+    };
+
+    const parsed = migrateAndParse(v3WithFactoryAndCustom);
+    expect(parsed.instances[0]?.appearance.colors).toEqual(PMCC_2026_OVERLAY_COLORS);
+    expect(parsed.instances[1]?.appearance.colors.accent).toBe('#00ffcc');
+    expect(parsed.instances[1]?.appearance.colors.background).toBe(
+      LEGACY_FACTORY_OVERLAY_COLORS.background,
+    );
   });
 });
 

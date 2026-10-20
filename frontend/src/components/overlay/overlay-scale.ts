@@ -13,6 +13,22 @@ export function u(designPixels: number): string {
   return `calc(${designPixels} * var(--overlay-unit))`;
 }
 
+/**
+ * Unscaled 1920×1080 design-canvas pixels (`--overlay-base-unit`).
+ *
+ * Used for full-canvas broadcast compositions (`Final-4` top bar, `WWCD` victory screen, and
+ * `Post-Game Standings`) whose geometry spans the 1920×1080 frame and must remain locked to the
+ * 16:9 broadcast safe area regardless of the side-tower `scale` multiplier.
+ */
+export function ub(designPixels: number): string {
+  return `calc(${designPixels} * var(--overlay-base-unit))`;
+}
+
+/** Formats a canonical 1-based team slot number (`teamNo`) as `T01`–`T25` (`D-PMCC-01`). */
+export function formatTeamSlot(teamNo: number): string {
+  return `T${String(teamNo).padStart(2, '0')}`;
+}
+
 /** Layout constants for the leaderboard, in design-canvas pixels. Mirrors `specs/example.png`. */
 export const LEADERBOARD_METRICS = {
   panelWidth: 340,

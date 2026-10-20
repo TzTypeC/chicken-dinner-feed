@@ -23,6 +23,7 @@ import {
   migrateSchemaVersionOnly,
   migrateTeamRoster,
 } from '../persistence/migrations.js';
+import { BackgroundStore, fileNameFromBackgroundUrl } from '../persistence/background-store.js';
 import { BACKUP_ENTRIES, type ExportDependencies } from './export.js';
 
 export interface ValidatedImport {
@@ -35,6 +36,8 @@ export interface ValidatedImport {
   /** File name (no path) → bytes, exactly as they will be written back to disk. */
   logoFiles: Map<string, Buffer>;
   fontFiles: Map<string, Buffer>;
+  /** Post-game background media; empty for a backup made before backgrounds existed. */
+  backgroundFiles: Map<string, Buffer>;
   summary: BackupSummary;
 }
 
@@ -114,6 +117,25 @@ export function validateImportZip(buffer: Buffer): ImportValidationResult {
 
   const logoFiles = readDirectoryEntries(zip, BACKUP_ENTRIES.logosDir);
   const fontFiles = readDirectoryEntries(zip, BACKUP_ENTRIES.fontsDir);
+  const backgroundFiles = readDirectoryEntries(zip, BACKUP_ENTRIES.backgroundsDir);
+  const backgroundSniffer = new BackgroundStore('.');
+
+  for (const instance of instances.instances) {
+    const mediaUrl = instance.appearance.postGameBackground.mediaUrl;
+    if (mediaUrl === null) continue;
+    const fileName = fileNameFromBackgroundUrl(mediaUrl);
+    const bytes = backgroundFiles.get(fileName);
+    if (!bytes) {
+      errors.push(
+        `Overlay "${instance.name}" refers to a post-game background ("${fileName}") that is not ` +
+          `in the backup.`,
+      );
+    } else if (!backgroundSniffer.detectFormat(bytes)) {
+      errors.push(
+        `The post-game background "${fileName}" in the backup is not a supported image or video.`,
+      );
+    }
+  }
 
   for (const team of teams.teams) {
     if (team.logoUrl === null) continue;
@@ -148,6 +170,7 @@ export function validateImportZip(buffer: Buffer): ImportValidationResult {
       series,
       logoFiles,
       fontFiles,
+      backgroundFiles,
       summary: {
         overlayInstances: instances.instances.length,
         teams: teams.teams.length,
@@ -174,6 +197,20 @@ export async function applyImport(
 ): Promise<void> {
   await replaceDirectory(deps.logos.root, validated.logoFiles);
   await replaceDirectory(deps.fonts.root, validated.fontFiles);
+  if (deps.backgrounds) {
+    // Only files an imported instance actually refers to are written; anything else in the
+    // archive's backgrounds/ folder is ignored rather than copied blindly onto disk.
+    const referenced = new Set(
+      validated.instances.instances
+        .map((instance) => instance.appearance.postGameBackground.mediaUrl)
+        .filter((url): url is string => url !== null)
+        .map(fileNameFromBackgroundUrl),
+    );
+    await replaceDirectory(
+      deps.backgrounds.root,
+      new Map([...validated.backgroundFiles].filter(([name]) => referenced.has(name))),
+    );
+  }
 
   await deps.config.saveTeams(validated.teams);
   await deps.config.saveScoring(validated.scoring);

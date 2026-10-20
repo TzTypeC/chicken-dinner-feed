@@ -16,67 +16,81 @@
   --radius: 0.625rem;
 
   /*
-   * Brand palette, sampled from public/images/app-logo.png rather than eyeballed — these are the
-   * average colours of the gold, orange, red, sky, navy and white regions of the mark itself.
+   * PMCC 2026 brand palette, sampled directly from `assets/KV_2026 PMCC ID.png`
+   * (docs/pmcc-visual-identity-analysis.md): sculpted fountain-pen nib trophy gold, burnished
+   * bronze architectural framing, warm parchment ivory headline, deep espresso library shadows,
+   * airdrop supply-crate crimson & slate-teal, and Level 3 Spetsnaz helmet gunmetal.
    */
-  --brand-gold: #f8d51a;
-  --brand-orange: #eb952f;
-  --brand-red: #e11911;
-  --brand-sky: #3ca7e9;
-  --brand-navy: #062542;
-  --brand-white: #efeff1;
+  --brand-gold: #e5a93c;
+  --brand-gold-bright: #eeb058;
+  --brand-champagne: #e7d8ad;
+  --brand-bronze: #816036;
+  --brand-orange: #cd984e;
+  --brand-red: #a83820;
+  --brand-sky: #607a6e;
+  --brand-navy: #26180f;
+  --brand-white: #f9edd9;
 
   /*
-   * Admin surfaces. Dark by default rather than as a toggle: this is looked at in a dim gallery
-   * beside a video wall, where a white page is genuinely unpleasant.
-   *
-   * The page sits deeper than the logo's navy so cards read as raised against it.
+   * Admin surfaces. Dark warm espresso-obsidian by default rather than cold blue/zinc: matches the
+   * 2026 PMCC ID collegiate hall key visual while keeping high contrast in a dim broadcast gallery.
    */
-  --background: #04101f;
-  --foreground: #eef2f7;
-  --card: #0a1e35;
-  --card-foreground: #eef2f7;
-  --popover: #0a1e35;
-  --popover-foreground: #eef2f7;
+  --background: #120c08;
+  --foreground: #f9edd9;
+  --card: #1c130d;
+  --card-foreground: #f9edd9;
+  --popover: #1c130d;
+  --popover-foreground: #f9edd9;
 
   --primary: var(--brand-gold);
-  /* Dark ink on gold reaches 12.9:1. White on gold would be unreadable. */
-  --primary-foreground: #0a1220;
+  /* Deep espresso ink on championship gold reaches > 9.5:1 contrast. */
+  --primary-foreground: #140d08;
 
-  --secondary: #12314f;
-  --secondary-foreground: #eef2f7;
-  --muted: #12314f;
-  --muted-foreground: #8fa9c4;
-  --accent: #163a5e;
-  --accent-foreground: #eef2f7;
+  --secondary: #2a1d14;
+  --secondary-foreground: #f9edd9;
+  --muted: #261a12;
+  --muted-foreground: #c9b68e;
+  --accent: #352418;
+  --accent-foreground: #f9edd9;
 
   /*
-   * A lighter red than the mark's for text and icons. The logo's own #e11911 reaches only 3.96:1 on
-   * this background — fine for a solid badge, not for anything that has to be read. Same hue and
-   * saturation, raised in lightness until it clears AA on both the page and the cards.
+   * Raised airdrop crimson for text and destructive actions so it clears WCAG AA on dark espresso.
    */
-  --destructive: #f1514b;
+  --destructive: #e0533c;
 
-  --border: #1b3f63;
-  --input: #1b3f63;
-  --ring: var(--brand-sky);
+  --border: #4a3522;
+  --input: #4a3522;
+  --ring: var(--brand-gold);
 
   /*
    * Overlay tokens — the broadcast surface, not the admin.
-   * Defaults approximate specs/example.png. Every one of these is operator-overridable.
+   * Defaults reflect the PMCC 2026 visual identity (`assets/KV_2026 PMCC ID.png`). Every one of
+   * these is operator-overridable per instance.
    */
   --overlay-font-family: 'Inter', system-ui, sans-serif;
-  --overlay-bg: oklch(0.18 0.01 285 / 0.82);
-  --overlay-header-bg: oklch(0.12 0.01 285 / 0.9);
-  --overlay-text: oklch(0.98 0 0);
-  --overlay-text-muted: oklch(0.72 0.01 285);
-  --overlay-row-alt-bg: oklch(0.22 0.01 285 / 0.6);
-  --overlay-accent: oklch(0.58 0.22 27);
+  --overlay-bg: rgba(22, 15, 10, 0.88);
+  --overlay-header-bg: rgba(38, 24, 15, 0.95);
+  --overlay-text: #f9edd9;
+  --overlay-text-muted: #c9b68e;
+  --overlay-row-alt-bg: rgba(61, 54, 43, 0.35);
+  --overlay-accent: #e5a93c;
+
+  /* Extended PMCC 2026 architectural & semantic broadcast tokens */
+  --pmcc-obsidian: #160f0a;
+  --pmcc-mahogany: #26180f;
+  --pmcc-gunmetal: #3d362b;
+  --pmcc-bronze: #816036;
+  --pmcc-gold: #e5a93c;
+  --pmcc-gold-bright: #eeb058;
+  --pmcc-champagne: #e7d8ad;
+  --pmcc-ivory: #f9edd9;
+  --pmcc-crimson: #a83820;
+  --pmcc-teal: #607a6e;
 
   /* Player state colours in the ALIVE column. See specs/PCOB-FINDINGS.md §2.1 (LiveState). */
-  --player-alive: oklch(0.62 0.23 27);
-  --player-knocked: oklch(0.78 0.17 70);
-  --player-dead: oklch(0.35 0.03 285);
+  --player-alive: #f9edd9;
+  --player-knocked: #c4462a;
+  --player-dead: #4a4136;
 
   /* Overlay show/hide animation, configurable per instance in the admin. */
   --overlay-anim-duration: 420ms;

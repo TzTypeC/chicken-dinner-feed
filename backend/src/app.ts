@@ -17,6 +17,12 @@ import { createIngestSource } from './ingest/index.js';
 import { ConfigStore } from './persistence/config-store.js';
 import { FontStore, MAX_FONT_BYTES } from './persistence/font-store.js';
 import { LogoStore, MAX_LOGO_BYTES } from './persistence/logo-store.js';
+import {
+  BackgroundStore,
+  fileNameFromBackgroundUrl,
+  MAX_BACKGROUND_BYTES,
+} from './persistence/background-store.js';
+import { backgroundRoutes } from './routes/backgrounds.js';
 import { backupRoutes } from './routes/backup.js';
 import { configRoutes } from './routes/config.js';
 import { feedbackRoutes } from './routes/feedback.js';
@@ -85,7 +91,7 @@ export async function buildApp(): Promise<AppContext> {
 
   await app.register(fastifyWebsocket);
   await app.register(fastifyMultipart, {
-    limits: { fileSize: Math.max(MAX_LOGO_BYTES, MAX_FONT_BYTES), files: 1 },
+    limits: { fileSize: Math.max(MAX_LOGO_BYTES, MAX_FONT_BYTES, MAX_BACKGROUND_BYTES), files: 1 },
   });
 
   // Configuration is loaded before anything else so a malformed file stops startup with a readable
@@ -101,6 +107,23 @@ export async function buildApp(): Promise<AppContext> {
 
   const fontStore = new FontStore(config.dataDir);
   await fontStore.init();
+
+  const backgroundStore = new BackgroundStore(config.dataDir);
+  await backgroundStore.init();
+  // Files no instance refers to any more — an instance deleted, a background replaced by a
+  // different format — are swept so the data directory (and every backup ZIP) stays lean.
+  const pruneBackgrounds = (): Promise<void> =>
+    backgroundStore
+      .prune(
+        new Set(
+          configStore.instances.current.instances
+            .map((instance) => instance.appearance.postGameBackground.mediaUrl)
+            .filter((url): url is string => url !== null)
+            .map(fileNameFromBackgroundUrl),
+        ),
+      )
+      .catch((error: unknown) => app.log.warn({ error }, 'Could not prune background media'));
+  await pruneBackgrounds();
 
   const seriesStore = new SeriesStore({
     dataDir: config.dataDir,
@@ -177,6 +200,7 @@ export async function buildApp(): Promise<AppContext> {
         mapName: currentSeries.activeMapName,
       };
     },
+    resolveLastClosedMap: () => seriesStore.getState().closedMaps.at(-1) ?? null,
   });
   const ingestSource = createIngestSource(config.ingestSource, {
     pcobBaseUrl: config.pcobBaseUrl,
@@ -250,6 +274,9 @@ export async function buildApp(): Promise<AppContext> {
         hub.schedulePublish();
         break;
       case 'instances':
+        void pruneBackgrounds();
+        hub.refreshAllOverlayStates();
+        break;
       case 'fonts':
         // A font uploaded mid-setup has to reach open browser sources without a reload.
         hub.refreshAllOverlayStates();
@@ -323,6 +350,7 @@ export async function buildApp(): Promise<AppContext> {
     series: seriesStore,
     logos: logoStore,
     fonts: fontStore,
+    backgrounds: backgroundStore,
     onImported: () => {
       refreshSeriesContext();
       hub.schedulePublish();
@@ -340,6 +368,11 @@ export async function buildApp(): Promise<AppContext> {
 
   await app.register(logoRoutes, { prefix: '/api', logos: logoStore, config: configStore });
   await app.register(fontRoutes, { prefix: '/api', fonts: fontStore, config: configStore });
+  await app.register(backgroundRoutes, {
+    prefix: '/api',
+    backgrounds: backgroundStore,
+    config: configStore,
+  });
 
   // Team logos are operator files, not build output, so they are served from the data directory.
   // `decorateReply: false` because the frontend's static plugin already owns `reply.sendFile`.
@@ -351,6 +384,13 @@ export async function buildApp(): Promise<AppContext> {
   await app.register(fastifyStatic, {
     root: fontStore.root,
     prefix: '/api/fonts/',
+    decorateReply: false,
+  });
+  // Post-game background media. `@fastify/static` answers range requests, which a looping
+  // `<video>` in a browser source relies on.
+  await app.register(fastifyStatic, {
+    root: backgroundStore.root,
+    prefix: '/api/backgrounds/',
     decorateReply: false,
   });
   await app.register(liveRoutes, { prefix: '/ws', hub });
