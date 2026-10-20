@@ -360,6 +360,7 @@ export function OverlayPage({
         <EliminationOverlay
           alert={isOperatorVisible ? activeAlert : null}
           appearance={appearance}
+          finalFourActive={activeLayoutMode === 'final-four'}
         />
       </>
     );
@@ -407,7 +408,8 @@ export function OverlayPage({
     const isWwcdVisible =
       isOperatorVisible &&
       (appearance.showWwcdOverlay ?? true) &&
-      ((activeLayoutMode === 'wwcd' && effectiveAutoWwcdVariant === 'standard') ||
+      ((activeLayoutMode === 'wwcd' &&
+        (effectiveAutoWwcdVariant === 'standard' || effectiveAutoWwcdVariant === 'dual')) ||
         isPreviewingWwcd);
     const winner = selectWwcdWinner(snapshot.match, lastClosedMap, {
       allowClosedMapFallback: true,
@@ -436,7 +438,8 @@ export function OverlayPage({
     const isFullscreenWwcdVisible =
       isOperatorVisible &&
       (appearance.showWwcdOverlay ?? true) &&
-      ((activeLayoutMode === 'wwcd' && effectiveAutoWwcdVariant === 'fullscreen') ||
+      ((activeLayoutMode === 'wwcd' &&
+        (effectiveAutoWwcdVariant === 'fullscreen' || effectiveAutoWwcdVariant === 'dual')) ||
         isPreviewingFullscreenWwcd);
     const winner = selectWwcdWinner(snapshot.match, lastClosedMap, {
       allowClosedMapFallback: true,
@@ -533,7 +536,11 @@ export function OverlayPage({
       )}
 
       {isPreview && previewLayers.elimination && (
-        <EliminationOverlay alert={activeAlert} appearance={appearance} />
+        <EliminationOverlay
+          alert={activeAlert}
+          appearance={appearance}
+          finalFourActive={activeLayoutMode === 'final-four'}
+        />
       )}
 
       {(!isPreview || previewLayers.leaderboard) && (

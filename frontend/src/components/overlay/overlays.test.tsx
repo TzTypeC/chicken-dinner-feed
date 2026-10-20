@@ -1157,6 +1157,163 @@ describe('D-PMCC-08 — Configurable Automatic WWCD Presentation & Fullscreen WW
     expect(minimalHtml).not.toContain('data-testid="wwcd-fullscreen-marquee"');
     expect(minimalHtml).not.toContain('data-testid="wwcd-fullscreen-stage-bg"');
   });
+
+  it('Part 6 Feature A — activates BOTH Standard WWCD and Fullscreen WWCD in Dual mode when both are ON AIR', () => {
+    const match = makeConfirmedWwcdMatch();
+    const snapshot: LiveSnapshot = {
+      revision: 4,
+      generatedAt: 2300,
+      ingest: { state: 'connected', source: 'pcob', lastUpdateAt: 2300, message: null },
+      match,
+      matchInfo: { matchNumber: 1, mapName: 'Erangel' },
+      lastClosedMap: null,
+      closedMaps: [],
+      autoWwcdVariant: 'dual',
+    };
+    const stdInstance: OverlayInstance = {
+      id: 'default-wwcd',
+      name: 'Standard WWCD',
+      type: 'wwcd',
+      enabled: true,
+      onAir: true,
+      appearance: DEFAULT_OVERLAY_APPEARANCE,
+    };
+    const fsInstance: OverlayInstance = {
+      id: 'default-wwcd-fullscreen',
+      name: 'Fullscreen WWCD',
+      type: 'wwcd-fullscreen',
+      enabled: true,
+      onAir: true,
+      appearance: DEFAULT_OVERLAY_APPEARANCE,
+    };
+
+    const stdHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-wwcd"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={stdInstance}
+        overlayState={{ instanceId: 'default-wwcd', visible: true, changedAt: 2300 }}
+      />,
+    );
+    const fsHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-wwcd-fullscreen"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={fsInstance}
+        overlayState={{ instanceId: 'default-wwcd-fullscreen', visible: true, changedAt: 2300 }}
+      />,
+    );
+
+    // Both activate in dual mode
+    expect(stdHtml).toContain('data-testid="wwcd-overlay"');
+    expect(fsHtml).toContain('data-testid="wwcd-fullscreen-overlay"');
+  });
+
+  it('Part 6 Feature A — respects per-instance HIDE in Dual mode and does not force hidden instances on air', () => {
+    const match = makeConfirmedWwcdMatch();
+    const snapshot: LiveSnapshot = {
+      revision: 5,
+      generatedAt: 2400,
+      ingest: { state: 'connected', source: 'pcob', lastUpdateAt: 2400, message: null },
+      match,
+      matchInfo: { matchNumber: 1, mapName: 'Erangel' },
+      lastClosedMap: null,
+      closedMaps: [],
+      autoWwcdVariant: 'dual',
+    };
+    const stdHiddenInstance: OverlayInstance = {
+      id: 'default-wwcd',
+      name: 'Standard WWCD',
+      type: 'wwcd',
+      enabled: true,
+      onAir: false,
+      appearance: DEFAULT_OVERLAY_APPEARANCE,
+    };
+    const fsInstance: OverlayInstance = {
+      id: 'default-wwcd-fullscreen',
+      name: 'Fullscreen WWCD',
+      type: 'wwcd-fullscreen',
+      enabled: true,
+      onAir: true,
+      appearance: DEFAULT_OVERLAY_APPEARANCE,
+    };
+
+    const stdHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-wwcd"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={stdHiddenInstance}
+        overlayState={{ instanceId: 'default-wwcd', visible: false, changedAt: 2400 }}
+      />,
+    );
+    const fsHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-wwcd-fullscreen"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={fsInstance}
+        overlayState={{ instanceId: 'default-wwcd-fullscreen', visible: true, changedAt: 2400 }}
+      />,
+    );
+
+    expect(stdHtml).not.toContain('data-testid="wwcd-overlay"');
+    expect(fsHtml).toContain('data-testid="wwcd-fullscreen-overlay"');
+  });
+
+  it('Part 6 Feature B — Fullscreen WWCD uses flex centering, letter-spacing compensation, and character optical alignment', () => {
+    const match = makeConfirmedWwcdMatch();
+    const winner = selectWwcdWinner(match, null);
+    const matchInfo = { matchNumber: 1, mapName: 'Erangel' };
+
+    const html = renderToStaticMarkup(
+      <FullscreenWwcdOverlay
+        winner={winner}
+        matchInfo={matchInfo}
+        appearance={DEFAULT_OVERLAY_APPEARANCE}
+      />,
+    );
+
+    // Flex container without Motion transform collision
+    expect(html).toContain('display:flex;flex-direction:column;align-items:center');
+    // Letter-spacing compensation margin
+    expect(html).toContain('margin-right:-calc(7 * var(--overlay-base-unit))');
+    // Optical compensation for char5 asset padding
+    expect(html).toContain('transform:translateX(-2.5%)');
+  });
+
+  it('Part 6 Feature C — Elimination notification shifts from top: u(42) down to top: u(164) when Final-4 is active', () => {
+    const alert = {
+      id: 'alert-team-4',
+      matchId: 'match-1',
+      teamNo: 4,
+      teamName: 'Delta Team',
+      logoUrl: null,
+      rank: 4,
+      placement: 4,
+      eliminations: 3,
+    };
+
+    const standardHtml = renderToStaticMarkup(
+      <EliminationOverlay
+        alert={alert}
+        appearance={DEFAULT_OVERLAY_APPEARANCE}
+        finalFourActive={false}
+      />,
+    );
+    expect(standardHtml).toContain('top:calc(42 * var(--overlay-unit))');
+
+    const finalFourHtml = renderToStaticMarkup(
+      <EliminationOverlay
+        alert={alert}
+        appearance={DEFAULT_OVERLAY_APPEARANCE}
+        finalFourActive={true}
+      />,
+    );
+    expect(finalFourHtml).toContain('top:calc(164 * var(--overlay-unit))');
+  });
 });
 
 describe('D-PMCC-09 — Postgame Match Historical Selection & Postgame Series Cumulative Standings', () => {
@@ -1446,5 +1603,54 @@ describe('Universal ON AIR / HIDE enforcement across all overlay types', () => {
 
     expect(visibleMatchHtml).toContain('ALPHA SQUAD');
     expect(visibleSeriesHtml).toContain('OVERALL SERIES STANDINGS');
+  });
+
+  it('Part 6 — preserves historical team name and logo from map snapshots in postgame even if active roster is renumbered or teams deleted', () => {
+    const historicalMap: ClosedMapResult = {
+      id: 'map-historic-1',
+      mapNumber: 1,
+      mapName: 'Erangel',
+      matchId: 'match-1',
+      startedAt: 100,
+      endedAt: 200,
+      teams: [
+        {
+          teamNo: 1,
+          name: 'Historic Alpha Squad',
+          logoUrl: '/api/logos/historic-alpha.png',
+          placement: 1,
+          eliminations: 10,
+          killPoints: 10,
+          placementPoints: 10,
+          totalPoints: 20,
+        },
+      ],
+    };
+
+    // Live match roster has been renumbered or replaced: Team 1 is now "New Omega"
+    const liveMatch: MatchState = {
+      matchId: 'match-2',
+      phase: 'live',
+      standingTeamCount: 16,
+      teams: [
+        makeTeam({
+          teamNo: 1,
+          name: 'New Omega',
+          logoUrl: '/api/logos/new-omega.png',
+          rank: 1,
+        }),
+      ],
+    };
+
+    const board = selectPostGameResults(liveMatch, historicalMap, {
+      matchNumber: 1,
+      mapName: 'Erangel',
+    });
+    expect(board).not.toBeNull();
+    // Uses the snapshot name and logo, not the new live roster identity
+    expect(board?.rows[0]?.name).toBe('Historic Alpha Squad');
+    expect(board?.rows[0]?.logoUrl).toBe('/api/logos/historic-alpha.png');
+    expect(board?.winner.name).toBe('Historic Alpha Squad');
+    expect(board?.winner.logoUrl).toBe('/api/logos/historic-alpha.png');
   });
 });

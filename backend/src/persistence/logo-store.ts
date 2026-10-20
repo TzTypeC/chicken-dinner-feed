@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -106,6 +107,83 @@ export class LogoStore {
     }
 
     return matches.length > 0;
+  }
+
+  /**
+   * Find the current logo file name for a team, if any exists.
+   */
+  async findLogoFileName(teamNo: number): Promise<string | null> {
+    if (!existsSync(this.directory)) return null;
+    const prefix = `team-${teamNo}.`;
+    const matches = (await readdir(this.directory)).filter((name) => name.startsWith(prefix));
+    return matches[0] ?? null;
+  }
+
+  /**
+   * Safely reassign logo files when teams are renumbered (Ripple Shift or Direct Swap).
+   *
+   * Executes in two stages to prevent file collisions during cyclic swaps or multi-slot shifts:
+   * 1. Renames all source files to unique temporary names.
+   * 2. Moves temporary files into their final target slots.
+   */
+  async reassignLogos(
+    moves: Array<{ fromTeamNo: number; toTeamNo: number }>,
+    now: number = Date.now(),
+  ): Promise<Map<number, StoredLogo>> {
+    await this.init();
+    const results = new Map<number, StoredLogo>();
+
+    // Filter to real moves
+    const effectiveMoves = moves.filter((m) => m.fromTeamNo !== m.toTeamNo);
+    if (effectiveMoves.length === 0) return results;
+
+    interface StagedMove {
+      fromTeamNo: number;
+      toTeamNo: number;
+      tempFileName: string;
+      targetFileName: string;
+      ext: string;
+    }
+
+    const staged: StagedMove[] = [];
+
+    // Stage 1: Move existing source files to temporary filenames
+    for (const move of effectiveMoves) {
+      const sourceFile = await this.findLogoFileName(move.fromTeamNo);
+      if (!sourceFile) continue;
+
+      const ext = path.extname(sourceFile);
+      const tempFileName = `team-temp-${randomUUID()}${ext}`;
+      const targetFileName = `team-${move.toTeamNo}${ext}`;
+
+      await rename(path.join(this.directory, sourceFile), path.join(this.directory, tempFileName));
+
+      staged.push({
+        fromTeamNo: move.fromTeamNo,
+        toTeamNo: move.toTeamNo,
+        tempFileName,
+        targetFileName,
+        ext,
+      });
+    }
+
+    // Stage 2: Move temporary files into target positions
+    for (const item of staged) {
+      // Remove any leftover target logo that was not part of this staged move
+      await this.remove(item.toTeamNo);
+
+      await rename(
+        path.join(this.directory, item.tempFileName),
+        path.join(this.directory, item.targetFileName),
+      );
+
+      results.set(item.toTeamNo, {
+        fileName: item.targetFileName,
+        url: this.urlFor(item.targetFileName, now),
+      });
+    }
+
+    return results;
   }
 
   /**

@@ -355,8 +355,8 @@ export function selectPostGameResults(
       const rosterTeam = rosterByNo.get(entry.teamNo);
       return {
         teamNo: entry.teamNo,
-        name: rosterTeam?.name ?? `Team ${entry.teamNo}`,
-        logoUrl: rosterTeam?.logoUrl ?? null,
+        name: entry.name ?? rosterTeam?.name ?? `Team ${entry.teamNo}`,
+        logoUrl: entry.logoUrl !== undefined ? entry.logoUrl : (rosterTeam?.logoUrl ?? null),
         placement: entry.placement,
         eliminations: entry.eliminations,
         placementPoints: entry.placementPoints,
@@ -540,10 +540,22 @@ export function selectSeriesStandings(
         }
       }
 
+      // Find the most recent snapshot for name/logo if rosterTeam is deleted or not found
+      let snapshotName: string | undefined;
+      let snapshotLogoUrl: string | null | undefined;
+      for (let i = maps.length - 1; i >= 0; i--) {
+        const entry = maps[i]?.teams.find((t) => t.teamNo === teamNo);
+        if (entry?.name) {
+          snapshotName = entry.name;
+          snapshotLogoUrl = entry.logoUrl;
+          break;
+        }
+      }
+
       unsorted.push({
         teamNo,
-        name: rosterTeam?.name ?? `Team ${teamNo}`,
-        logoUrl: rosterTeam?.logoUrl ?? null,
+        name: rosterTeam?.name ?? snapshotName ?? `Team ${teamNo}`,
+        logoUrl: rosterTeam?.logoUrl !== undefined ? rosterTeam.logoUrl : (snapshotLogoUrl ?? null),
         matchesPlayed,
         wwcdCount,
         placementPoints,

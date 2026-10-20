@@ -11,9 +11,11 @@ import {
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { ConfigStore } from '../persistence/config-store.js';
+import type { LogoStore } from '../persistence/logo-store.js';
 
 export interface ConfigRoutesOptions {
   store: ConfigStore;
+  logos?: LogoStore;
 }
 
 const errorSchema = z.object({ error: z.string() });
@@ -189,7 +191,71 @@ export const configRoutes: FastifyPluginAsyncZod<ConfigRoutesOptions> = async (a
         return reply.code(400).send({ error: 'Each team number can only appear once.' });
       }
 
-      return reply.send(await store.saveTeams(request.body));
+      const existingDoc = store.teams.current;
+      const existingTeams = existingDoc.teams;
+      const nextTeams = request.body.teams;
+
+      // Handle logos synchronization if logo store is available
+      if (options.logos) {
+        const nextTeamNos = new Set(nextTeams.map((t) => t.teamNo));
+
+        // 1. Detect renumbered teams
+        // Check either explicit previousTeamNo or logoUrl containing /api/logos/team-(\d+)
+        const moves: Array<{ fromTeamNo: number; toTeamNo: number }> = [];
+        for (const next of nextTeams) {
+          let fromTeamNo: number | null = null;
+          if (next.previousTeamNo !== undefined && next.previousTeamNo !== next.teamNo) {
+            fromTeamNo = next.previousTeamNo;
+          } else if (next.logoUrl) {
+            const match = next.logoUrl.match(/\/api\/logos\/team-(\d+)\./);
+            if (match) {
+              const matchedNo = Number(match[1]);
+              if (matchedNo !== next.teamNo) {
+                fromTeamNo = matchedNo;
+              }
+            }
+          }
+
+          if (fromTeamNo !== null && fromTeamNo >= 1 && fromTeamNo <= 25) {
+            moves.push({ fromTeamNo, toTeamNo: next.teamNo });
+          }
+        }
+
+        const movedFrom = new Set(moves.map((m) => m.fromTeamNo));
+
+        // 2. Clean up deleted teams' logo files (sparse slots: teams deleted and not moved)
+        for (const prev of existingTeams) {
+          if (!nextTeamNos.has(prev.teamNo) && !movedFrom.has(prev.teamNo)) {
+            await options.logos.remove(prev.teamNo);
+          }
+        }
+
+        // 3. Atomically reassign logos on disk for moved teams
+        if (moves.length > 0) {
+          const now = Date.now();
+          const reassigned = await options.logos.reassignLogos(moves, now);
+          for (const next of nextTeams) {
+            const updatedLogo = reassigned.get(next.teamNo);
+            if (updatedLogo) {
+              next.logoUrl = updatedLogo.url;
+            }
+          }
+        }
+      }
+
+      // Strip transient previousTeamNo before persisting to document
+      const sanitizedTeams = nextTeams.map(({ teamNo, name, logoUrl }) => ({
+        teamNo,
+        name,
+        logoUrl,
+      }));
+
+      return reply.send(
+        await store.saveTeams({
+          schemaVersion: request.body.schemaVersion,
+          teams: sanitizedTeams,
+        }),
+      );
     },
   );
 

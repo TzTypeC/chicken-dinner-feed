@@ -375,55 +375,64 @@ export function FullscreenWwcdOverlay({
                 style={{ minHeight: 0 }}
               >
                 {/* Floating Grand Pan Emblem & Hero Typography */}
-                <motion.div
-                  initial={{ scale: 0.86, opacity: 0, y: -18 }}
-                  animate={{ scale: 1, opacity: 1, y: 0 }}
-                  transition={{ duration: 0.65, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
-                  className="flex flex-col items-center text-center"
+                <div
                   style={{
                     position: 'absolute',
-                    top: showFullscreenCharacters ? ub(8) : '24%',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
+                    top: showFullscreenCharacters ? ub(8) : '22%',
+                    left: 0,
+                    right: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    pointerEvents: 'none',
                     zIndex: 20,
                   }}
                 >
-                  <div style={{ position: 'relative', marginBottom: ub(6) }}>
-                    <img
-                      src="/images/chicken-dinner-badge.png"
-                      alt=""
-                      className="cdf-pulse-glow"
+                  <motion.div
+                    initial={{ scale: 0.86, opacity: 0, y: -18 }}
+                    animate={{ scale: 1, opacity: 1, y: 0 }}
+                    transition={{ duration: 0.65, delay: 0.12, ease: [0.22, 1, 0.36, 1] }}
+                    className="flex flex-col items-center text-center"
+                  >
+                    <div style={{ position: 'relative', marginBottom: ub(6) }}>
+                      <img
+                        src="/images/chicken-dinner-badge.png"
+                        alt=""
+                        className="cdf-pulse-glow"
+                        style={{
+                          width: ub(136),
+                          height: ub(136),
+                          objectFit: 'contain',
+                        }}
+                      />
+                    </div>
+                    <div
+                      className="font-black uppercase"
                       style={{
-                        width: ub(136),
-                        height: ub(136),
-                        objectFit: 'contain',
+                        fontSize: ub(20),
+                        letterSpacing: ub(7),
+                        marginRight: `-${ub(7)}`,
+                        color: 'var(--overlay-accent)',
+                        textShadow: `0 ${ub(2)} ${ub(8)} rgba(0, 0, 0, 0.9)`,
                       }}
-                    />
-                  </div>
-                  <div
-                    className="font-black uppercase"
-                    style={{
-                      fontSize: ub(20),
-                      letterSpacing: ub(7),
-                      color: 'var(--overlay-accent)',
-                      textShadow: `0 ${ub(2)} ${ub(8)} rgba(0, 0, 0, 0.9)`,
-                    }}
-                  >
-                    WINNER WINNER
-                  </div>
-                  <div
-                    className="font-black uppercase"
-                    style={{
-                      fontSize: ub(68),
-                      lineHeight: 1.02,
-                      letterSpacing: ub(3),
-                      color: 'var(--overlay-text)',
-                      textShadow: `0 ${ub(6)} ${ub(26)} rgba(0, 0, 0, 0.88), 0 0 ${ub(24)} rgba(229, 169, 60, 0.45)`,
-                    }}
-                  >
-                    CHICKEN DINNER
-                  </div>
-                </motion.div>
+                    >
+                      WINNER WINNER
+                    </div>
+                    <div
+                      className="font-black uppercase"
+                      style={{
+                        fontSize: ub(68),
+                        lineHeight: 1.02,
+                        letterSpacing: ub(3),
+                        marginRight: `-${ub(3)}`,
+                        color: 'var(--overlay-text)',
+                        textShadow: `0 ${ub(6)} ${ub(26)} rgba(0, 0, 0, 0.88), 0 0 ${ub(24)} rgba(229, 169, 60, 0.45)`,
+                      }}
+                    >
+                      CHICKEN DINNER
+                    </div>
+                  </motion.div>
+                </div>
 
                 {/* 5-Character Squad Stage Lineup */}
                 {showFullscreenCharacters && (
@@ -498,7 +507,13 @@ export function FullscreenWwcdOverlay({
                       <img
                         src="/images/characters/char5.png"
                         alt=""
-                        style={{ height: '100%', objectFit: 'contain' }}
+                        style={{
+                          height: '100%',
+                          objectFit: 'contain',
+                          // Optical centering compensation: char5.png has 110px excess left margin (123px left pad vs 13px right pad),
+                          // so shifting it ~2.5% left perfectly balances the helmet & body axis with the crest and title.
+                          transform: 'translateX(-2.5%)',
+                        }}
                       />
                     </motion.div>
 

@@ -190,8 +190,9 @@ export type OverlayType = z.infer<typeof overlayTypeSchema>;
 
 /**
  * Which WWCD presentation variant activates on automatic match-end transitions (D-PMCC-08).
+ * Supports standard card, fullscreen, or dual (both card and fullscreen activated).
  */
-export const autoWwcdVariantSchema = z.enum(['standard', 'fullscreen']);
+export const autoWwcdVariantSchema = z.enum(['standard', 'fullscreen', 'dual']);
 export type AutoWwcdVariant = z.infer<typeof autoWwcdVariantSchema>;
 
 /**

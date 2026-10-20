@@ -17,6 +17,12 @@ export const closedMapTeamResultSchema = z.object({
   killPoints: z.number().int().min(0),
   placementPoints: z.number().int().min(0),
   totalPoints: z.number().int().min(0),
+  /**
+   * Snapshot of the team's identity at the moment this map closed (D-PMCC Part 6).
+   * Preserves historical accuracy if the active roster is subsequently renumbered or teams deleted.
+   */
+  name: z.string().optional(),
+  logoUrl: z.string().nullable().optional(),
 });
 export type ClosedMapTeamResult = z.infer<typeof closedMapTeamResultSchema>;
 

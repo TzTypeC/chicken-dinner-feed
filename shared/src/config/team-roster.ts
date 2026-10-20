@@ -29,6 +29,11 @@ export const teamRosterEntrySchema = z.object({
   name: z.string().min(1).max(TEAM_NAME_MAX_LENGTH),
   /** Null until the operator supplies a logo. */
   logoUrl: z.string().nullable(),
+  /**
+   * Optional slot provenance when moving or renumbering teams (Fitur E).
+   * Used by the backend to coordinate atomic file renaming in LogoStore.
+   */
+  previousTeamNo: z.number().int().min(1).max(25).optional(),
 });
 export type TeamRosterEntry = z.infer<typeof teamRosterEntrySchema>;
 

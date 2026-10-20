@@ -302,5 +302,62 @@ Chronological record of phases, tasks, files changed, and verification results.
 - **Issues Encountered & Resolved:**
   - TypeScript literal fixture in `overlays.test.tsx` required `matchId`, `startedAt`, and `endedAt` to strictly adhere to `ClosedMapResult` type contract. Resolved cleanly.
   - Oxlint export warning on `OVERLAY_TYPE_LABELS` in `InstanceToolbar.tsx` resolved by creating dedicated `overlay-types.ts`.
-- **Next Steps:** Complete. Ready for tournament broadcast deployment.
+- **Next Steps:** Complete Part 5. Awaiting user instructions.
 
+---
+
+## Entry 6 — 2026-10-21 — Part 6: WWCD Display Modes, Fullscreen Layout Refinement, Elimination Positioning & Team Management UX (`WS-6.1`–`WS-6.8`)
+
+- **Phase:** Part 6 Implementation & Quality Gate Verification
+- **Task:** `WS-6.1` – `WS-6.8`
+- **Status:** `COMPLETED`
+- **Files Affected:**
+  - `shared/src/config/overlay-instance.ts`, `shared/src/config/team-roster.ts`, `shared/src/domain/series.ts`
+  - `backend/src/app.ts`, `backend/src/persistence/logo-store.ts`, `backend/src/routes/config.ts`, `backend/src/state/series-store.ts`, `backend/src/routes/config.test.ts`
+  - `frontend/src/components/overlay/FullscreenWwcdOverlay.tsx`, `frontend/src/components/overlay/EliminationOverlay.tsx`, `frontend/src/components/overlay/broadcast-state.ts`, `frontend/src/components/overlay/overlays.test.tsx`
+  - `frontend/src/features/admin/bulk-teams.ts`, `frontend/src/features/admin/BulkTeamDialog.tsx`, `frontend/src/features/admin/roster-reorder.ts`, `frontend/src/features/admin/TeamRosterEditor.tsx`, `frontend/src/features/admin/TeamManagement.test.ts`
+  - `frontend/src/pages/AdminPage.tsx`, `frontend/src/pages/OverlayPage.tsx`
+  - `docs/checkpoint.md`, `docs/progress.md`
+- **Changes Made:**
+  - **`WS-6.1` (Schema, Protocol & Backend Persistence):**
+    - Extended `autoWwcdVariantSchema` to `z.enum(['standard', 'fullscreen', 'dual'])`.
+    - Added optional `name?: string` and `logoUrl?: string | null` snapshot properties to `closedMapTeamResultSchema`.
+    - Added optional `previousTeamNo?: number` to `teamRosterEntrySchema` to track slot provenance during moves.
+    - Updated `SeriesStore.persistClosedMap` to stamp active team `name` and `logoUrl` onto closed map records upon map close, and updated `editClosedMap` to preserve snapshot identity.
+    - Implemented `LogoStore.reassignLogos` with a two-stage temporary rename mechanism to prevent file collisions during cyclic swaps or multi-slot shifts.
+    - Updated `PUT /config/teams` in `backend/src/routes/config.ts` to detect slot moves, atomically reassign disk logos via `LogoStore`, remove logos for deleted teams, and strip transient fields before persistence.
+    - Updated `selectPostGameResults` and `selectSeriesStandings` in `broadcast-state.ts` to prioritize snapshot `name` and `logoUrl` for closed maps, falling back to active roster only when snapshots are absent.
+  - **`WS-6.2` (Fullscreen WWCD Layout Refinement):**
+    - Resolved Motion transform collision by wrapping emblem badge and title typography in a full-width flex container (`left: 0, right: 0, display: flex, flexDirection: column, alignItems: center`).
+    - Compensated for CSS `letter-spacing` trailing offset on `WINNER WINNER` with negative right margin `marginRight: -ub(7)`.
+    - Applied optical centering compensation (`transform: translateX(-2.5%)`) to `char5.png` image container to balance the 110px transparent padding asymmetry of the asset with the emblem and headline.
+  - **`WS-6.3` (Elimination Notification Dynamic Positioning):**
+    - Added `finalFourActive?: boolean` prop to `EliminationOverlay.tsx`.
+    - Anchored banner to `top: u(42)` by default, dynamically shifting down to `top: u(164)` when Final-4 is active ($19\text{px}$ clearance below Final-4 cards, compliant with EBU R95 5% safe area).
+    - Wired `activeLayoutMode === 'final-four'` in `OverlayPage.tsx` across both standalone and composite surface modes.
+  - **`WS-6.4` (Dual WWCD Mode & Visibility Coordination):**
+    - Coordinated simultaneous automatic activation of both `wwcd` (Standard Card) and `wwcd-fullscreen` (Fullscreen Stage) surfaces when `effectiveAutoWwcdVariant === 'dual'`.
+    - Strictly enforced individual instance `onAir` controls: if one instance is set to HIDE, only the ON AIR instance renders; never forcing a hidden instance ON AIR.
+    - Updated Admin panel Auto WWCD selector with a 3-way toggle (`Card`, `Fullscreen`, `Dual`) and informational guidance banner explaining dual coordination.
+  - **`WS-6.5` (Bulk Team Creation):**
+    - Implemented `bulk-teams.ts` parser and `BulkTeamDialog.tsx` modal supporting `[Slot] [Team Name]`, `[Slot], [Team Name]`, and auto-assigned `[Team Name]` formats.
+    - Added live parsing preview table with line numbers, slot assignments, validation status, duplicate detection, and 25-team capacity limit.
+  - **`WS-6.6` (Permanent Team Number Renumbering & DND - Fitur E):**
+    - Implemented `applyRippleShift` algorithm in `roster-reorder.ts` as the default drag-and-drop behavior (downward move shifts `[D, S - 1]` by `+1`, upward move shifts `[S + 1, D]` by `-1`, vacant target moves directly).
+    - Added accessible Slot Number Dropdown (`applyDirectSwap`) and Up/Down stepper buttons per team row.
+    - Added amber Live Match warning banner when editing roster while `match.phase !== 'idle'`.
+  - **`WS-6.7` (Selective & Bulk Team Deletion - Fitur F):**
+    - Implemented row select checkboxes, table header master checkbox with indeterminate support, and Selection Action Bar (`X of Y teams selected`, `Delete Selected (X)`, `Clear`).
+    - Implemented sparse slots retention: remaining teams preserve their original `teamNo` without automatic shifting.
+    - Implemented `Delete Selected` and `Delete All Teams` confirmation dialogs detailing deletion scope and historical data protection.
+  - **`WS-6.8` (Quality Gates, Automated Tests & Verification):**
+    - Added `frontend/src/features/admin/TeamManagement.test.ts` (11 tests covering bulk parsing, Ripple Shift, and Direct Swap).
+    - Added `backend/src/routes/config.test.ts` (4 tests covering Dual auto-WWCD mode, atomic logo reassignment on slot renumbering, logo deletion on sparse slot cleanup, and duplicate team number rejection).
+    - Added comprehensive integration tests in `frontend/src/components/overlay/overlays.test.tsx` verifying Dual WWCD activation, per-instance HIDE enforcement, elimination positioning at Final-4, Fullscreen WWCD centering, and postgame snapshot preservation.
+- **Verification Results:**
+  - `npm test`: **All 30 test files passed, 374 tests passed** (24 backend test files / 288 tests; 6 frontend test files / 86 tests).
+  - `npm run typecheck`: Passed with **0 errors** across all workspaces.
+  - `npm run lint`: Passed with **0 warnings and 0 errors** across 60 files.
+  - `npm run format:check`: Passed (`All matched files use Prettier code style!`).
+  - `npm run build`: Full production build of `@cdf/shared`, `@cdf/backend`, and `@cdf/frontend` succeeded with exit code 0.
+- **Next Steps:** Part 6 complete and fully verified. Ready for production broadcast deployment.

@@ -33,6 +33,8 @@ export interface ClosedMapTeamEdit {
   teamNo: number;
   placement: number;
   eliminations: number;
+  name?: string;
+  logoUrl?: string | null;
 }
 
 /**
@@ -43,6 +45,7 @@ export interface ClosedMapTeamEdit {
 function resultsFromEdits(
   edits: readonly ClosedMapTeamEdit[],
   ruleset: ScoringRuleset,
+  existingTeams?: readonly ClosedMapTeamResult[],
 ): ClosedMapTeamResult[] {
   // Distinct, not necessarily a contiguous 1..N run: a real closed map's own placements can
   // legitimately skip numbers — `resolvePlacements`'s slot pool is sized by every team ever seen in
@@ -60,8 +63,11 @@ function resultsFromEdits(
   }
 
   return edits.map((edit) => {
+    const existing = existingTeams?.find((t) => t.teamNo === edit.teamNo);
     const killPoints = edit.eliminations * ruleset.pointsPerElimination;
     const placementPoints = ruleset.placementPoints[edit.placement - 1] ?? 0;
+    const name = edit.name ?? existing?.name;
+    const logoUrl = edit.logoUrl !== undefined ? edit.logoUrl : existing?.logoUrl;
     return {
       teamNo: edit.teamNo,
       placement: edit.placement,
@@ -69,6 +75,8 @@ function resultsFromEdits(
       killPoints,
       placementPoints,
       totalPoints: killPoints + placementPoints,
+      ...(name !== undefined ? { name } : {}),
+      ...(logoUrl !== undefined ? { logoUrl } : {}),
     };
   });
 }
@@ -407,7 +415,7 @@ export class SeriesStore {
         throw new Error('An edit must cover exactly the teams already recorded for this map.');
       }
 
-      const teams = resultsFromEdits(edits, ruleset);
+      const teams = resultsFromEdits(edits, ruleset, map.teams);
 
       return this.document.write({
         ...current,
@@ -478,6 +486,8 @@ export class SeriesStore {
         // in via `MatchStore.setSeriesContext`, and persisting that would double-count them into
         // every future series total the moment this map closes.
         totalPoints: team.killPoints + team.placementPoints,
+        name: team.name,
+        logoUrl: team.logoUrl ?? null,
       }));
 
     const activeMapName = current.activeMapName.trim();

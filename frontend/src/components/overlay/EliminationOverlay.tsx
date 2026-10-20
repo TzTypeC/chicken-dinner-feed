@@ -7,20 +7,28 @@ import { formatTeamSlot, u } from './overlay-scale';
 export interface EliminationOverlayProps {
   alert: EliminationAlertItem | null;
   appearance: OverlayAppearance;
+  finalFourActive?: boolean;
 }
 
 /**
  * Broadcast Team Elimination Notification Banner (`/overlay/elimination`).
  *
- * Anchored at top-center of the 1920×1080 broadcast frame (`top: u(42)`), leaving center gameplay,
- * top-left match info, and side leaderboard unobstructed.
+ * Anchored at top-center of the 1920×1080 broadcast frame.
+ * Standard position: `top: u(42)`.
+ * Dynamic Final-4 clearance: When Final-4 is active (4 or fewer squads alive), shifts down to
+ * `top: u(164)` ($19px below the Final-4 card cluster) to avoid occluding alive bars and scores
+ * while staying inside EBU R95 upper safe margin.
  *
  * Respects:
  * - `appearance.showEliminationAlerts` (master toggle)
  * - `appearance.showLogos` (shows or collapses the team logo slot)
  * - `appearance.showEliminationAlertElims` (shows or hides the match eliminations stat pill)
  */
-export function EliminationOverlay({ alert, appearance }: EliminationOverlayProps) {
+export function EliminationOverlay({
+  alert,
+  appearance,
+  finalFourActive = false,
+}: EliminationOverlayProps) {
   const showAlerts = appearance.showEliminationAlerts ?? true;
   const showLogos = appearance.showLogos ?? true;
   const showElims = appearance.showEliminationAlertElims ?? true;
@@ -33,12 +41,13 @@ export function EliminationOverlay({ alert, appearance }: EliminationOverlayProp
       style={{
         ...appearanceToCssVariables(appearance),
         position: 'fixed',
-        top: u(42),
+        top: finalFourActive ? u(164) : u(42),
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 20,
         pointerEvents: 'none',
         fontFamily: 'var(--overlay-font-family)',
+        transition: 'top 0.3s ease',
       }}
     >
       <AnimatePresence mode="wait">

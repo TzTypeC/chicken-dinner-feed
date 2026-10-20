@@ -8,7 +8,7 @@ import type {
   ScoringRuleset,
   TeamRosterDocument,
 } from '@cdf/shared';
-import { AlertTriangle, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { AlertTriangle, Info, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Toaster } from '@/components/Toaster';
@@ -309,8 +309,10 @@ export function AdminPage() {
       toast.success(
         updated.autoWwcdVariant === 'fullscreen'
           ? 'Automatic WWCD set to Fullscreen WWCD'
-          : 'Automatic WWCD set to Standard WWCD',
-        'Match-end victory transitions will now activate the selected WWCD variant.',
+          : updated.autoWwcdVariant === 'dual'
+            ? 'Automatic WWCD set to Dual Mode (Card & Fullscreen)'
+            : 'Automatic WWCD set to Standard Card WWCD',
+        'Match-end victory transitions will now activate the selected WWCD presentation mode.',
       );
     } catch (error) {
       toast.error('Could not update Automatic WWCD setting', describe(error));
@@ -382,9 +384,14 @@ export function AdminPage() {
   const [useScopedOverlayUrls, setUseScopedOverlayUrls] = useState(false);
 
   const autoWwcdVariant: AutoWwcdVariant = overlays?.autoWwcdVariant ?? 'standard';
-  const targetWwcdType: OverlayType = autoWwcdVariant === 'fullscreen' ? 'wwcd-fullscreen' : 'wwcd';
   const matchingWwcdInstances =
-    overlays?.instances.filter((inst) => inst.type === targetWwcdType) ?? [];
+    overlays?.instances.filter((inst) =>
+      autoWwcdVariant === 'dual'
+        ? inst.type === 'wwcd' || inst.type === 'wwcd-fullscreen'
+        : autoWwcdVariant === 'fullscreen'
+          ? inst.type === 'wwcd-fullscreen'
+          : inst.type === 'wwcd',
+    ) ?? [];
   const hasActiveSelectedWwcd = matchingWwcdInstances.some((inst) => {
     const visible = overlayStates[inst.id]?.visible ?? inst.onAir;
     return inst.enabled && visible && (inst.appearance.showWwcdOverlay ?? true);
@@ -691,14 +698,15 @@ export function AdminPage() {
                         Which WWCD variant activates automatically when a match ends:
                       </p>
                       <div
-                        className="grid grid-cols-2 gap-1 rounded border border-white/10 bg-black/25 p-0.5"
+                        className="grid grid-cols-3 gap-1 rounded border border-white/10 bg-black/25 p-0.5"
                         role="group"
                         aria-label="Automatic WWCD presentation selector"
                       >
                         {(
                           [
-                            ['standard', 'Standard Card'],
-                            ['fullscreen', 'Fullscreen Stage'],
+                            ['standard', 'Card'],
+                            ['fullscreen', 'Fullscreen'],
+                            ['dual', 'Dual'],
                           ] as const
                         ).map(([variant, label]) => {
                           const active = autoWwcdVariant === variant;
@@ -721,6 +729,19 @@ export function AdminPage() {
                         })}
                       </div>
 
+                      {autoWwcdVariant === 'dual' && (
+                        <div
+                          data-testid="auto-wwcd-dual-notice"
+                          className="flex items-start gap-1.5 rounded border border-blue-500/40 bg-blue-500/10 p-2 text-[11px] text-blue-200"
+                        >
+                          <Info className="mt-0.5 size-3.5 shrink-0 text-blue-400" aria-hidden />
+                          <span>
+                            Dual mode coordinates both Card and Fullscreen presentations during a
+                            WWCD event. Each instance must be independently set to ON AIR.
+                          </span>
+                        </div>
+                      )}
+
                       {!hasActiveSelectedWwcd && (
                         <div
                           data-testid="auto-wwcd-warning"
@@ -733,12 +754,14 @@ export function AdminPage() {
                           <span>
                             The selected{' '}
                             <strong>
-                              {autoWwcdVariant === 'fullscreen'
-                                ? 'Fullscreen WWCD'
-                                : 'Standard WWCD'}
+                              {autoWwcdVariant === 'dual'
+                                ? 'Dual WWCD'
+                                : autoWwcdVariant === 'fullscreen'
+                                  ? 'Fullscreen WWCD'
+                                  : 'Standard WWCD'}
                             </strong>{' '}
-                            instance is currently hidden or disabled. Automatic WWCD will respect
-                            your HIDE state and stay off air until you put it ON AIR.
+                            instance(s) are currently hidden or disabled. Automatic WWCD will
+                            respect your HIDE state and stay off air until you put it ON AIR.
                           </span>
                         </div>
                       )}
@@ -1050,7 +1073,11 @@ export function AdminPage() {
         {tab === 'teams' && teams && (
           <div className="grid max-w-3xl gap-4">
             <ImportIniButton onImported={setTeams} />
-            <TeamRosterEditor document={teams} onChange={setTeams} />
+            <TeamRosterEditor
+              document={teams}
+              onChange={setTeams}
+              isMatchLive={Boolean(snapshot?.match && snapshot.match.phase !== 'idle')}
+            />
             <button
               type="button"
               className="bg-primary text-primary-foreground min-h-10 w-fit rounded px-3.5 py-1.5 text-sm font-medium"

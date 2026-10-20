@@ -312,7 +312,7 @@ export async function buildApp(): Promise<AppContext> {
     store: overlayControl,
     isConfigured: (instanceId) => configStore.findInstance(instanceId) !== null,
   });
-  await app.register(configRoutes, { prefix: '/api', store: configStore });
+  await app.register(configRoutes, { prefix: '/api', store: configStore, logos: logoStore });
 
   await app.register(manualRoutes, {
     prefix: '/api',
