@@ -10,6 +10,7 @@ export interface WwcdOverlayProps {
   matchInfo: LiveMatchInfo;
   appearance: OverlayAppearance;
   source?: IngestSourceKind;
+  visible?: boolean;
 }
 
 /**
@@ -25,7 +26,13 @@ export interface WwcdOverlayProps {
  *   - In Manual Mode (where player names are synthetic `Slot 1..4`): renders the 4-segment visual
  *     `AlivePlayerBars` + `SURVIVING SQUAD: X / 4 ALIVE` without fake player names.
  */
-export function WwcdOverlay({ winner, matchInfo, appearance, source }: WwcdOverlayProps) {
+export function WwcdOverlay({
+  winner,
+  matchInfo,
+  appearance,
+  source,
+  visible = true,
+}: WwcdOverlayProps) {
   const showLogos = appearance.showLogos ?? true;
   const showTeamNumbers = appearance.showTeamNumbers ?? true;
 
@@ -53,7 +60,7 @@ export function WwcdOverlay({ winner, matchInfo, appearance, source }: WwcdOverl
       }}
     >
       <AnimatePresence mode="wait">
-        {winner && (
+        {visible && winner && (
           <motion.div
             key={`wwcd-${winner.teamNo}-${matchInfo.matchNumber}`}
             data-testid="wwcd-overlay"

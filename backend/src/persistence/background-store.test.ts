@@ -86,4 +86,3 @@ describe('BackgroundStore', () => {
     expect(await readdir(store.root)).toEqual(['main.png']);
   });
 });
-

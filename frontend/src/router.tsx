@@ -8,7 +8,9 @@ import {
 import { AdminPage } from '@/pages/AdminPage';
 import {
   OverlayEliminationRoute,
+  OverlayFinalFourRoute,
   OverlayInstanceEliminationRoute,
+  OverlayInstanceFinalFourRoute,
   OverlayInstanceMatchInfoRoute,
   OverlayInstancePostGameRoute,
   OverlayInstanceWwcdRoute,
@@ -40,6 +42,18 @@ const overlayMatchInfoRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/overlay/match-info',
   component: OverlayMatchInfoRoute,
+});
+
+const overlayFinalFourRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/final4',
+  component: OverlayFinalFourRoute,
+});
+
+const overlayFinalFourAliasRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/final-four',
+  component: OverlayFinalFourRoute,
 });
 
 const overlayWwcdRoute = createRoute({
@@ -77,6 +91,18 @@ const overlayInstanceMatchInfoRoute = createRoute({
   component: OverlayInstanceMatchInfoRoute,
 });
 
+const overlayInstanceFinalFourRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$instanceId/final4',
+  component: OverlayInstanceFinalFourRoute,
+});
+
+const overlayInstanceFinalFourAliasRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$instanceId/final-four',
+  component: OverlayInstanceFinalFourRoute,
+});
+
 const overlayInstanceWwcdRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/overlay/$instanceId/wwcd',
@@ -95,14 +121,68 @@ const adminRoute = createRoute({
   component: AdminPage,
 });
 
+// Top-level broadcast shortcuts for quick OBS entry:
+const shortcutMainRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/main',
+  component: OverlayRoute,
+});
+
+const shortcutFinalFourRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/final4',
+  component: OverlayFinalFourRoute,
+});
+
+const shortcutFinalFourAliasRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/final-four',
+  component: OverlayFinalFourRoute,
+});
+
+const shortcutWwcdRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/wwcd',
+  component: OverlayWwcdRoute,
+});
+
+const shortcutMatchInfoRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/match-info',
+  component: OverlayMatchInfoRoute,
+});
+
+const shortcutPostGameRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/postgame',
+  component: OverlayPostGameRoute,
+});
+
+const shortcutEliminationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/elimination',
+  component: OverlayEliminationRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
+  shortcutMainRoute,
+  shortcutFinalFourRoute,
+  shortcutFinalFourAliasRoute,
+  shortcutWwcdRoute,
+  shortcutMatchInfoRoute,
+  shortcutPostGameRoute,
+  shortcutEliminationRoute,
   overlayEliminationRoute,
   overlayMatchInfoRoute,
+  overlayFinalFourRoute,
+  overlayFinalFourAliasRoute,
   overlayWwcdRoute,
   overlayPostGameRoute,
   overlayInstanceEliminationRoute,
   overlayInstanceMatchInfoRoute,
+  overlayInstanceFinalFourRoute,
+  overlayInstanceFinalFourAliasRoute,
   overlayInstanceWwcdRoute,
   overlayInstancePostGameRoute,
   overlayRoute,

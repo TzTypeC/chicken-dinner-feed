@@ -1,11 +1,13 @@
 import { BellRing } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { resolveLeaderboardLayoutMode } from '@/components/overlay/broadcast-state';
 import { useElementWidth } from '@/hooks/useElementWidth';
 import type {
   OverlayPreviewLayerConfig,
   OverlayPreviewMessage,
   OverlayPreviewViewMode,
 } from '@/pages/OverlayPage';
+import { useLiveStore } from '@/stores/live-store';
 
 type PreviewMode = 'canvas' | 'actual';
 
@@ -39,6 +41,28 @@ export function OverlayPreview({ instanceId }: OverlayPreviewProps) {
 
   const isCanvas = mode === 'canvas';
   const scale = isCanvas && boxWidth > 0 ? boxWidth / CANVAS_WIDTH : 1;
+
+  const snapshot = useLiveStore((state) => state.snapshot);
+  const liveMode = snapshot?.match
+    ? resolveLeaderboardLayoutMode(snapshot.match, {
+        showFinalFourLayout: true,
+        showWwcdOverlay: true,
+      })
+    : 'tower';
+
+  const viewMode = layers.viewMode ?? 'auto';
+  const effectiveScreen = viewMode === 'auto' ? liveMode : viewMode;
+
+  const previewPath =
+    effectiveScreen === 'final-four'
+      ? `/overlay/${instanceId}/final4`
+      : effectiveScreen === 'wwcd'
+        ? `/overlay/${instanceId}/wwcd`
+        : effectiveScreen === 'postgame'
+          ? `/overlay/${instanceId}/postgame`
+          : `/overlay/${instanceId}`;
+
+  const previewSrc = `${previewPath}?preview=1`;
 
   const postToIframe = (message: OverlayPreviewMessage) => {
     const win = iframeRef.current?.contentWindow;
@@ -172,10 +196,10 @@ export function OverlayPreview({ instanceId }: OverlayPreviewProps) {
       >
         <iframe
           ref={iframeRef}
-          key={instanceId}
-          src={`/overlay/${instanceId}?preview=1`}
+          key={`${instanceId}-${effectiveScreen}`}
+          src={previewSrc}
           onLoad={() => postToIframe({ type: 'cdf:preview-layers', layers })}
-          title={`Live preview of the ${instanceId} overlay`}
+          title={`Live preview of the ${instanceId} overlay (${effectiveScreen})`}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           className="pointer-events-none block border-0"

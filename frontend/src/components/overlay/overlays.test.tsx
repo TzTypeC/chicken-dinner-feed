@@ -2,11 +2,15 @@ import {
   DEFAULT_OVERLAY_APPEARANCE,
   DEFAULT_POST_GAME_BACKGROUND,
   type ClosedMapResult,
+  type LiveSnapshot,
   type MatchState,
+  type OverlayInstance,
   type Team,
 } from '@cdf/shared';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { OverlayPage } from '@/pages/OverlayPage';
+import { useLiveStore } from '@/stores/live-store';
 import {
   resolveLeaderboardLayoutMode,
   selectFinalFourCohort,
@@ -600,5 +604,299 @@ describe('PostGameOverlay & Custom Background Media (D-PMCC-04 / A3 & D-PMCC-05)
     expect(videoHtml).toContain('data-testid="postgame-bg-video"');
     expect(videoHtml).toContain('/api/backgrounds/main.mp4?v=456');
     expect(videoHtml).toContain('opacity:0.5');
+  });
+});
+
+describe('Overlay route isolation & global visibility coordination (Part 4)', () => {
+  const teams6: Team[] = [
+    makeTeam({ teamNo: 1, name: 'SQUAD ONE', rank: 1, isEliminated: false }),
+    makeTeam({ teamNo: 2, name: 'SQUAD TWO', rank: 2, isEliminated: false }),
+    makeTeam({ teamNo: 3, name: 'SQUAD THREE', rank: 3, isEliminated: false }),
+    makeTeam({ teamNo: 4, name: 'SQUAD FOUR', rank: 4, isEliminated: false }),
+    makeTeam({ teamNo: 5, name: 'SQUAD FIVE', rank: 5, isEliminated: false }),
+    makeTeam({ teamNo: 6, name: 'SQUAD SIX', rank: 6, isEliminated: true, placement: 6 }),
+  ];
+
+  function setupLiveMatch(standingCount: number, phase: MatchState['phase'] = 'live'): MatchState {
+    const teams = teams6.map((t, idx) => {
+      const isAlive = idx < standingCount;
+      return {
+        ...t,
+        isEliminated: !isAlive,
+        standingPlayerCount: isAlive ? 4 : 0,
+        placement: isAlive ? null : idx + 1,
+      };
+    });
+    return {
+      matchId: 'test-match-1',
+      phase,
+      standingTeamCount: standingCount,
+      teams,
+    };
+  }
+
+  function setStoreSnapshot(match: MatchState, appearance = DEFAULT_OVERLAY_APPEARANCE) {
+    const mainInstance: OverlayInstance = {
+      id: 'main',
+      name: 'Main Leaderboard',
+      type: 'leaderboard',
+      appearance,
+    };
+    const snapshot: LiveSnapshot = {
+      revision: 1,
+      generatedAt: 1000,
+      ingest: { state: 'connected', source: 'pcob', lastUpdateAt: 1000, message: null },
+      match,
+      matchInfo: { matchNumber: 2, mapName: 'Erangel' },
+      lastClosedMap: null,
+    };
+    useLiveStore.setState({
+      snapshot,
+      instances: { main: mainInstance },
+      overlayStates: { main: { instanceId: 'main', visible: true, changedAt: 1000 } },
+    });
+    return {
+      snapshot,
+      instance: mainInstance,
+      overlayState: { instanceId: 'main', visible: true, changedAt: 1000 },
+    };
+  }
+
+  it('State A (> 4 alive): /main shows vertical leaderboard, /final4 and /wwcd are hidden, /match-info is visible', () => {
+    const match = setupLiveMatch(5); // 5 alive, 1 eliminated
+    const ctx = setStoreSnapshot(match);
+
+    // /main route: renders vertical leaderboard only
+    const mainHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="leaderboard" {...ctx} />,
+    );
+    expect(mainHtml).toContain('SQUAD ONE');
+    expect(mainHtml).not.toContain('data-testid="final-four-overlay"');
+    expect(mainHtml).not.toContain('data-testid="wwcd-overlay"');
+
+    // /final4 route: hidden during State A
+    const f4Html = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="final-four" {...ctx} />,
+    );
+    expect(f4Html).not.toContain('data-testid="final-four-overlay"');
+
+    // /wwcd route: hidden during State A
+    const wwcdHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="wwcd" {...ctx} />,
+    );
+    expect(wwcdHtml).not.toContain('data-testid="wwcd-overlay"');
+
+    // /match-info route: visible during State A
+    const infoHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="match-info" {...ctx} />,
+    );
+    expect(infoHtml).toContain('MATCH 2');
+    expect(infoHtml).toContain('Erangel');
+  });
+
+  it('State B (4 alive): /final4 shows horizontal cards, /main hides vertical tower and NEVER renders Final-4/WWCD, /match-info hides', () => {
+    const match = setupLiveMatch(4); // 4 alive, 2 eliminated
+    const ctx = setStoreSnapshot(match);
+
+    // /main route: vertical tower is hidden, NEVER renders Final-4 cards
+    const mainHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="leaderboard" {...ctx} />,
+    );
+    expect(mainHtml).not.toContain('data-testid="final-four-overlay"');
+    expect(mainHtml).not.toContain('data-testid="wwcd-overlay"');
+    expect(mainHtml).not.toContain('FINAL 4 SHOWDOWN');
+    expect(mainHtml).not.toContain('SQUAD ONE'); // Tower is cleanly hidden
+
+    // /final4 route: displays the 4-team horizontal showdown
+    const f4Html = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="final-four" {...ctx} />,
+    );
+    expect(f4Html).toContain('data-testid="final-four-overlay"');
+    expect(f4Html).toContain('FINAL 4 SHOWDOWN');
+    expect(f4Html).toContain('4 / 4 SQUADS ALIVE');
+    expect(f4Html).toContain('SQUAD ONE');
+    expect(f4Html).toContain('SQUAD FOUR');
+
+    // /wwcd route: stays hidden
+    const wwcdHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="wwcd" {...ctx} />,
+    );
+    expect(wwcdHtml).not.toContain('data-testid="wwcd-overlay"');
+
+    // /match-info route: hides to prevent duplication with Final-4 header pill
+    const infoHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="match-info" {...ctx} />,
+    );
+    expect(infoHtml).not.toContain('MATCH 2');
+  });
+
+  it('State C (3 or 2 alive in Final-4): /final4 retains all 4 cards with grayed-out eliminated cards, /main stays hidden', () => {
+    const match = setupLiveMatch(2); // 2 alive, 4 eliminated
+    const ctx = setStoreSnapshot(match);
+
+    // /main route remains completely hidden
+    const mainHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="leaderboard" {...ctx} />,
+    );
+    expect(mainHtml).not.toContain('data-testid="final-four-overlay"');
+    expect(mainHtml).not.toContain('data-testid="wwcd-overlay"');
+    expect(mainHtml).not.toContain('SQUAD ONE');
+
+    // /final4 route retains all 4 cards with eliminated squads in grayed-out state
+    const f4Html = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="final-four" {...ctx} />,
+    );
+    expect(f4Html).toContain('data-testid="final-four-overlay"');
+    expect(f4Html).toContain('2 / 4 SQUADS ALIVE');
+    expect(f4Html).toContain('data-status="eliminated"');
+
+    // /wwcd route remains hidden until confirmed 1 team alive
+    const wwcdHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="wwcd" {...ctx} />,
+    );
+    expect(wwcdHtml).not.toContain('data-testid="wwcd-overlay"');
+  });
+
+  it('State D (Confirmed WWCD, 1 alive): /wwcd displays victory screen and takes precedence; /main, /final4, and /match-info are all hidden', () => {
+    const match = setupLiveMatch(1); // 1 alive, 5 eliminated
+    const ctx = setStoreSnapshot(match);
+
+    // /wwcd route displays the WWCD victory screen
+    const wwcdHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="wwcd" {...ctx} />,
+    );
+    expect(wwcdHtml).toContain('data-testid="wwcd-overlay"');
+    expect(wwcdHtml).toContain('WINNER WINNER CHICKEN DINNER');
+    expect(wwcdHtml).toContain('SQUAD ONE');
+
+    // /main route is hidden and NEVER renders WWCD
+    const mainHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="leaderboard" {...ctx} />,
+    );
+    expect(mainHtml).not.toContain('data-testid="wwcd-overlay"');
+    expect(mainHtml).not.toContain('WINNER WINNER CHICKEN DINNER');
+    expect(mainHtml).not.toContain('data-testid="final-four-overlay"');
+
+    // /final4 route is hidden
+    const f4Html = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="final-four" {...ctx} />,
+    );
+    expect(f4Html).not.toContain('data-testid="final-four-overlay"');
+
+    // /match-info route is hidden
+    const infoHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="match-info" {...ctx} />,
+    );
+    expect(infoHtml).not.toContain('MATCH 2');
+  });
+
+  it('New match or valid reset restores State A (normal leaderboard) and hides WWCD/Final-4', () => {
+    // Reset back to 6 alive teams
+    const resetMatch = setupLiveMatch(6);
+    const ctx = setStoreSnapshot(resetMatch);
+
+    const mainHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="leaderboard" {...ctx} />,
+    );
+    expect(mainHtml).toContain('SQUAD ONE'); // Vertical leaderboard restored
+
+    const f4Html = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="final-four" {...ctx} />,
+    );
+    expect(f4Html).not.toContain('data-testid="final-four-overlay"');
+
+    const wwcdHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="wwcd" {...ctx} />,
+    );
+    expect(wwcdHtml).not.toContain('data-testid="wwcd-overlay"');
+  });
+
+  it('Warmup with 1 team alive does NOT falsely trigger WWCD', () => {
+    const warmupMatch = setupLiveMatch(1, 'idle');
+    const ctx = setStoreSnapshot(warmupMatch);
+
+    const wwcdHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="wwcd" {...ctx} />,
+    );
+    expect(wwcdHtml).not.toContain('data-testid="wwcd-overlay"');
+  });
+
+  it('Feature disabled (showFinalFourLayout: false) keeps vertical tower active at 4 alive teams and hides /final4', () => {
+    const match = setupLiveMatch(4);
+    const ctx = setStoreSnapshot(match, {
+      ...DEFAULT_OVERLAY_APPEARANCE,
+      showFinalFourLayout: false,
+    });
+
+    // /main continues showing normal leaderboard when Final-4 feature is OFF
+    const mainHtml = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="leaderboard" {...ctx} />,
+    );
+    expect(mainHtml).toContain('SQUAD ONE');
+
+    // /final4 route is hidden
+    const f4Html = renderToStaticMarkup(
+      <OverlayPage instanceId="main" surfaceMode="final-four" {...ctx} />,
+    );
+    expect(f4Html).not.toContain('data-testid="final-four-overlay"');
+  });
+});
+
+describe('Final-4 Overlay Centering on 1920×1080 canvas (Part 4 / Phase 4)', () => {
+  const sampleCohort = [
+    {
+      team: makeTeam({ teamNo: 1, name: 'SQUAD ONE', rank: 1 }),
+      isKnockedOut: false,
+      eliminatedPlacement: null,
+    },
+    {
+      team: makeTeam({ teamNo: 2, name: 'SQUAD TWO', rank: 2 }),
+      isKnockedOut: false,
+      eliminatedPlacement: null,
+    },
+    {
+      team: makeTeam({ teamNo: 3, name: 'SQUAD THREE', rank: 3 }),
+      isKnockedOut: true,
+      eliminatedPlacement: 3,
+    },
+    {
+      team: makeTeam({ teamNo: 4, name: 'SQUAD FOUR', rank: 4 }),
+      isKnockedOut: true,
+      eliminatedPlacement: 4,
+    },
+  ];
+
+  it('renders outer container with fixed full-canvas flex centering (left: 0, right: 0, justify-content: center)', () => {
+    const html = renderToStaticMarkup(
+      <FinalFourOverlay
+        cohort={sampleCohort}
+        matchInfo={{ matchNumber: 1, mapName: 'Erangel' }}
+        appearance={DEFAULT_OVERLAY_APPEARANCE}
+      />,
+    );
+    expect(html).toContain('position:fixed');
+    expect(html).toContain('left:0');
+    expect(html).toContain('right:0');
+    expect(html).toContain('display:flex');
+    expect(html).toContain('justify-content:center');
+    expect(html).toContain('width:calc(1448 * var(--overlay-base-unit))');
+    // Does NOT use inline transform: translateX(-50%) on the motion element (which conflicted with translateY animation)
+    expect(html).not.toContain('transform:translateX(-50%)');
+  });
+
+  it('keeps all 4 cards in an equal 4-column grid (repeat(4, minmax(0, 1fr))) when cards are eliminated', () => {
+    const html = renderToStaticMarkup(
+      <FinalFourOverlay
+        cohort={sampleCohort}
+        matchInfo={{ matchNumber: 1, mapName: 'Erangel' }}
+        appearance={DEFAULT_OVERLAY_APPEARANCE}
+      />,
+    );
+    expect(html).toContain('grid-template-columns:repeat(4, minmax(0, 1fr))');
+    expect(html).toContain('column-gap:calc(14 * var(--overlay-base-unit))');
+    expect(html).toContain('data-testid="final-four-card-1"');
+    expect(html).toContain('data-testid="final-four-card-2"');
+    expect(html).toContain('data-testid="final-four-card-3"');
+    expect(html).toContain('data-testid="final-four-card-4"');
   });
 });

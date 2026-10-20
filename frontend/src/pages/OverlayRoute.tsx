@@ -8,12 +8,21 @@ import { OverlayPage } from './OverlayPage';
  * what the admin's live preview will need.
  */
 export function OverlayRoute() {
-  const { instanceId } = useParams({ from: '/overlay/$instanceId' });
+  const { instanceId } = (useParams({ strict: false }) as { instanceId?: string }) ?? {};
   return <OverlayPage instanceId={instanceId} surfaceMode="leaderboard" />;
 }
 
 export function OverlayEliminationRoute() {
   return <OverlayPage surfaceMode="elimination" />;
+}
+
+export function OverlayFinalFourRoute() {
+  return <OverlayPage surfaceMode="final-four" />;
+}
+
+export function OverlayInstanceFinalFourRoute() {
+  const { instanceId } = useParams({ strict: false }) as { instanceId?: string };
+  return <OverlayPage instanceId={instanceId} surfaceMode="final-four" />;
 }
 
 export function OverlayInstanceEliminationRoute() {

@@ -192,3 +192,38 @@ Chronological record of phases, tasks, files changed, and verification results.
   - `npm run format:check` & `npm run build`: Passed (`0` errors).
 - **Issues Encountered:** None remaining.
 - **Next Steps:** Task complete.
+
+---
+
+## Entry 9 — 2026-10-20 — Part 4: Separate Final-4 & WWCD Overlay Routing & Visibility Fix
+
+- **Phase:** Part 4 (`WS-4.1` → `WS-4.4`)
+- **Task:** Separate `/main`, `/final4`, `/wwcd`, `/match-info`, and `/postgame` into dedicated overlay routes, fix Final-4 horizontal off-centering, implement automated visibility coordination across broadcast States A–D, update Admin preview and copyable OBS URLs, and verify with automated unit/regression tests.
+- **Status:** `COMPLETED`
+- **Files Affected:**
+  - `frontend/src/router.tsx`
+  - `frontend/src/pages/OverlayRoute.tsx`
+  - `frontend/src/pages/OverlayPage.tsx`
+  - `frontend/src/components/overlay/FinalFourOverlay.tsx`
+  - `frontend/src/components/overlay/WwcdOverlay.tsx`
+  - `frontend/src/features/admin/OverlayPreview.tsx`
+  - `frontend/src/pages/AdminPage.tsx`
+  - `frontend/src/components/overlay/overlays.test.tsx`
+  - `docs/implementation-plan.md`
+  - `docs/checkpoint.md`
+  - `docs/progress.md`
+- **Changes Made:**
+  - **`WS-4.1` (Route Registration & Isolation):** Added `OverlayFinalFourRoute` and `OverlayInstanceFinalFourRoute` in `OverlayRoute.tsx`; registered `/overlay/final4`, `/overlay/final-four`, `/overlay/$instanceId/final4`, and `/overlay/$instanceId/final-four` alongside root shortcut routes (`/main`, `/final4`, `/wwcd`, `/match-info`, `/postgame`, `/elimination`) in `router.tsx`; updated `OverlaySurfaceMode` to include `'final-four'`. Removed embedded `FinalFourOverlay` and `WwcdOverlay` from `LeaderboardOverlay` rendering in `OverlayPage.tsx`, ensuring `/main` strictly renders the vertical tower.
+  - **`WS-4.2` (Centering & Coordinated Visibility):** Fixed Final-4 horizontal alignment by removing inline `transform: translateX(-50%)` (which conflicted with Framer Motion's `animate={{ y: 0 }}`) and wrapping in a viewport-wide flex container (`position: fixed; inset: 0; left: 0; right: 0; display: flex; justify-content: center; pointer-events: none;`) with `width: ub(1448)`. Implemented state coordination in `OverlayPage.tsx` across States A (>4 alive -> tower visible), B & C (4, 3, 2 alive -> Final-4 visible, tower/wwcd/match-info hidden), and D (1 alive confirmed winner -> WWCD takes precedence, tower/final-4/match-info hidden).
+  - **`WS-4.3` (Admin Preview & OBS URLs):** Updated `OverlayPreview.tsx` to route iframes directly to dedicated URLs for selected preview modes (`tower`, `final-four`, `wwcd`, `postgame`, or `auto`). Added Final-4 copyable OBS URL card and informational notice in `AdminPage.tsx` explaining how automated visibility enables OBS operators to leave all sources permanently unmuted and active in their scene.
+  - **`WS-4.4` (Testing & Verification):** Added unit and regression tests in `overlays.test.tsx` covering States A, B, C, D, warmup suppression, new match reset, feature disable fallback, and viewport flex centering CSS rules.
+- **Verification Results:**
+  - `npm test`: **28 test files passed, 343 tests passed** (23 backend test files / 283 tests; 5 frontend test files / 60 tests).
+  - `npm run typecheck`: Passed with **0 errors** across all workspaces.
+  - `npm run lint`: Passed with **0 warnings and 0 errors** across all files.
+  - `npm run format:check`: Passed (`All matched files use Prettier code style!`).
+  - `npm run build`: Full production build of `@cdf/shared`, `@cdf/backend`, and `@cdf/frontend` succeeded with exit code 0.
+- **Issues Encountered & Resolved:**
+  - Zustand v5 SSR / Static Markup: During `renderToStaticMarkup`, Zustand external stores return `getInitialState()`, which caused test store updates to be bypassed. Fixed by adding optional prop injection (`snapshot`, `instance`, `overlayState`) to `OverlayPage`, allowing deterministic static markup assertions while preserving live store hydration in the browser.
+  - Framer Motion Transform Collision: Replaced inline `transform: translateX(-50%)` with flexbox `justify-content: center` so Motion's vertical entry/exit animations operate cleanly on their own axis without disturbing horizontal canvas centering.
+- **Next Steps:** Complete and ready for user review.

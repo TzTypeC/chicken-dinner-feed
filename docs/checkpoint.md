@@ -1,9 +1,9 @@
 # Project Checkpoint
 
 - **Last Updated:** 2026-10-20
-- **Current Task:** Final-4 Leaderboard, WWCD Celebration, Post-Game Results & PMCC 2026 Visual Identity
-- **Current Phase:** Phase 4 (Verification & Final Handoff) — **COMPLETED**
-- **Last Completed Checkpoint:** Phase 3 & Phase 4 — Full implementation and verification of `WS-3.1` through `WS-3.4` (`D-PMCC-01` – `D-PMCC-07`)
+- **Current Task:** Separate Final-4 and WWCD Overlay Routing & Visibility Fix
+- **Current Phase:** Part 4 Verification Complete (`WS-4.1` → `WS-4.4`)
+- **Last Completed Checkpoint:** Part 4 Route Isolation, Centering Fix & Global Visibility Coordination
 
 ---
 
@@ -19,24 +19,28 @@
 
 ### Part 3 — Final-4, WWCD, Post-Game Standings & PMCC 2026 Identity (`D-PMCC-01` – `D-PMCC-07`, Completed)
 
-- **Visual Identity Analysis:** [`docs/pmcc-visual-identity-analysis.md`](pmcc-visual-identity-analysis.md) (pixel-sampled palette and motifs from `assets/KV_2026 PMCC ID.png`)
-- **Broadcast Design References:** [`docs/broadcast-design-references.md`](broadcast-design-references.md)
-- **Final-4 & Persistent Team Slot Audit:** [`docs/final-four-leaderboard-audit.md`](final-four-leaderboard-audit.md)
-- **WWCD Victory Screen Spec:** [`docs/wwcd-screen-requirements.md`](wwcd-screen-requirements.md)
-- **Post-Game Standings & Background Spec:** [`docs/postgame-standings-requirements.md`](postgame-standings-requirements.md)
-- **Approved Decisions (`D-PMCC-01` – `D-PMCC-07`):** [`docs/broadcast-ui-decisions.md`](broadcast-ui-decisions.md)
+- Persistent team slots (`T01`–`T25`), horizontal Final-4 top bar with grayed-out card retention at 3/2 alive teams, WWCD victory screen, post-game detailed standings table (`#1`–`#25`), custom background media uploader/storage, PMCC 2026 theme tokens, and Admin preview modes are implemented and verified.
+
+### Part 4 — Separate Final-4 & WWCD Overlay Routing & Visibility Fix (Completed)
+
+- Independent overlay routing (`/overlay/final4`, `/overlay/:id/final4`, `/overlay/wwcd`, `/overlay/:id/wwcd`, `/overlay/match-info`, `/overlay/:id/match-info`, and `/overlay/:id` / `/main`).
+- Strict component isolation: `/main` exclusively renders the vertical tower and never embeds Final-4 or WWCD.
+- Global visibility coordination across broadcast States A, B, C, and D with zero overlap.
+- Centered 1920×1080 canvas architecture using flex wrapper without Framer Motion `transform` collision.
+- Admin panel integration with copyable OBS Browser Source URLs for all 6 overlay routes and visual coordination callouts.
+- All 343 tests passed across backend and frontend, 0 TypeScript errors, 0 ESLint errors, clean Prettier formatting, clean production build.
 
 ---
 
-## 2. Part 3 Workstream Status
+## 2. Part 4 Workstream Status
 
-- [x] **`WS-3.1`:** Shared Contracts, PMCC 2026 Default Tokens & Backend Background Media / Series Snapshot (`@cdf/shared`, `@cdf/backend`) — **COMPLETED**
-- [x] **`WS-3.2`:** PMCC 2026 Theme System, Persistent Team Slot Badge (`T##`), Automatic Final-4 Layout & WWCD Victory Screen (`@cdf/frontend`) — **COMPLETED**
-- [x] **`WS-3.3`:** Post-Game Detailed Standings Screen (`/overlay/postgame`) & Isolated Custom Background Layer (`@cdf/frontend`) — **COMPLETED**
-- [x] **`WS-3.4`:** Admin Controls: Appearance Toggles, PMCC Preset, Background Media Uploader & Multi-State Preview (`@cdf/frontend`) — **COMPLETED**
+- [x] **`WS-4.1`:** Routing & Route Isolation (`@cdf/frontend`) — **COMPLETED**
+- [x] **`WS-4.2`:** Global Visibility Coordination & Centered Final-4 Layout (`@cdf/frontend`) — **COMPLETED**
+- [x] **`WS-4.3`:** OBS URLs & Admin Integration (`@cdf/frontend`) — **COMPLETED**
+- [x] **`WS-4.4`:** Testing & Verification (`@cdf/frontend`, `@cdf/backend`) — **COMPLETED**
 
 ---
 
 ## 3. Exact Next Action
 
-All workstreams (`WS-3.1` through `WS-3.4`) and Phase 4 verification checks (`npm test`, `npm run typecheck`, `npm run lint`, `npm run format:check`, `npm run build`) are complete and passing.
+All planned tasks and verification steps for Part 4 are fully completed and tested. Ready for review or next user instructions.

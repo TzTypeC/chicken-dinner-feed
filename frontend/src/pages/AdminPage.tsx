@@ -715,31 +715,30 @@ export function AdminPage() {
                       </button>
                     </div>
 
+                    <p className="text-muted-foreground text-[11px] leading-relaxed">
+                      <strong>Automatic Visibility Coordination:</strong> Live Leaderboard (#1),
+                      Final-4 (#2), WWCD (#3), and Match Info (#4) work as coordinated, separate OBS
+                      Browser Sources. During normal gameplay, Leaderboard &amp; Match Info show.
+                      When 4, 3, or 2 squads remain alive, Final-4 takes over. On confirmed victory,
+                      WWCD takes precedence over all live overlays.
+                    </p>
+
                     <CopyableUrl
-                      label="1. Live Leaderboard Overlay"
+                      label="1. Live Leaderboard (Vertical Tower)"
                       url={`${window.location.origin}/overlay/${selected.id}`}
                     />
 
                     <CopyableUrl
-                      label="2. Team Elimination Notification Overlay"
+                      label="2. Final-4 Leaderboard (Horizontal Top Bar)"
                       url={
                         useScopedOverlayUrls || selected.id !== 'main'
-                          ? `${window.location.origin}/overlay/${selected.id}/elimination`
-                          : `${window.location.origin}/overlay/elimination`
+                          ? `${window.location.origin}/overlay/${selected.id}/final4`
+                          : `${window.location.origin}/overlay/final4`
                       }
                     />
 
                     <CopyableUrl
-                      label="3. Match Information Overlay (Match # & Map)"
-                      url={
-                        useScopedOverlayUrls || selected.id !== 'main'
-                          ? `${window.location.origin}/overlay/${selected.id}/match-info`
-                          : `${window.location.origin}/overlay/match-info`
-                      }
-                    />
-
-                    <CopyableUrl
-                      label="4. WWCD Victory Screen Overlay"
+                      label="3. WWCD Victory Screen"
                       url={
                         useScopedOverlayUrls || selected.id !== 'main'
                           ? `${window.location.origin}/overlay/${selected.id}/wwcd`
@@ -748,7 +747,25 @@ export function AdminPage() {
                     />
 
                     <CopyableUrl
-                      label="5. Post-Game Detailed Standings Overlay"
+                      label="4. Match Information (Match # & Map)"
+                      url={
+                        useScopedOverlayUrls || selected.id !== 'main'
+                          ? `${window.location.origin}/overlay/${selected.id}/match-info`
+                          : `${window.location.origin}/overlay/match-info`
+                      }
+                    />
+
+                    <CopyableUrl
+                      label="5. Team Elimination Notification Banner"
+                      url={
+                        useScopedOverlayUrls || selected.id !== 'main'
+                          ? `${window.location.origin}/overlay/${selected.id}/elimination`
+                          : `${window.location.origin}/overlay/elimination`
+                      }
+                    />
+
+                    <CopyableUrl
+                      label="6. Post-Game Detailed Standings Board"
                       url={
                         useScopedOverlayUrls || selected.id !== 'main'
                           ? `${window.location.origin}/overlay/${selected.id}/postgame`
