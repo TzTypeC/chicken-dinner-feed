@@ -137,3 +137,28 @@ Chronological record of phases, tasks, files changed, and verification results.
   - `npm run build` & `npm run format:check`: Passed.
 - **Issues Encountered:** Resolved `MatchState.phase === 'idle'` warmup check in `useEliminationQueue.ts` and `showEliminationAlerts` gating in `EliminationOverlay.tsx` caught by unit tests.
 - **Next Steps:** Task complete.
+
+
+---
+
+## Entry 7 — 2026-10-20 — Part 3 Phases 1–2: PMCC 2026 Visual Audit, Broadcast Reference Research & Feature Specifications
+
+- **Phase:** Part 3 — Phase 1 & Phase 2
+- **Task:** Inspect `assets/KV_2026 PMCC ID.png` and sample exact pixel clusters; research PUBG Esports broadcast references; audit repository support for persistent `teamNo`, automatic Final-4 top bar, WWCD victory screen, post-game detailed standings (`ClosedMapResult`), and customizable post-game background media; author all Phase 2 specification documents.
+- **Status:** `COMPLETED` (Awaiting User Approval Gate before Phase 3 coding)
+- **Files Affected:**
+  - `docs/pmcc-visual-identity-analysis.md` (created)
+  - `docs/broadcast-design-references.md` (created)
+  - `docs/final-four-leaderboard-audit.md` (created)
+  - `docs/wwcd-screen-requirements.md` (created)
+  - `docs/postgame-standings-requirements.md` (created)
+  - `docs/broadcast-ui-decisions.md` (created)
+  - `docs/implementation-plan.md` (updated with `WS-3.1`–`WS-3.4`)
+  - `docs/checkpoint.md` (updated)
+  - `docs/progress.md` (updated)
+- **Changes Made:**
+  - Decompressed and sampled `assets/KV_2026 PMCC ID.png` (`3840×2160` RGBA), extracting exact hex tokens for Deep Espresso Obsidian (`#160F0A`), Mahogany (`#26180F`), Burnished Bronze (`#816036`), Nib-Trophy Gold (`#E5A93C` / `#EEB058`), Champagne (`#E7D8AD`), Parchment Ivory (`#F9EDD9`), Airdrop Crimson (`#A83820`), Tarp Slate-Teal (`#607A6E`), and Helmet Gunmetal (`#3D362B`).
+  - Documented specifications and data flows for Features 1–6 and recorded proposed architectural decisions `D-PMCC-01` through `D-PMCC-07`. No application source code modified during Phase 1–2.
+- **Tests Executed:** Read-only pixel sampling script; no source code changes yet.
+- **Issues Encountered:** None.
+- **Next Steps:** Present Phase 2 Review Gate findings and questions to user and await approval before Phase 3 implementation.
