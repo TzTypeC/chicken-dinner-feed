@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ingestStatusSchema } from '../domain/ingest.js';
 import { matchStateSchema } from '../domain/match.js';
 import { customFontSchema } from '../config/fonts.js';
-import { overlayInstanceSchema } from '../config/overlay-instance.js';
+import { autoWwcdVariantSchema, overlayInstanceSchema } from '../config/overlay-instance.js';
 import { overlayVisibilitySchema } from '../domain/overlay.js';
 import { closedMapResultSchema } from '../domain/series.js';
 
@@ -38,6 +38,16 @@ export const liveSnapshotSchema = z.object({
    * deleted, without a reload.
    */
   lastClosedMap: closedMapResultSchema.nullable().default(null),
+  /**
+   * All completed maps recorded in the current series (`series.json`), in sequential order.
+   * Powers both historical single-match pinning (`D-PMCC-09`) and cumulative series statistics
+   * (`postgame-series`).
+   */
+  closedMaps: z.array(closedMapResultSchema).default([]),
+  /**
+   * Which WWCD presentation variant activates on automatic match-end transitions (`D-PMCC-08`).
+   */
+  autoWwcdVariant: autoWwcdVariantSchema.default('standard'),
 });
 export type LiveSnapshot = z.infer<typeof liveSnapshotSchema>;
 
@@ -81,6 +91,10 @@ export const serverMessageSchema = z.discriminatedUnion('type', [
      * mid-setup should not need a reload to take effect.
      */
     fonts: z.array(customFontSchema),
+    /**
+     * Which WWCD presentation variant activates on automatic match-end transitions (`D-PMCC-08`).
+     */
+    autoWwcdVariant: autoWwcdVariantSchema.default('standard'),
   }),
   z.object({
     type: z.literal('error'),

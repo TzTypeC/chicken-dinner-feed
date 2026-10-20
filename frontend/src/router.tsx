@@ -11,12 +11,17 @@ import {
   OverlayFinalFourRoute,
   OverlayInstanceEliminationRoute,
   OverlayInstanceFinalFourRoute,
+  OverlayInstanceMainRoute,
   OverlayInstanceMatchInfoRoute,
   OverlayInstancePostGameRoute,
+  OverlayInstancePostGameSeriesRoute,
+  OverlayInstanceWwcdFullscreenRoute,
   OverlayInstanceWwcdRoute,
   OverlayMatchInfoRoute,
   OverlayPostGameRoute,
+  OverlayPostGameSeriesRoute,
   OverlayRoute,
+  OverlayWwcdFullscreenRoute,
   OverlayWwcdRoute,
 } from '@/pages/OverlayRoute';
 
@@ -62,10 +67,28 @@ const overlayWwcdRoute = createRoute({
   component: OverlayWwcdRoute,
 });
 
+const overlayWwcdFullscreenRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/wwcd-fullscreen',
+  component: OverlayWwcdFullscreenRoute,
+});
+
 const overlayPostGameRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/overlay/postgame',
   component: OverlayPostGameRoute,
+});
+
+const overlayPostGameMatchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/postgame-match',
+  component: OverlayPostGameRoute,
+});
+
+const overlayPostGameSeriesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/postgame-series',
+  component: OverlayPostGameSeriesRoute,
 });
 
 /**
@@ -77,6 +100,12 @@ const overlayRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/overlay/$instanceId',
   component: OverlayRoute,
+});
+
+const overlayInstanceMainRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$instanceId/main',
+  component: OverlayInstanceMainRoute,
 });
 
 const overlayInstanceEliminationRoute = createRoute({
@@ -109,10 +138,28 @@ const overlayInstanceWwcdRoute = createRoute({
   component: OverlayInstanceWwcdRoute,
 });
 
+const overlayInstanceWwcdFullscreenRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$instanceId/wwcd-fullscreen',
+  component: OverlayInstanceWwcdFullscreenRoute,
+});
+
 const overlayInstancePostGameRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/overlay/$instanceId/postgame',
   component: OverlayInstancePostGameRoute,
+});
+
+const overlayInstancePostGameMatchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$instanceId/postgame-match',
+  component: OverlayInstancePostGameRoute,
+});
+
+const overlayInstancePostGameSeriesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$instanceId/postgame-series',
+  component: OverlayInstancePostGameSeriesRoute,
 });
 
 const adminRoute = createRoute({
@@ -146,6 +193,12 @@ const shortcutWwcdRoute = createRoute({
   component: OverlayWwcdRoute,
 });
 
+const shortcutWwcdFullscreenRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/wwcd-fullscreen',
+  component: OverlayWwcdFullscreenRoute,
+});
+
 const shortcutMatchInfoRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/match-info',
@@ -156,6 +209,18 @@ const shortcutPostGameRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/postgame',
   component: OverlayPostGameRoute,
+});
+
+const shortcutPostGameMatchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/postgame-match',
+  component: OverlayPostGameRoute,
+});
+
+const shortcutPostGameSeriesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/postgame-series',
+  component: OverlayPostGameSeriesRoute,
 });
 
 const shortcutEliminationRoute = createRoute({
@@ -170,21 +235,31 @@ const routeTree = rootRoute.addChildren([
   shortcutFinalFourRoute,
   shortcutFinalFourAliasRoute,
   shortcutWwcdRoute,
+  shortcutWwcdFullscreenRoute,
   shortcutMatchInfoRoute,
   shortcutPostGameRoute,
+  shortcutPostGameMatchRoute,
+  shortcutPostGameSeriesRoute,
   shortcutEliminationRoute,
   overlayEliminationRoute,
   overlayMatchInfoRoute,
   overlayFinalFourRoute,
   overlayFinalFourAliasRoute,
   overlayWwcdRoute,
+  overlayWwcdFullscreenRoute,
   overlayPostGameRoute,
+  overlayPostGameMatchRoute,
+  overlayPostGameSeriesRoute,
+  overlayInstanceMainRoute,
   overlayInstanceEliminationRoute,
   overlayInstanceMatchInfoRoute,
   overlayInstanceFinalFourRoute,
   overlayInstanceFinalFourAliasRoute,
   overlayInstanceWwcdRoute,
+  overlayInstanceWwcdFullscreenRoute,
   overlayInstancePostGameRoute,
+  overlayInstancePostGameMatchRoute,
+  overlayInstancePostGameSeriesRoute,
   overlayRoute,
   adminRoute,
 ]);

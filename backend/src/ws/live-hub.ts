@@ -1,4 +1,5 @@
 import type {
+  AutoWwcdVariant,
   ClosedMapResult,
   CustomFont,
   LiveMatchInfo,
@@ -56,6 +57,10 @@ export interface LiveHubOptions {
   resolveMatchInfo?: () => LiveMatchInfo;
   /** The most recently recorded map, for the post-game and WWCD screens. */
   resolveLastClosedMap?: () => ClosedMapResult | null;
+  /** All recorded maps in the series, for historical post-game match selection and series standings. */
+  resolveClosedMaps?: () => ClosedMapResult[];
+  /** Operator-selected automatic WWCD presentation variant (D-PMCC-08). */
+  resolveAutoWwcdVariant?: () => AutoWwcdVariant;
   /**
    * Updates arriving faster than this collapse into one broadcast. Bounds client work regardless of
    * how the source behaves, and costs at most this much latency.
@@ -88,6 +93,8 @@ export class LiveHub {
   private readonly listFonts: (() => CustomFont[]) | undefined;
   private readonly resolveMatchInfo: (() => LiveMatchInfo) | undefined;
   private readonly resolveLastClosedMap: (() => ClosedMapResult | null) | undefined;
+  private readonly resolveClosedMaps: (() => ClosedMapResult[]) | undefined;
+  private readonly resolveAutoWwcdVariant: (() => AutoWwcdVariant) | undefined;
   private readonly coalesceMs: number;
   private readonly staleCheckMs: number;
 
@@ -107,6 +114,8 @@ export class LiveHub {
     this.listFonts = options.listFonts;
     this.resolveMatchInfo = options.resolveMatchInfo;
     this.resolveLastClosedMap = options.resolveLastClosedMap;
+    this.resolveClosedMaps = options.resolveClosedMaps;
+    this.resolveAutoWwcdVariant = options.resolveAutoWwcdVariant;
     this.coalesceMs = options.coalesceMs ?? 50;
     this.staleCheckMs = options.staleCheckMs ?? 1000;
   }
@@ -141,12 +150,17 @@ export class LiveHub {
   ): void {
     this.clients.set(client, { instanceId, isPreview: options.isPreview ?? false });
 
+    const closedMaps = this.resolveClosedMaps?.() ?? [];
+    const lastClosedMap = this.resolveLastClosedMap?.() ?? closedMaps.at(-1) ?? null;
+    const autoWwcdVariant = this.resolveAutoWwcdVariant?.() ?? 'standard';
     const snapshot =
       this.lastSnapshot ??
       this.buildSnapshot(
         this.store.project(),
         this.resolveMatchInfo?.() ?? DEFAULT_MATCH_INFO,
-        this.resolveLastClosedMap?.() ?? null,
+        lastClosedMap,
+        closedMaps,
+        autoWwcdVariant,
       );
     this.sendTo(client, { type: 'snapshot', protocolVersion: PROTOCOL_VERSION, snapshot });
 
@@ -203,6 +217,7 @@ export class LiveHub {
       },
       instance: this.resolveInstance?.(instanceId) ?? null,
       fonts: this.listFonts?.() ?? [],
+      autoWwcdVariant: this.resolveAutoWwcdVariant?.() ?? 'standard',
     };
   }
 
@@ -245,13 +260,21 @@ export class LiveHub {
   publish(): boolean {
     const projection = this.store.project();
     const matchInfo = this.resolveMatchInfo?.() ?? DEFAULT_MATCH_INFO;
-    const lastClosedMap = this.resolveLastClosedMap?.() ?? null;
-    const key = changeKeyOf(projection, matchInfo, lastClosedMap);
+    const closedMaps = this.resolveClosedMaps?.() ?? [];
+    const lastClosedMap = this.resolveLastClosedMap?.() ?? closedMaps.at(-1) ?? null;
+    const autoWwcdVariant = this.resolveAutoWwcdVariant?.() ?? 'standard';
+    const key = changeKeyOf(projection, matchInfo, lastClosedMap, closedMaps, autoWwcdVariant);
 
     if (key === this.lastChangeKey) return false;
     this.lastChangeKey = key;
 
-    const snapshot = this.buildSnapshot(projection, matchInfo, lastClosedMap);
+    const snapshot = this.buildSnapshot(
+      projection,
+      matchInfo,
+      lastClosedMap,
+      closedMaps,
+      autoWwcdVariant,
+    );
     this.lastSnapshot = snapshot;
 
     const message: ServerMessage = {
@@ -268,6 +291,8 @@ export class LiveHub {
     projection: Projection,
     matchInfo: LiveMatchInfo,
     lastClosedMap: ClosedMapResult | null,
+    closedMaps: ClosedMapResult[] = [],
+    autoWwcdVariant: AutoWwcdVariant = 'standard',
   ): LiveSnapshot {
     return {
       revision: ++this.revision,
@@ -276,6 +301,8 @@ export class LiveHub {
       match: projection.match,
       matchInfo,
       lastClosedMap,
+      closedMaps,
+      autoWwcdVariant,
     };
   }
 
@@ -303,7 +330,16 @@ function changeKeyOf(
   projection: Projection,
   matchInfo: LiveMatchInfo,
   lastClosedMap: ClosedMapResult | null,
+  closedMaps: ClosedMapResult[] = [],
+  autoWwcdVariant: AutoWwcdVariant = 'standard',
 ): string {
   const { lastUpdateAt: _ignored, ...ingest } = projection.ingest;
-  return JSON.stringify({ ingest, match: projection.match, matchInfo, lastClosedMap });
+  return JSON.stringify({
+    ingest,
+    match: projection.match,
+    matchInfo,
+    lastClosedMap,
+    closedMaps,
+    autoWwcdVariant,
+  });
 }

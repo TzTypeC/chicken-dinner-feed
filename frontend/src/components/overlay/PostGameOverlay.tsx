@@ -12,6 +12,7 @@ export interface PostGameOverlayProps {
   board: PostGameBoardData | null;
   matchInfo: LiveMatchInfo;
   appearance: OverlayAppearance;
+  unavailableSelection?: boolean;
 }
 
 /**
@@ -33,7 +34,12 @@ export interface PostGameOverlayProps {
  *      automatically splitting into 2 balanced side-by-side table columns when `> 12` teams are present
  *      so up to 25 teams fit on a single 1080p frame with zero vertical scrolling.
  */
-export function PostGameOverlay({ board, matchInfo, appearance }: PostGameOverlayProps) {
+export function PostGameOverlay({
+  board,
+  matchInfo,
+  appearance,
+  unavailableSelection = false,
+}: PostGameOverlayProps) {
   const showLogos = appearance.showLogos ?? true;
   const showTeamNumbers = appearance.showTeamNumbers ?? true;
   const bg = appearance.postGameBackground ?? DEFAULT_POST_GAME_BACKGROUND;
@@ -244,7 +250,9 @@ export function PostGameOverlay({ board, matchInfo, appearance }: PostGameOverla
         {/* Main Body: Left #1 Winner Spotlight + Right Standings Table (or Empty Holding State) */}
         {!board ? (
           <div
-            data-testid="postgame-empty-state"
+            data-testid={
+              unavailableSelection ? 'postgame-unavailable-state' : 'postgame-empty-state'
+            }
             className="flex flex-1 flex-col items-center justify-center text-center"
             style={{
               borderRadius: ub(4),
@@ -265,7 +273,9 @@ export function PostGameOverlay({ board, matchInfo, appearance }: PostGameOverla
                 color: 'var(--overlay-text)',
               }}
             >
-              AWAITING CLOSED MAP RESULTS
+              {unavailableSelection
+                ? 'SELECTED MATCH RESULT UNAVAILABLE'
+                : 'AWAITING CLOSED MAP RESULTS'}
             </div>
             <div
               className="font-semibold uppercase"
@@ -275,8 +285,9 @@ export function PostGameOverlay({ board, matchInfo, appearance }: PostGameOverla
                 color: 'var(--overlay-text-muted)',
               }}
             >
-              MATCH {displayMapNumber}
-              {displayMapName ? `  •  ${displayMapName}` : ''}
+              {unavailableSelection
+                ? `PINNED MATCH (${appearance.postGameMatchSelection}) WAS REMOVED OR RESET — SELECT A VALID MATCH IN ADMIN`
+                : `MATCH ${displayMapNumber}${displayMapName ? `  •  ${displayMapName}` : ''}`}
             </div>
           </div>
         ) : (
@@ -479,7 +490,8 @@ export function PostGameOverlay({ board, matchInfo, appearance }: PostGameOverla
                         marginTop: ub(2),
                       }}
                     >
-                      SERIES TOTAL: {board.winner.seriesTotalPoints} PTS
+                      SINGLE-MATCH SCORE ({board.winner.placementPoints}P +{' '}
+                      {board.winner.killPoints}E)
                     </span>
                   </div>
                   <span

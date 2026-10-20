@@ -1,12 +1,14 @@
 import type {
+  AutoWwcdVariant,
   CustomFont,
   OperatingMode,
   OverlayInstance,
   OverlayInstancesDocument,
+  OverlayType,
   ScoringRuleset,
   TeamRosterDocument,
 } from '@cdf/shared';
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { AlertTriangle, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Toaster } from '@/components/Toaster';
@@ -15,6 +17,7 @@ import { FontManager } from '@/features/admin/FontManager';
 import { ImportExport } from '@/features/admin/ImportExport';
 import { ImportIniButton } from '@/features/admin/ImportIniButton';
 import { InstanceToolbar } from '@/features/admin/InstanceToolbar';
+import { OVERLAY_TYPE_LABELS } from '@/features/admin/overlay-types';
 import { CopyableUrl } from '@/features/admin/CopyableUrl';
 import { ManualControl } from '@/features/admin/ManualControl';
 import { OnAirBadge } from '@/features/admin/OnAirBadge';
@@ -34,6 +37,21 @@ import { toast } from '@/stores/toast-store';
 type Tab = 'overlays' | 'manual' | 'teams' | 'scoring' | 'fonts' | 'series' | 'importExport';
 
 const SIDEBAR_STORAGE_KEY = 'cdf.admin.sidebar';
+
+const INSTANCE_CATEGORIES: { label: string; types: OverlayType[] }[] = [
+  {
+    label: 'In-Game Overlays',
+    types: ['leaderboard', 'final4', 'match-info', 'elimination'],
+  },
+  {
+    label: 'Victory (WWCD)',
+    types: ['wwcd', 'wwcd-fullscreen'],
+  },
+  {
+    label: 'Post-Game Standings',
+    types: ['postgame-match', 'postgame-series'],
+  },
+];
 
 const CONNECTION_LABEL: Record<string, { label: string; hint: string; tone: string }> = {
   connected: { label: 'Connected', hint: 'Match data is arriving', tone: 'bg-emerald-500' },
@@ -82,6 +100,7 @@ export function AdminPage() {
   const [fonts, setFonts] = useState<CustomFont[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
+  const [newType, setNewType] = useState<OverlayType>('leaderboard');
   /** The instance the operator has asked to delete, pending confirmation. */
   const [pendingDelete, setPendingDelete] = useState<OverlayInstance | null>(null);
   /**
@@ -256,14 +275,23 @@ export function AdminPage() {
     }
   };
 
-  const createOverlay = async (id: string, name: string, copyFrom?: string) => {
+  const createOverlay = async (
+    id: string,
+    name: string,
+    options?: { type?: OverlayType; copyFrom?: string },
+  ) => {
     try {
-      await api.createOverlay({ id, name, ...(copyFrom ? { copyAppearanceFrom: copyFrom } : {}) });
+      await api.createOverlay({
+        id,
+        name,
+        ...(options?.type ? { type: options.type } : {}),
+        ...(options?.copyFrom ? { copyAppearanceFrom: options.copyFrom } : {}),
+      });
       await reloadOverlays();
       setSelectedId(id);
       setNewName('');
       toast.success(
-        copyFrom ? `Duplicated as “${name}”` : `Created “${name}”`,
+        options?.copyFrom ? `Duplicated as “${name}”` : `Created “${name}”`,
         `Its browser source address is /overlay/${id}`,
       );
     } catch (error) {
@@ -271,11 +299,42 @@ export function AdminPage() {
     }
   };
 
+  const changeAutoWwcdVariant = async (variant: AutoWwcdVariant) => {
+    if (!overlays || overlays.autoWwcdVariant === variant) return;
+    try {
+      const updated = await api.updateAutoWwcdVariant(variant);
+      setOverlays((prev) =>
+        prev ? { ...prev, autoWwcdVariant: updated.autoWwcdVariant } : updated,
+      );
+      toast.success(
+        updated.autoWwcdVariant === 'fullscreen'
+          ? 'Automatic WWCD set to Fullscreen WWCD'
+          : 'Automatic WWCD set to Standard WWCD',
+        'Match-end victory transitions will now activate the selected WWCD variant.',
+      );
+    } catch (error) {
+      toast.error('Could not update Automatic WWCD setting', describe(error));
+    }
+  };
+
   const toggleVisibility = async (instance: OverlayInstance) => {
     try {
       const state = await api.setOverlayVisibility(instance.id, 'toggle');
-      // Confirm what actually happened using the state the server returned, not what we assumed —
-      // the two can differ if a director pressed a button at the same moment.
+      setOverlays((prev) =>
+        prev
+          ? {
+              ...prev,
+              instances: prev.instances.map((entry) =>
+                entry.id === instance.id ? { ...entry, onAir: state.visible } : entry,
+              ),
+            }
+          : prev,
+      );
+      setSavedOverlays((prev) =>
+        prev.map((entry) =>
+          entry.id === instance.id ? { ...entry, onAir: state.visible } : entry,
+        ),
+      );
       toast.success(
         state.visible ? `“${instance.name}” is ON AIR` : `“${instance.name}” is hidden`,
         state.visible
@@ -321,6 +380,17 @@ export function AdminPage() {
   };
 
   const [useScopedOverlayUrls, setUseScopedOverlayUrls] = useState(false);
+
+  const autoWwcdVariant: AutoWwcdVariant = overlays?.autoWwcdVariant ?? 'standard';
+  const targetWwcdType: OverlayType = autoWwcdVariant === 'fullscreen' ? 'wwcd-fullscreen' : 'wwcd';
+  const matchingWwcdInstances =
+    overlays?.instances.filter((inst) => inst.type === targetWwcdType) ?? [];
+  const hasActiveSelectedWwcd = matchingWwcdInstances.some((inst) => {
+    const visible = overlayStates[inst.id]?.visible ?? inst.onAir;
+    return inst.enabled && visible && (inst.appearance.showWwcdOverlay ?? true);
+  });
+  const closedMaps =
+    snapshot?.closedMaps ?? (snapshot?.lastClosedMap ? [snapshot.lastClosedMap] : []);
 
   const ingest = snapshot?.ingest;
   const connection =
@@ -484,25 +554,41 @@ export function AdminPage() {
               </div>
 
               <div className="flex flex-wrap gap-1.5">
-                {overlays.instances.map((instance) => (
-                  <button
-                    key={instance.id}
-                    type="button"
-                    onClick={() => setSelectedId(instance.id)}
-                    className={`inline-flex min-h-9 items-center gap-2 rounded border px-3 py-1.5 text-left text-xs transition-colors ${
-                      instance.id === selectedId
-                        ? 'border-[var(--brand-gold)] bg-secondary font-medium'
-                        : 'border-border hover:bg-secondary/60'
-                    }`}
-                  >
-                    <span className="truncate">{instance.name}</span>
-                    <OnAirBadge visible={overlayStates[instance.id]?.visible} size="sm" />
-                  </button>
-                ))}
+                {overlays.instances.map((instance) => {
+                  const isVis = overlayStates[instance.id]?.visible ?? instance.onAir;
+                  return (
+                    <div
+                      key={instance.id}
+                      className={`inline-flex min-h-9 items-center gap-1.5 rounded border px-2.5 py-1 text-left text-xs transition-colors ${
+                        instance.id === selectedId
+                          ? 'border-[var(--brand-gold)] bg-secondary font-medium'
+                          : 'border-border hover:bg-secondary/60'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSelectedId(instance.id)}
+                        className="truncate text-left"
+                      >
+                        {instance.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void toggleVisibility(instance)}
+                        title={
+                          isVis ? `Hide “${instance.name}” on air` : `Put “${instance.name}” ON AIR`
+                        }
+                        className="rounded px-1 py-0.5 hover:bg-black/25"
+                      >
+                        <OnAirBadge visible={isVis} size="sm" />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               {sidebarOpen && (
-                <div className="border-border/70 grid gap-2 border-t pt-2.5 sm:grid-cols-[1fr_auto_auto] sm:items-end">
+                <div className="border-border/70 grid gap-2 border-t pt-2.5 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end">
                   <label className="grid gap-1 text-xs">
                     <span className="text-muted-foreground">New overlay name</span>
                     <input
@@ -513,11 +599,28 @@ export function AdminPage() {
                       onChange={(event) => setNewName(event.target.value)}
                     />
                   </label>
+                  <label className="grid gap-1 text-xs">
+                    <span className="text-muted-foreground">Overlay type</span>
+                    <select
+                      aria-label="Mobile new overlay type"
+                      className="border-border bg-background min-h-9 rounded border px-2 py-1.5 text-sm"
+                      value={newType}
+                      onChange={(event) => setNewType(event.target.value as OverlayType)}
+                    >
+                      {Object.entries(OVERLAY_TYPE_LABELS).map(([val, lbl]) => (
+                        <option key={val} value={val}>
+                          {lbl}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                   <button
                     type="button"
                     className="border-border hover:bg-secondary min-h-9 rounded border px-3 py-1.5 text-xs disabled:opacity-40"
                     disabled={!newInstanceId}
-                    onClick={() => void createOverlay(newInstanceId, newName.trim())}
+                    onClick={() =>
+                      void createOverlay(newInstanceId, newName.trim(), { type: newType })
+                    }
                   >
                     Create
                   </button>
@@ -526,7 +629,11 @@ export function AdminPage() {
                     className="border-border hover:bg-secondary min-h-9 rounded border px-3 py-1.5 text-xs disabled:opacity-40"
                     disabled={!newInstanceId || !selected}
                     onClick={() =>
-                      selected && void createOverlay(newInstanceId, newName.trim(), selected.id)
+                      selected &&
+                      void createOverlay(newInstanceId, newName.trim(), {
+                        type: selected.type,
+                        copyFrom: selected.id,
+                      })
                     }
                   >
                     Duplicate
@@ -572,29 +679,130 @@ export function AdminPage() {
                   inert={!sidebarOpen}
                 >
                   <>
-                    <ul className="grid gap-1">
-                      {overlays.instances.map((instance) => (
-                        <li key={instance.id}>
-                          <button
-                            type="button"
-                            onClick={() => setSelectedId(instance.id)}
-                            className={`flex w-full items-start gap-2 rounded px-3 py-2 text-left text-sm ${
-                              instance.id === selectedId ? 'bg-secondary' : 'hover:bg-secondary/60'
-                            }`}
-                          >
-                            <span className="min-w-0 flex-1">
-                              <span className="block truncate">{instance.name}</span>
-                              <span className="text-muted-foreground block truncate font-mono text-xs">
-                                /overlay/{instance.id}
-                              </span>
-                            </span>
-                            <OnAirBadge visible={overlayStates[instance.id]?.visible} size="sm" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                    {/* D-PMCC-08: Configurable Automatic WWCD Presentation */}
+                    <div
+                      data-testid="auto-wwcd-selector-card"
+                      className="border-border bg-card/70 grid gap-2 rounded border p-2.5 text-xs"
+                    >
+                      <div className="font-semibold text-[var(--brand-gold)]">
+                        Automatic WWCD Presentation
+                      </div>
+                      <p className="text-muted-foreground text-[11px] leading-snug">
+                        Which WWCD variant activates automatically when a match ends:
+                      </p>
+                      <div
+                        className="grid grid-cols-2 gap-1 rounded border border-white/10 bg-black/25 p-0.5"
+                        role="group"
+                        aria-label="Automatic WWCD presentation selector"
+                      >
+                        {(
+                          [
+                            ['standard', 'Standard Card'],
+                            ['fullscreen', 'Fullscreen Stage'],
+                          ] as const
+                        ).map(([variant, label]) => {
+                          const active = autoWwcdVariant === variant;
+                          return (
+                            <button
+                              key={variant}
+                              type="button"
+                              data-testid={`auto-wwcd-option-${variant}`}
+                              aria-pressed={active}
+                              onClick={() => void changeAutoWwcdVariant(variant)}
+                              className={`min-h-7 rounded px-2 py-1 text-[11px] font-medium transition-colors ${
+                                active
+                                  ? 'bg-[var(--brand-gold)] font-semibold text-black'
+                                  : 'text-muted-foreground hover:text-foreground'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
 
-                    <div className="grid gap-2">
+                      {!hasActiveSelectedWwcd && (
+                        <div
+                          data-testid="auto-wwcd-warning"
+                          className="flex items-start gap-1.5 rounded border border-amber-500/50 bg-amber-500/10 p-2 text-[11px] text-amber-200"
+                        >
+                          <AlertTriangle
+                            className="mt-0.5 size-3.5 shrink-0 text-amber-400"
+                            aria-hidden
+                          />
+                          <span>
+                            The selected{' '}
+                            <strong>
+                              {autoWwcdVariant === 'fullscreen'
+                                ? 'Fullscreen WWCD'
+                                : 'Standard WWCD'}
+                            </strong>{' '}
+                            instance is currently hidden or disabled. Automatic WWCD will respect
+                            your HIDE state and stay off air until you put it ON AIR.
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Categorized Instance List with Independent ON AIR / HIDE Toggles */}
+                    <div className="grid gap-3">
+                      {INSTANCE_CATEGORIES.map((category) => {
+                        const groupInstances = overlays.instances.filter((inst) =>
+                          category.types.includes(inst.type),
+                        );
+                        if (groupInstances.length === 0) return null;
+                        return (
+                          <div key={category.label} className="grid gap-1">
+                            <span className="text-muted-foreground px-1 text-[11px] font-semibold tracking-wider uppercase">
+                              {category.label}
+                            </span>
+                            <ul className="grid gap-1">
+                              {groupInstances.map((instance) => {
+                                const isVis = overlayStates[instance.id]?.visible ?? instance.onAir;
+                                return (
+                                  <li
+                                    key={instance.id}
+                                    className={`flex items-center gap-1 rounded px-2 py-1.5 text-sm ${
+                                      instance.id === selectedId
+                                        ? 'bg-secondary'
+                                        : 'hover:bg-secondary/60'
+                                    }`}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedId(instance.id)}
+                                      className="min-w-0 flex-1 text-left"
+                                    >
+                                      <span className="block truncate font-medium">
+                                        {instance.name}
+                                      </span>
+                                      <span className="text-muted-foreground block truncate font-mono text-[11px]">
+                                        /overlay/{instance.id}
+                                      </span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      data-testid={`sidebar-toggle-onair-${instance.id}`}
+                                      onClick={() => void toggleVisibility(instance)}
+                                      title={
+                                        isVis
+                                          ? `Hide “${instance.name}”`
+                                          : `Put “${instance.name}” ON AIR`
+                                      }
+                                      className="shrink-0 rounded px-1 py-0.5 hover:bg-black/25"
+                                    >
+                                      <OnAirBadge visible={isVis} size="sm" />
+                                    </button>
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="border-border/70 grid gap-2 border-t pt-2.5">
                       <label className="grid gap-1 text-xs">
                         <span className="text-muted-foreground">New overlay name</span>
                         <input
@@ -604,6 +812,22 @@ export function AdminPage() {
                           value={newName}
                           onChange={(event) => setNewName(event.target.value)}
                         />
+                      </label>
+
+                      <label className="grid gap-1 text-xs">
+                        <span className="text-muted-foreground">Overlay type</span>
+                        <select
+                          aria-label="New overlay type"
+                          className="border-border bg-background min-h-9 rounded border px-2 py-1.5 text-sm"
+                          value={newType}
+                          onChange={(event) => setNewType(event.target.value as OverlayType)}
+                        >
+                          {Object.entries(OVERLAY_TYPE_LABELS).map(([val, lbl]) => (
+                            <option key={val} value={val}>
+                              {lbl}
+                            </option>
+                          ))}
+                        </select>
                       </label>
 
                       {newName.trim() && (
@@ -624,8 +848,10 @@ export function AdminPage() {
                           type="button"
                           className="border-border hover:bg-secondary min-h-9 rounded border px-3 py-1.5 text-xs disabled:opacity-40"
                           disabled={!newInstanceId}
-                          onClick={() => void createOverlay(newInstanceId, newName.trim())}
-                          title="Create an overlay with the default appearance"
+                          onClick={() =>
+                            void createOverlay(newInstanceId, newName.trim(), { type: newType })
+                          }
+                          title="Create an overlay with the default appearance for the selected type"
                         >
                           Create
                         </button>
@@ -635,11 +861,14 @@ export function AdminPage() {
                           disabled={!newInstanceId || !selected}
                           onClick={() =>
                             selected &&
-                            void createOverlay(newInstanceId, newName.trim(), selected.id)
+                            void createOverlay(newInstanceId, newName.trim(), {
+                              type: selected.type,
+                              copyFrom: selected.id,
+                            })
                           }
                           title={
                             selected
-                              ? `Create it with the appearance of “${selected.name}”`
+                              ? `Create it with the type and appearance of “${selected.name}”`
                               : 'Select an overlay to copy first'
                           }
                         >
@@ -647,8 +876,8 @@ export function AdminPage() {
                         </button>
                       </div>
                       <p className="text-muted-foreground text-xs">
-                        <strong>Create</strong> starts from the defaults. <strong>Duplicate</strong>{' '}
-                        copies the look of{' '}
+                        <strong>Create</strong> starts from the selected type’s defaults.{' '}
+                        <strong>Duplicate</strong> copies the type and look of{' '}
                         {selected ? `“${selected.name}”` : 'the selected overlay'}.
                       </p>
                     </div>
@@ -662,6 +891,8 @@ export function AdminPage() {
                 <section className="order-2 grid min-w-0 content-start gap-5 md:order-1">
                   <AppearanceEditor
                     appearance={selected.appearance}
+                    instanceType={selected.type}
+                    closedMaps={closedMaps}
                     customFonts={fonts}
                     onChange={(appearance) => patchSelected({ appearance })}
                     onUploadBackground={(file) => uploadBackground(selected, file)}
@@ -687,7 +918,7 @@ export function AdminPage() {
                     onDelete={() => setPendingDelete(selected)}
                   />
 
-                  <OverlayPreview instanceId={selected.id} />
+                  <OverlayPreview instanceId={selected.id} instanceType={selected.type} />
 
                   <p className="text-muted-foreground text-xs">
                     This is the overlay itself, loaded from the same address your browser source
@@ -709,67 +940,92 @@ export function AdminPage() {
                             ? 'border-[var(--brand-gold)]/60 bg-[var(--brand-gold)]/15 text-[var(--brand-gold)]'
                             : 'border-border text-muted-foreground hover:text-foreground'
                         }`}
-                        title="Toggle between default URLs (/overlay/elimination) and instance-scoped URLs"
+                        title="Toggle between default URLs and instance-scoped URLs"
                       >
                         Scope to “{selected.id}”: {useScopedOverlayUrls ? 'ON' : 'OFF'}
                       </button>
                     </div>
 
                     <p className="text-muted-foreground text-[11px] leading-relaxed">
-                      <strong>Automatic Visibility Coordination:</strong> Live Leaderboard (#1),
-                      Final-4 (#2), WWCD (#3), and Match Info (#4) work as coordinated, separate OBS
-                      Browser Sources. During normal gameplay, Leaderboard &amp; Match Info show.
-                      When 4, 3, or 2 squads remain alive, Final-4 takes over. On confirmed victory,
-                      WWCD takes precedence over all live overlays.
+                      <strong>Selected Instance Endpoint:</strong> Every overlay instance has its
+                      own independent URL (<code className="font-mono">/overlay/{selected.id}</code>
+                      ), ON AIR / HIDE state, and appearance settings.
                     </p>
 
                     <CopyableUrl
-                      label="1. Live Leaderboard (Vertical Tower)"
+                      label={`Selected Instance (${OVERLAY_TYPE_LABELS[selected.type] ?? selected.type})`}
                       url={`${window.location.origin}/overlay/${selected.id}`}
+                    />
+
+                    <CopyableUrl
+                      label="1. Live Leaderboard (Vertical Tower)"
+                      url={
+                        useScopedOverlayUrls
+                          ? `${window.location.origin}/overlay/${selected.id}/main`
+                          : `${window.location.origin}/overlay/main`
+                      }
                     />
 
                     <CopyableUrl
                       label="2. Final-4 Leaderboard (Horizontal Top Bar)"
                       url={
-                        useScopedOverlayUrls || selected.id !== 'main'
+                        useScopedOverlayUrls
                           ? `${window.location.origin}/overlay/${selected.id}/final4`
                           : `${window.location.origin}/overlay/final4`
                       }
                     />
 
                     <CopyableUrl
-                      label="3. WWCD Victory Screen"
+                      label="3. WWCD Victory Screen (Standard Card)"
                       url={
-                        useScopedOverlayUrls || selected.id !== 'main'
+                        useScopedOverlayUrls
                           ? `${window.location.origin}/overlay/${selected.id}/wwcd`
                           : `${window.location.origin}/overlay/wwcd`
                       }
                     />
 
                     <CopyableUrl
-                      label="4. Match Information (Match # & Map)"
+                      label="4. WWCD Victory Screen (Fullscreen 5-Character Stage)"
                       url={
-                        useScopedOverlayUrls || selected.id !== 'main'
+                        useScopedOverlayUrls
+                          ? `${window.location.origin}/overlay/${selected.id}/wwcd-fullscreen`
+                          : `${window.location.origin}/overlay/wwcd-fullscreen`
+                      }
+                    />
+
+                    <CopyableUrl
+                      label="5. Match Information (Match # & Map)"
+                      url={
+                        useScopedOverlayUrls
                           ? `${window.location.origin}/overlay/${selected.id}/match-info`
                           : `${window.location.origin}/overlay/match-info`
                       }
                     />
 
                     <CopyableUrl
-                      label="5. Team Elimination Notification Banner"
+                      label="6. Team Elimination Notification Banner"
                       url={
-                        useScopedOverlayUrls || selected.id !== 'main'
+                        useScopedOverlayUrls
                           ? `${window.location.origin}/overlay/${selected.id}/elimination`
                           : `${window.location.origin}/overlay/elimination`
                       }
                     />
 
                     <CopyableUrl
-                      label="6. Post-Game Detailed Standings Board"
+                      label="7. Post-Game Single-Match Standings"
                       url={
-                        useScopedOverlayUrls || selected.id !== 'main'
-                          ? `${window.location.origin}/overlay/${selected.id}/postgame`
-                          : `${window.location.origin}/overlay/postgame`
+                        useScopedOverlayUrls
+                          ? `${window.location.origin}/overlay/${selected.id}/postgame-match`
+                          : `${window.location.origin}/overlay/postgame-match`
+                      }
+                    />
+
+                    <CopyableUrl
+                      label="8. Post-Game Cumulative Series Standings"
+                      url={
+                        useScopedOverlayUrls
+                          ? `${window.location.origin}/overlay/${selected.id}/postgame-series`
+                          : `${window.location.origin}/overlay/postgame-series`
                       }
                     />
                   </div>

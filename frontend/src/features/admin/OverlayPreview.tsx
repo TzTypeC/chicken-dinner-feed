@@ -1,3 +1,4 @@
+import type { OverlayType } from '@cdf/shared';
 import { BellRing } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { resolveLeaderboardLayoutMode } from '@/components/overlay/broadcast-state';
@@ -17,16 +18,17 @@ const CANVAS_HEIGHT = 1080;
 
 export interface OverlayPreviewProps {
   instanceId: string;
+  instanceType?: OverlayType;
 }
 
 /**
  * The overlay itself, embedded.
  *
- * Includes multi-layer preview toggles (`Leaderboard`, `Match Info`, `Elimination Alert`) and a
- * `Test Elimination Alert` button so operators can rehearse all three broadcast layers on the
- * 16:9 canvas without affecting on-air browser sources.
+ * Includes multi-layer preview toggles (`Leaderboard`, `Match Info`, `Elimination Alert`), screen
+ * simulation buttons across all 8 overlay surfaces, and a `Test Elimination Alert` button so
+ * operators can rehearse broadcast layers on the 16:9 canvas without affecting on-air browser sources.
  */
-export function OverlayPreview({ instanceId }: OverlayPreviewProps) {
+export function OverlayPreview({ instanceId, instanceType = 'leaderboard' }: OverlayPreviewProps) {
   const [mode, setMode] = useState<PreviewMode>('canvas');
   const [layers, setLayers] = useState<OverlayPreviewLayerConfig>({
     leaderboard: true,
@@ -53,14 +55,28 @@ export function OverlayPreview({ instanceId }: OverlayPreviewProps) {
   const viewMode = layers.viewMode ?? 'auto';
   const effectiveScreen = viewMode === 'auto' ? liveMode : viewMode;
 
-  const previewPath =
-    effectiveScreen === 'final-four'
-      ? `/overlay/${instanceId}/final4`
-      : effectiveScreen === 'wwcd'
-        ? `/overlay/${instanceId}/wwcd`
-        : effectiveScreen === 'postgame'
-          ? `/overlay/${instanceId}/postgame`
+  let previewPath = `/overlay/${instanceId}`;
+  if (viewMode !== 'auto') {
+    previewPath =
+      viewMode === 'final-four'
+        ? `/overlay/${instanceId}/final4`
+        : viewMode === 'wwcd'
+          ? `/overlay/${instanceId}/wwcd`
+          : viewMode === 'wwcd-fullscreen'
+            ? `/overlay/${instanceId}/wwcd-fullscreen`
+            : viewMode === 'postgame'
+              ? `/overlay/${instanceId}/postgame`
+              : viewMode === 'postgame-series'
+                ? `/overlay/${instanceId}/postgame-series`
+                : `/overlay/${instanceId}/main`;
+  } else if (instanceType === 'leaderboard') {
+    previewPath =
+      effectiveScreen === 'final-four'
+        ? `/overlay/${instanceId}/final4`
+        : effectiveScreen === 'wwcd'
+          ? `/overlay/${instanceId}/wwcd`
           : `/overlay/${instanceId}`;
+  }
 
   const previewSrc = `${previewPath}?preview=1`;
 
@@ -81,8 +97,8 @@ export function OverlayPreview({ instanceId }: OverlayPreviewProps) {
     });
   };
 
-  const setViewMode = (viewMode: OverlayPreviewViewMode) => {
-    setLayers((prev) => ({ ...prev, viewMode }));
+  const setViewMode = (nextViewMode: OverlayPreviewViewMode) => {
+    setLayers((prev) => ({ ...prev, viewMode: nextViewMode }));
   };
 
   const handleTestEliminationAlert = () => {
@@ -130,11 +146,13 @@ export function OverlayPreview({ instanceId }: OverlayPreviewProps) {
         <span className="text-muted-foreground mr-1">Preview screen:</span>
         {(
           [
-            ['auto', 'Auto (Live)'],
+            ['auto', 'Auto (Instance)'],
             ['tower', 'Tower'],
             ['final-four', 'Final-4'],
-            ['wwcd', 'WWCD'],
-            ['postgame', 'Post-Game'],
+            ['wwcd', 'WWCD Card'],
+            ['wwcd-fullscreen', 'WWCD Fullscreen'],
+            ['postgame', 'Post-Game Match'],
+            ['postgame-series', 'Post-Game Series'],
           ] as const
         ).map(([value, label]) => {
           const active = (layers.viewMode ?? 'auto') === value;
@@ -146,7 +164,7 @@ export function OverlayPreview({ instanceId }: OverlayPreviewProps) {
               aria-pressed={active}
               className={`min-h-7 rounded border px-2 py-0.5 text-[11px] font-medium transition-colors ${
                 active
-                  ? 'border-[var(--brand-gold)] bg-[var(--brand-gold)] text-black font-semibold'
+                  ? 'border-[var(--brand-gold)] bg-[var(--brand-gold)] font-semibold text-black'
                   : 'border-border text-muted-foreground hover:text-foreground bg-transparent'
               }`}
             >
@@ -156,33 +174,35 @@ export function OverlayPreview({ instanceId }: OverlayPreviewProps) {
         })}
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 text-xs">
-        <span className="text-muted-foreground mr-1">Preview layers:</span>
-        {(
-          [
-            ['leaderboard', 'Leaderboard'],
-            ['matchInfo', 'Match Info'],
-            ['elimination', 'Elimination Alert'],
-          ] as const
-        ).map(([key, label]) => {
-          const active = layers[key];
-          return (
-            <button
-              key={key}
-              type="button"
-              onClick={() => toggleLayer(key)}
-              aria-pressed={active}
-              className={`min-h-7 rounded border px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                active
-                  ? 'border-[var(--brand-gold)]/60 bg-[var(--brand-gold)]/15 text-[var(--brand-gold)]'
-                  : 'border-border text-muted-foreground hover:text-foreground bg-transparent'
-              }`}
-            >
-              {label}: {active ? 'ON' : 'OFF'}
-            </button>
-          );
-        })}
-      </div>
+      {instanceType === 'leaderboard' && (
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+          <span className="text-muted-foreground mr-1">Preview layers:</span>
+          {(
+            [
+              ['leaderboard', 'Leaderboard'],
+              ['matchInfo', 'Match Info'],
+              ['elimination', 'Elimination Alert'],
+            ] as const
+          ).map(([key, label]) => {
+            const active = layers[key];
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => toggleLayer(key)}
+                aria-pressed={active}
+                className={`min-h-7 rounded border px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                  active
+                    ? 'border-[var(--brand-gold)]/60 bg-[var(--brand-gold)]/15 text-[var(--brand-gold)]'
+                    : 'border-border text-muted-foreground hover:text-foreground bg-transparent'
+                }`}
+              >
+                {label}: {active ? 'ON' : 'OFF'}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div
         ref={boxRef}
@@ -196,10 +216,10 @@ export function OverlayPreview({ instanceId }: OverlayPreviewProps) {
       >
         <iframe
           ref={iframeRef}
-          key={`${instanceId}-${effectiveScreen}`}
+          key={`${instanceId}-${instanceType}-${previewPath}`}
           src={previewSrc}
           onLoad={() => postToIframe({ type: 'cdf:preview-layers', layers })}
-          title={`Live preview of the ${instanceId} overlay (${effectiveScreen})`}
+          title={`Live preview of the ${instanceId} overlay (${previewPath})`}
           width={CANVAS_WIDTH}
           height={CANVAS_HEIGHT}
           className="pointer-events-none block border-0"

@@ -1,6 +1,38 @@
-import type { ClosedMapResult, MatchState, OverlayAppearance, Team } from '@cdf/shared';
+import type {
+  AutoWwcdVariant,
+  ClosedMapResult,
+  MatchState,
+  OverlayAppearance,
+  Team,
+} from '@cdf/shared';
 
 export type LeaderboardLayoutMode = 'tower' | 'final-four' | 'wwcd';
+
+export interface WwcdVariantLatch {
+  matchId: string | null;
+  variant: AutoWwcdVariant;
+}
+
+/**
+ * Resolves the effective automatic WWCD variant (`D-PMCC-08`), latching the chosen variant while
+ * a live WWCD presentation (`layoutMode === 'wwcd'`) is active so changing the preference mid-WWCD
+ * never triggers a new victory animation mid-celebration.
+ */
+export function resolveActiveAutoWwcdVariant(
+  layoutMode: LeaderboardLayoutMode,
+  matchId: string | null,
+  configuredVariant: AutoWwcdVariant,
+  currentLatch: WwcdVariantLatch | null,
+): { effectiveVariant: AutoWwcdVariant; nextLatch: WwcdVariantLatch | null } {
+  if (layoutMode !== 'wwcd') {
+    return { effectiveVariant: configuredVariant, nextLatch: null };
+  }
+  if (currentLatch && currentLatch.matchId === matchId) {
+    return { effectiveVariant: currentLatch.variant, nextLatch: currentLatch };
+  }
+  const nextLatch: WwcdVariantLatch = { matchId, variant: configuredVariant };
+  return { effectiveVariant: configuredVariant, nextLatch };
+}
 
 export interface FinalFourCardItem {
   team: Team;
@@ -243,6 +275,7 @@ export interface PostGameTeamRow {
 }
 
 export interface PostGameBoardData {
+  mapId?: string;
   mapNumber: number;
   mapName: string;
   /** The team that won the match (`placement === 1`, or rank 1 if placements are tied in preview). */
@@ -252,21 +285,73 @@ export interface PostGameBoardData {
   sourceKind: 'closed-map' | 'live-fallback' | 'preview';
 }
 
+export interface SelectPostGameResultsOptions {
+  isPreviewSimulation?: boolean;
+  /** All persisted completed matches in the series (`series.json`). */
+  closedMaps?: readonly ClosedMapResult[];
+  /**
+   * Which completed match to display (`D-PMCC-09`):
+   * - `'latest'` (default): most recently completed match (`closedMaps.at(-1)` or `lastClosedMap`)
+   * - `<ClosedMapResult.id>`: pinned historical match ID
+   */
+  postGameMatchSelection?: string;
+}
+
 /**
- * Resolves the post-game detailed standings board from persisted `ClosedMapResult` (`lastClosedMap`),
- * with a clean fallback to finished live match data (or preview simulation) when no closed map has
- * been saved yet (`docs/postgame-standings-requirements.md`, `D-PMCC-04`).
+ * Checks whether a Postgame Match instance has a pinned historical match ID (`D-PMCC-09`) that is
+ * no longer present in `closedMaps` (e.g. after a series reset or map deletion).
+ */
+export function isPinnedPostGameMatchUnavailable(
+  postGameMatchSelection: string | undefined,
+  closedMaps: readonly ClosedMapResult[] | undefined,
+  lastClosedMap?: ClosedMapResult | null,
+): boolean {
+  const selection = postGameMatchSelection?.trim() || 'latest';
+  if (selection === 'latest') return false;
+  const maps =
+    closedMaps && closedMaps.length > 0 ? closedMaps : lastClosedMap ? [lastClosedMap] : [];
+  return !maps.some((m) => m.id === selection);
+}
+
+/**
+ * Resolves the post-game single-match standings board from persisted `ClosedMapResult` records
+ * (`D-PMCC-04` & `D-PMCC-09`).
+ *
+ * - When `postGameMatchSelection` is `'latest'` (or omitted), uses the latest closed map, with a
+ *   clean fallback to finished live match data (or preview simulation) when no closed map exists.
+ * - When `postGameMatchSelection` is a specific `ClosedMapResult.id`, renders **exclusively** from
+ *   that persisted match record and returns `null` if that record is unavailable (never silently
+ *   substituting another match).
  */
 export function selectPostGameResults(
   match: MatchState,
   lastClosedMap: ClosedMapResult | null | undefined,
   matchInfo: { matchNumber: number; mapName: string },
-  options: { isPreviewSimulation?: boolean } = {},
+  options: SelectPostGameResultsOptions = {},
 ): PostGameBoardData | null {
   const rosterByNo = new Map(match.teams.map((team) => [team.teamNo, team]));
+  const selection = options.postGameMatchSelection?.trim() || 'latest';
+  const availableMaps =
+    options.closedMaps && options.closedMaps.length > 0
+      ? options.closedMaps
+      : lastClosedMap
+        ? [lastClosedMap]
+        : [];
 
-  if (lastClosedMap && lastClosedMap.teams.length > 0) {
-    const unsorted: Omit<PostGameTeamRow, 'matchRank'>[] = lastClosedMap.teams.map((entry) => {
+  let targetClosedMap: ClosedMapResult | null = null;
+  if (selection === 'latest') {
+    targetClosedMap = availableMaps.at(-1) ?? lastClosedMap ?? null;
+  } else {
+    targetClosedMap = availableMaps.find((m) => m.id === selection) ?? null;
+    // D-PMCC-09 Rule 10 & 11: Never silently substitute a different match when a pinned match ID
+    // is unavailable.
+    if (!targetClosedMap) {
+      return null;
+    }
+  }
+
+  if (targetClosedMap && targetClosedMap.teams.length > 0) {
+    const unsorted: Omit<PostGameTeamRow, 'matchRank'>[] = targetClosedMap.teams.map((entry) => {
       const rosterTeam = rosterByNo.get(entry.teamNo);
       return {
         teamNo: entry.teamNo,
@@ -298,8 +383,9 @@ export function selectPostGameResults(
       [...rows].sort((a, b) => a.placement - b.placement)[0]!;
 
     return {
-      mapNumber: lastClosedMap.mapNumber,
-      mapName: lastClosedMap.mapName ?? matchInfo.mapName,
+      mapId: targetClosedMap.id,
+      mapNumber: targetClosedMap.mapNumber,
+      mapName: targetClosedMap.mapName ?? matchInfo.mapName,
       winner,
       rows,
       sourceKind: 'closed-map',
@@ -307,7 +393,7 @@ export function selectPostGameResults(
   }
 
   // Fallback when operator switches to /overlay/postgame at match end before clicking "Close map",
-  // or when previewing Post-Game Standings in the Admin Preview.
+  // or when previewing Post-Game Standings in the Admin Preview (only when selection === 'latest').
   const appearedTeams = match.teams.filter((team) => team.hasAppeared);
   const standingCount = appearedTeams.filter((team) => !team.isEliminated).length;
   const isFinishedLiveMatch =
@@ -350,6 +436,186 @@ export function selectPostGameResults(
       winner,
       rows,
       sourceKind: isFinishedLiveMatch ? 'live-fallback' : 'preview',
+    };
+  }
+
+  return null;
+}
+
+export interface SeriesStandingsRow {
+  /** 1-based overall tournament rank after PUBG Esports tie-breakers. */
+  seriesRank: number;
+  teamNo: number;
+  name: string;
+  logoUrl: string | null;
+  /** Number of completed matches this team participated in (`M`). */
+  matchesPlayed: number;
+  /** Number of Chicken Dinners (`placement === 1`) across completed matches. */
+  wwcdCount: number;
+  /** Cumulative placement points across completed matches. */
+  placementPoints: number;
+  /** Cumulative elimination points across completed matches. */
+  killPoints: number;
+  /** Cumulative eliminations across completed matches. */
+  eliminations: number;
+  /** Cumulative total series points (`placementPoints + killPoints`). */
+  totalPoints: number;
+  /** Placement in the most recent closed match (used as official 4th tie-breaker). */
+  latestPlacement: number;
+}
+
+export interface SeriesStandingsBoardData {
+  completedMatchesCount: number;
+  lastMapName: string | null;
+  leader: SeriesStandingsRow;
+  rows: SeriesStandingsRow[];
+  sourceKind: 'series' | 'preview';
+}
+
+/**
+ * Computes cumulative series standings across all persisted `ClosedMapResult` records in `series.json`
+ * (`D-PMCC-04` / `postgame-series`), ordered by official PUBG Esports tie-breakers:
+ * 1. `totalPoints` desc
+ * 2. `wwcdCount` desc
+ * 3. `placementPoints` desc
+ * 4. `killPoints` desc
+ * 5. `latestPlacement` asc (placement in the most recent closed match)
+ * 6. `teamNo` asc
+ */
+export function selectSeriesStandings(
+  match: MatchState,
+  closedMaps: readonly ClosedMapResult[] | undefined,
+  options: { isPreviewSimulation?: boolean; lastClosedMap?: ClosedMapResult | null } = {},
+): SeriesStandingsBoardData | null {
+  const maps =
+    closedMaps && closedMaps.length > 0
+      ? closedMaps
+      : options.lastClosedMap
+        ? [options.lastClosedMap]
+        : [];
+
+  const rosterByNo = new Map(match.teams.map((team) => [team.teamNo, team]));
+
+  if (maps.length > 0) {
+    const allTeamNos = new Set<number>();
+    for (const team of match.teams) {
+      if (team.hasAppeared) allTeamNos.add(team.teamNo);
+    }
+    for (const map of maps) {
+      for (const entry of map.teams) {
+        allTeamNos.add(entry.teamNo);
+      }
+    }
+    // If no team had hasAppeared on live match, still include all teams that appeared in closedMaps
+    // (or full roster if needed).
+    if (allTeamNos.size === 0) {
+      for (const team of match.teams) allTeamNos.add(team.teamNo);
+    }
+
+    const latestMap = maps.at(-1)!;
+    const latestPlacementByTeam = new Map<number, number>();
+    for (const entry of latestMap.teams) {
+      latestPlacementByTeam.set(entry.teamNo, entry.placement);
+    }
+
+    const unsorted: Omit<SeriesStandingsRow, 'seriesRank'>[] = [];
+    for (const teamNo of allTeamNos) {
+      const rosterTeam = rosterByNo.get(teamNo);
+      let matchesPlayed = 0;
+      let wwcdCount = 0;
+      let placementPoints = 0;
+      let killPoints = 0;
+      let eliminations = 0;
+      let totalPoints = 0;
+
+      for (const map of maps) {
+        const entry = map.teams.find((t) => t.teamNo === teamNo);
+        if (entry) {
+          matchesPlayed += 1;
+          if (entry.placement === 1) wwcdCount += 1;
+          placementPoints += entry.placementPoints;
+          killPoints += entry.killPoints;
+          eliminations += entry.eliminations;
+          totalPoints += entry.totalPoints;
+        }
+      }
+
+      unsorted.push({
+        teamNo,
+        name: rosterTeam?.name ?? `Team ${teamNo}`,
+        logoUrl: rosterTeam?.logoUrl ?? null,
+        matchesPlayed,
+        wwcdCount,
+        placementPoints,
+        killPoints,
+        eliminations,
+        totalPoints,
+        latestPlacement: latestPlacementByTeam.get(teamNo) ?? 999,
+      });
+    }
+
+    const sorted = [...unsorted].sort((a, b) => {
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      if (b.wwcdCount !== a.wwcdCount) return b.wwcdCount - a.wwcdCount;
+      if (b.placementPoints !== a.placementPoints) return b.placementPoints - a.placementPoints;
+      if (b.killPoints !== a.killPoints) return b.killPoints - a.killPoints;
+      if (a.latestPlacement !== b.latestPlacement) return a.latestPlacement - b.latestPlacement;
+      return a.teamNo - b.teamNo;
+    });
+
+    const rows: SeriesStandingsRow[] = sorted.map((row, idx) => ({
+      ...row,
+      seriesRank: idx + 1,
+    }));
+
+    return {
+      completedMatchesCount: maps.length,
+      lastMapName: latestMap.mapName ?? null,
+      leader: rows[0]!,
+      rows,
+      sourceKind: 'series',
+    };
+  }
+
+  if (options.isPreviewSimulation && match.teams.length > 0) {
+    const unsorted: Omit<SeriesStandingsRow, 'seriesRank'>[] = match.teams.map((team, idx) => {
+      const placePts = team.placementPoints;
+      const killPts = team.killPoints;
+      const totalPts = team.totalPoints > 0 ? team.totalPoints : placePts + killPts;
+      return {
+        teamNo: team.teamNo,
+        name: team.name,
+        logoUrl: team.logoUrl,
+        matchesPlayed: 1,
+        wwcdCount: (team.placement ?? idx + 1) === 1 ? 1 : 0,
+        placementPoints: placePts,
+        killPoints: killPts,
+        eliminations: team.eliminations,
+        totalPoints: totalPts,
+        latestPlacement: team.placement ?? idx + 1,
+      };
+    });
+
+    const sorted = [...unsorted].sort((a, b) => {
+      if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+      if (b.wwcdCount !== a.wwcdCount) return b.wwcdCount - a.wwcdCount;
+      if (b.placementPoints !== a.placementPoints) return b.placementPoints - a.placementPoints;
+      if (b.killPoints !== a.killPoints) return b.killPoints - a.killPoints;
+      if (a.latestPlacement !== b.latestPlacement) return a.latestPlacement - b.latestPlacement;
+      return a.teamNo - b.teamNo;
+    });
+
+    const rows: SeriesStandingsRow[] = sorted.map((row, idx) => ({
+      ...row,
+      seriesRank: idx + 1,
+    }));
+
+    return {
+      completedMatchesCount: 1,
+      lastMapName: 'Erangel',
+      leader: rows[0]!,
+      rows,
+      sourceKind: 'preview',
     };
   }
 

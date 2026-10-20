@@ -1,8 +1,10 @@
 import {
-  DEFAULT_OVERLAY_APPEARANCE,
+  autoWwcdVariantSchema,
+  defaultAppearanceForType,
   overlayInstanceIdSchema,
   overlayInstanceSchema,
   overlayInstancesDocumentSchema,
+  overlayTypeSchema,
   scoringRulesetSchema,
   teamRosterDocumentSchema,
 } from '@cdf/shared';
@@ -17,14 +19,19 @@ export interface ConfigRoutesOptions {
 const errorSchema = z.object({ error: z.string() });
 
 /**
- * Create takes only an id and a name; appearance starts from the defaults and is edited afterwards.
- * Asking an operator to supply a full appearance object to make an overlay would be absurd.
+ * Create takes an id, a name, and an optional overlay type; appearance starts from the type's
+ * defaults (or copied from an existing instance) and is edited afterwards.
  */
 const createInstanceSchema = z.object({
   id: overlayInstanceIdSchema,
   name: z.string().min(1).max(60),
+  type: overlayTypeSchema.default('leaderboard'),
   /** Copy another instance's look — the usual way a second overlay is made. */
   copyAppearanceFrom: overlayInstanceIdSchema.optional(),
+});
+
+const updateAutoWwcdSchema = z.object({
+  autoWwcdVariant: autoWwcdVariantSchema,
 });
 
 /**
@@ -60,7 +67,7 @@ export const configRoutes: FastifyPluginAsyncZod<ConfigRoutesOptions> = async (a
       },
     },
     async (request, reply) => {
-      const { id, name, copyAppearanceFrom } = request.body;
+      const { id, name, type, copyAppearanceFrom } = request.body;
 
       if (store.findInstance(id)) {
         return reply.code(409).send({ error: `An overlay with the id "${id}" already exists.` });
@@ -70,13 +77,28 @@ export const configRoutes: FastifyPluginAsyncZod<ConfigRoutesOptions> = async (a
       const created = {
         id,
         name,
-        type: 'leaderboard' as const,
-        appearance: source?.appearance ?? DEFAULT_OVERLAY_APPEARANCE,
+        type,
+        enabled: true,
+        onAir: true,
+        appearance: source?.appearance ?? defaultAppearanceForType(type),
       };
 
       await store.saveInstances([...store.instances.current.instances, created]);
       return reply.code(201).send(created);
     },
+  );
+
+  app.put(
+    '/config/auto-wwcd',
+    {
+      schema: {
+        summary: 'Update the automatic WWCD presentation variant (D-PMCC-08)',
+        tags: ['config'],
+        body: updateAutoWwcdSchema,
+        response: { 200: overlayInstancesDocumentSchema },
+      },
+    },
+    async (request) => store.saveAutoWwcdVariant(request.body.autoWwcdVariant),
   );
 
   app.put(

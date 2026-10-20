@@ -227,3 +227,80 @@ Chronological record of phases, tasks, files changed, and verification results.
   - Zustand v5 SSR / Static Markup: During `renderToStaticMarkup`, Zustand external stores return `getInitialState()`, which caused test store updates to be bypassed. Fixed by adding optional prop injection (`snapshot`, `instance`, `overlayState`) to `OverlayPage`, allowing deterministic static markup assertions while preserving live store hydration in the browser.
   - Framer Motion Transform Collision: Replaced inline `transform: translateX(-50%)` with flexbox `justify-content: center` so Motion's vertical entry/exit animations operate cleanly on their own axis without disturbing horizontal canvas centering.
 - **Next Steps:** Complete and ready for user review.
+
+---
+
+## Entry 10 — 2026-10-20 — Part 5 Phases 1–4: Repository Audit, Local Fullscreen WWCD Investigation, Broadcast Research & Design Proposal
+
+- **Phase:** Part 5 — Phase 1 (Audit), Phase 2 (Local WWCD Investigation), Phase 3 (Broadcast Research), Phase 4 (Design Proposal Gate)
+- **Task:** Perform comprehensive audit of current overlay instance architecture, ON AIR controls, and postgame/WWCD data paths; inspect local fullscreen WWCD fork in `T:\codebook\guthib\pmcc2026\chicken-dinner-feed`; conduct online broadcast research; author `docs/per-instance-overlay-audit.md` and `docs/per-instance-design-proposal.md`; halt at Phase 4 Review Gate for explicit user approval before implementation.
+- **Status:** `COMPLETED` (Phase 4 Review Gate — Awaiting User Approval)
+- **Files Affected:**
+  - `docs/per-instance-overlay-audit.md` (created)
+  - `docs/per-instance-design-proposal.md` (created)
+  - `docs/checkpoint.md` (updated)
+  - `docs/progress.md` (updated)
+- **Changes Made:**
+  - **Phase 1 (Audit):** Verified automated baseline (**343/343 tests passed**, 0 typecheck errors, 0 lint warnings, clean build). Built full inventory across all overlay surfaces, configuration schemas, routing conventions, and persistence mechanisms. Identified key deficiencies: hard-coded `'leaderboard'` type, volatile in-memory ON AIR control, lack of separate cumulative series overlay, and missing fullscreen WWCD.
+  - **Phase 2 (Local WWCD Investigation):** Inspected `T:\codebook\guthib\pmcc2026\chicken-dinner-feed` commit `88b6ad3`. Evaluated `WwcdOverlay.tsx` (419 lines), `RecapOverlay.tsx` (879 lines), and assets (`char1`–`char5.png`, `chicken-dinner-badge.png`, `postgame-bg.png`). Formulated reuse plan adapting the 1920×1080 stage layout, 5-character lineup, marquee ticker, and 4-column esports stats panel to the PMCC 2026 design system, `ub()` resolution scaling, and authoritative `LiveSnapshot` data model.
+  - **Phase 3 (Broadcast Research):** Researched Xtallet, OBS Studio Knowledge Base, Fluid Studio PUBG Squad Battle, and KRAFTON/PUBG Esports production HUDs. Extracted concrete design principles for independent browser sources, 3-layer background isolation, and zero-scroll 2-column standings tables.
+  - **Phase 4 (Design Proposal):** Authored comprehensive 15-section implementation proposal covering multi-type registry (8 overlay types), universal `/overlay/:instanceId` and type-scoped routes, persistent ON AIR equation, separate `postgame-match` and `postgame-series` implementations, dual WWCD variants, admin panel redesign, migration strategy, and test plan.
+- **Tests Executed:**
+  - `npm test`: **28 test files passed, 343 tests passed** (baseline recorded).
+  - `npm run typecheck`: Passed (`0` errors).
+  - `npm run lint`: Passed (`0` warnings, `0` errors).
+  - `npm run format:check` & `npm run build`: Passed.
+  - No application production source code modified during Phases 1–4.
+- **Issues Encountered:** None.
+- **Next Steps:** Present Phase 4 Design Proposal, audit findings, and key review questions to user; await explicit approval before commencing Phase 5 coding.
+
+---
+
+## Entry 11 — 2026-10-20 — Part 5 Phase 5: Implementation & Verification of `WS-5.1` through `WS-5.5`
+
+- **Phase:** Part 5 — Phase 5 (`WS-5.1` → `WS-5.5`)
+- **Task:** Implement multi-type per-instance overlay architecture (8 overlay types), persistent ON AIR/HIDE controls, selectable automatic WWCD presentation (`D-PMCC-08`), selectable historical match for single-match postgame (`D-PMCC-09`), cumulative tournament series standings (`postgame-series`), and adapted PMCC 2026 Fullscreen WWCD victory screen (`wwcd-fullscreen`).
+- **Status:** `COMPLETED`
+- **Files Affected:**
+  - `shared/src/versions.ts`, `shared/src/config/overlay-instance.ts`, `shared/src/protocol/live.ts`, `shared/src/protocol/feedback.ts`, `shared/src/index.ts`
+  - `backend/src/persistence/migrations.ts`, `backend/src/persistence/config-store.ts`, `backend/src/state/overlay-control-store.ts`, `backend/src/routes/config.ts`, `backend/src/routes/feedback.ts`, `backend/src/ws/live-hub.ts`, `backend/src/app.ts`
+  - `backend/src/persistence/migrations.test.ts`, `backend/src/routes/feedback.test.ts`, `backend/src/routes/backgrounds.test.ts`
+  - `frontend/public/images/characters/char1.png`–`char5.png`, `frontend/public/images/chicken-dinner-badge.png`, `frontend/public/images/postgame-bg.png`
+  - `frontend/src/components/overlay/broadcast-state.ts`, `frontend/src/components/overlay/FullscreenWwcdOverlay.tsx`, `frontend/src/components/overlay/PostGameSeriesOverlay.tsx`, `frontend/src/components/overlay/PostGameOverlay.tsx`, `frontend/src/components/overlay/overlays.test.tsx`
+  - `frontend/src/stores/live-store.ts`, `frontend/src/pages/OverlayRoute.tsx`, `frontend/src/router.tsx`, `frontend/src/pages/OverlayPage.tsx`
+  - `frontend/src/lib/api.ts`, `frontend/src/features/admin/overlay-types.ts`, `frontend/src/features/admin/InstanceToolbar.tsx`, `frontend/src/features/admin/OverlayPreview.tsx`, `frontend/src/features/admin/AppearanceEditor.tsx`, `frontend/src/pages/AdminPage.tsx`
+  - `docs/checkpoint.md`, `docs/progress.md`
+- **Changes Made:**
+  - **`WS-5.1` (Shared Schema & Backend Configuration):**
+    - Bumped `PROTOCOL_VERSION = 10` and `CONFIG_SCHEMA_VERSION = 5`.
+    - Added `OverlayType` (`leaderboard`, `final4`, `match-info`, `elimination`, `wwcd`, `wwcd-fullscreen`, `postgame-match`, `postgame-series`), `enabled`, `onAir`, and `autoWwcdVariant` to `OverlayInstance` and `overlayInstancesDocumentSchema`.
+    - Implemented v4→v5 non-destructive document migration with default instance seeding.
+    - Added `setInstanceOnAir` and `saveAutoWwcdVariant` to `ConfigStore`; wired `OverlayControlStore.syncFromInstances` and `onPersist` callback to guarantee persistent ON AIR states across restarts; registered `PUT /config/auto-wwcd`.
+  - **`WS-5.2` (Fullscreen WWCD & Postgame Series Components):**
+    - Copied and integrated high-resolution character cutouts (`char1`–`char5.png`), chicken dinner badge, and stage background.
+    - Implemented `FullscreenWwcdOverlay.tsx` (`wwcd-fullscreen`) with 3D stage background, 5-character squad lineup (`showFullscreenCharacters`), scrolling marquee ribbon (`showFullscreenMarquee`), and 4-column PMCC stats card with slot `T01..T25`.
+    - Implemented `PostGameSeriesOverlay.tsx` (`postgame-series`) with official PUBG Esports tie-breakers (Total Pts -> WWCDs -> Place Pts -> Elim Pts -> Latest Match Placement), 1-or-2 column zero-scroll table layout, and isolated background media.
+    - Updated `PostGameOverlay.tsx` and `broadcast-state.ts` to implement `D-PMCC-09`: historical match selector (`postGameMatchSelection`), deliberate unavailable empty state (`postgame-unavailable-state`), and strict single-match score isolation (never conflating series totals).
+  - **`WS-5.3` (Routes & Visibility Coordination):**
+    - Added routes `/overlay/wwcd-fullscreen`, `/overlay/:instanceId/wwcd-fullscreen`, `/overlay/postgame-series`, `/overlay/:instanceId/postgame-series`, and universal `/overlay/:instanceId` (`surfaceMode="auto"`).
+    - Enforced independent `onAir` evaluation for all 8 overlay types.
+    - Implemented `D-PMCC-08` automatic WWCD mutual exclusion and celebration latching (`resolveActiveAutoWwcdVariant`) so mid-ceremony variant toggles never disrupt an active victory presentation.
+  - **`WS-5.4` (Admin Panel & Scoped Controls):**
+    - Categorized overlay instance list into 3 distinct functional groups: `Leaderboard & Progression`, `Match Status & Alerts`, and `Ceremony & Post-Game`.
+    - Added Type Selector with auto-populated names and default appearances when creating new instances.
+    - Added Auto WWCD Presentation selector (`D-PMCC-08`) with live indicator pill and misconfiguration/hide warnings.
+    - Added Historical Match selector (`D-PMCC-09`) to Postgame Match instance appearance editor.
+    - Extracted `OVERLAY_TYPE_LABELS` to clean module `frontend/src/features/admin/overlay-types.ts` for fast-refresh and oxlint compliance.
+  - **`WS-5.5` (Verification & Quality Gates):**
+    - Added comprehensive unit and regression tests in `frontend/src/components/overlay/overlays.test.tsx` verifying `D-PMCC-08`, `D-PMCC-09`, `FullscreenWwcdOverlay`, `PostGameSeriesOverlay`, and universal ON AIR / HIDE enforcement.
+- **Verification Results:**
+  - `npm test`: **All 28 test files passed, 354 tests passed** (23 backend test files / 284 tests; 5 frontend test files / 70 tests).
+  - `npm run typecheck`: Passed with **0 errors** across all workspaces.
+  - `npm run lint`: Passed with **0 warnings and 0 errors** across 56 files.
+  - `npm run format:check`: Passed (`All matched files use Prettier code style!`).
+  - `npm run build`: Full production build of `@cdf/shared`, `@cdf/backend`, and `@cdf/frontend` succeeded with exit code 0.
+- **Issues Encountered & Resolved:**
+  - TypeScript literal fixture in `overlays.test.tsx` required `matchId`, `startedAt`, and `endedAt` to strictly adhere to `ClosedMapResult` type contract. Resolved cleanly.
+  - Oxlint export warning on `OVERLAY_TYPE_LABELS` in `InstanceToolbar.tsx` resolved by creating dedicated `overlay-types.ts`.
+- **Next Steps:** Complete. Ready for tournament broadcast deployment.
+

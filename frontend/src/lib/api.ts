@@ -1,4 +1,5 @@
 import type {
+  AutoWwcdVariant,
   BackupPreview,
   CustomFont,
   CustomFontsDocument,
@@ -7,6 +8,7 @@ import type {
   OperatingMode,
   OverlayInstance,
   OverlayInstancesDocument,
+  OverlayType,
   ScoringRuleset,
   SeriesDocument,
   SeriesMatchInfoPatch,
@@ -68,8 +70,19 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   getOverlays: () => request<OverlayInstancesDocument>('/config/overlays'),
 
-  createOverlay: (body: { id: string; name: string; copyAppearanceFrom?: string }) =>
+  createOverlay: (body: {
+    id: string;
+    name: string;
+    type?: OverlayType;
+    copyAppearanceFrom?: string;
+  }) =>
     request<OverlayInstance>('/config/overlays', { method: 'POST', body: JSON.stringify(body) }),
+
+  updateAutoWwcdVariant: (autoWwcdVariant: AutoWwcdVariant) =>
+    request<OverlayInstancesDocument>('/config/auto-wwcd', {
+      method: 'PUT',
+      body: JSON.stringify({ autoWwcdVariant }),
+    }),
 
   updateOverlay: (instance: OverlayInstance) =>
     request<OverlayInstance>(`/config/overlays/${instance.id}`, {

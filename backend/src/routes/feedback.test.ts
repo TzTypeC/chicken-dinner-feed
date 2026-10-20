@@ -29,6 +29,8 @@ function instance(id: string, name: string, scale = 1): OverlayInstance {
     id,
     name,
     type: 'leaderboard',
+    enabled: true,
+    onAir: true,
     appearance: { ...structuredClone(DEFAULT_OVERLAY_APPEARANCE), scale },
   };
 }

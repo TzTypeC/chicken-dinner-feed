@@ -1,6 +1,9 @@
 import type { OverlayInstance } from '@cdf/shared';
 import { Trash2 } from 'lucide-react';
 import { OnAirBadge } from './OnAirBadge';
+import { OVERLAY_TYPE_LABELS } from './overlay-types';
+
+export { OVERLAY_TYPE_LABELS };
 
 export interface InstanceToolbarProps {
   instance: OverlayInstance;
@@ -32,6 +35,13 @@ export function InstanceToolbar({
 }: InstanceToolbarProps) {
   return (
     <div className="border-border bg-card grid gap-3 rounded-lg border p-3">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="rounded border border-[var(--brand-gold)]/40 bg-[var(--brand-gold)]/10 px-2 py-0.5 font-semibold text-[var(--brand-gold)]">
+          {OVERLAY_TYPE_LABELS[instance.type] ?? instance.type}
+        </span>
+        <code className="text-muted-foreground font-mono text-[11px]">/overlay/{instance.id}</code>
+      </div>
+
       <div className="flex items-center gap-2">
         <label className="sr-only" htmlFor="overlay-name">
           Overlay name

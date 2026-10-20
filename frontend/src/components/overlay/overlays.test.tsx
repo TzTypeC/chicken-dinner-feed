@@ -12,16 +12,21 @@ import { describe, expect, it } from 'vitest';
 import { OverlayPage } from '@/pages/OverlayPage';
 import { useLiveStore } from '@/stores/live-store';
 import {
+  isPinnedPostGameMatchUnavailable,
+  resolveActiveAutoWwcdVariant,
   resolveLeaderboardLayoutMode,
   selectFinalFourCohort,
   selectPostGameResults,
+  selectSeriesStandings,
   selectWwcdWinner,
 } from './broadcast-state';
 import { EliminationOverlay } from './EliminationOverlay';
 import { FinalFourOverlay } from './FinalFourOverlay';
+import { FullscreenWwcdOverlay } from './FullscreenWwcdOverlay';
 import { LeaderboardOverlay } from './LeaderboardOverlay';
 import { MatchInfoOverlay } from './MatchInfoOverlay';
 import { PostGameOverlay } from './PostGameOverlay';
+import { PostGameSeriesOverlay } from './PostGameSeriesOverlay';
 import { WwcdOverlay } from './WwcdOverlay';
 
 function makeTeam(overrides: Partial<Team> & { teamNo: number; rank: number }): Team {
@@ -635,11 +640,17 @@ describe('Overlay route isolation & global visibility coordination (Part 4)', ()
     };
   }
 
-  function setStoreSnapshot(match: MatchState, appearance = DEFAULT_OVERLAY_APPEARANCE) {
+  function setStoreSnapshot(
+    match: MatchState,
+    appearance = DEFAULT_OVERLAY_APPEARANCE,
+    autoWwcdVariant: 'standard' | 'fullscreen' = 'standard',
+  ) {
     const mainInstance: OverlayInstance = {
       id: 'main',
       name: 'Main Leaderboard',
       type: 'leaderboard',
+      enabled: true,
+      onAir: true,
       appearance,
     };
     const snapshot: LiveSnapshot = {
@@ -649,6 +660,8 @@ describe('Overlay route isolation & global visibility coordination (Part 4)', ()
       match,
       matchInfo: { matchNumber: 2, mapName: 'Erangel' },
       lastClosedMap: null,
+      closedMaps: [],
+      autoWwcdVariant,
     };
     useLiveStore.setState({
       snapshot,
@@ -898,5 +911,540 @@ describe('Final-4 Overlay Centering on 1920×1080 canvas (Part 4 / Phase 4)', ()
     expect(html).toContain('data-testid="final-four-card-2"');
     expect(html).toContain('data-testid="final-four-card-3"');
     expect(html).toContain('data-testid="final-four-card-4"');
+  });
+});
+
+describe('D-PMCC-08 — Configurable Automatic WWCD Presentation & Fullscreen WWCD', () => {
+  function makeConfirmedWwcdMatch(): MatchState {
+    const teams: Team[] = [
+      makeTeam({
+        teamNo: 1,
+        name: 'CHAMPION SQUAD',
+        rank: 1,
+        isEliminated: false,
+        standingPlayerCount: 4,
+        eliminations: 14,
+      }),
+      makeTeam({
+        teamNo: 2,
+        name: 'RUNNER UP',
+        rank: 2,
+        isEliminated: true,
+        standingPlayerCount: 0,
+        placement: 2,
+      }),
+    ];
+    return {
+      matchId: 'match-wwcd-1',
+      phase: 'ended',
+      standingTeamCount: 1,
+      teams,
+    };
+  }
+
+  it('activates only Standard WWCD when autoWwcdVariant is "standard" and never puts both variants ON AIR simultaneously', () => {
+    const match = makeConfirmedWwcdMatch();
+    const snapshot: LiveSnapshot = {
+      revision: 1,
+      generatedAt: 2000,
+      ingest: { state: 'connected', source: 'pcob', lastUpdateAt: 2000, message: null },
+      match,
+      matchInfo: { matchNumber: 1, mapName: 'Erangel' },
+      lastClosedMap: null,
+      closedMaps: [],
+      autoWwcdVariant: 'standard',
+    };
+    const stdInstance: OverlayInstance = {
+      id: 'default-wwcd',
+      name: 'Standard WWCD',
+      type: 'wwcd',
+      enabled: true,
+      onAir: true,
+      appearance: DEFAULT_OVERLAY_APPEARANCE,
+    };
+    const fsInstance: OverlayInstance = {
+      id: 'default-wwcd-fullscreen',
+      name: 'Fullscreen WWCD',
+      type: 'wwcd-fullscreen',
+      enabled: true,
+      onAir: true,
+      appearance: DEFAULT_OVERLAY_APPEARANCE,
+    };
+
+    const stdHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-wwcd"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={stdInstance}
+        overlayState={{ instanceId: 'default-wwcd', visible: true, changedAt: 2000 }}
+      />,
+    );
+    const fsHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-wwcd-fullscreen"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={fsInstance}
+        overlayState={{ instanceId: 'default-wwcd-fullscreen', visible: true, changedAt: 2000 }}
+      />,
+    );
+
+    expect(stdHtml).toContain('data-testid="wwcd-overlay"');
+    expect(stdHtml).toContain('CHAMPION SQUAD');
+    expect(fsHtml).not.toContain('data-testid="wwcd-fullscreen-overlay"');
+  });
+
+  it('activates only Fullscreen WWCD when autoWwcdVariant is "fullscreen"', () => {
+    const match = makeConfirmedWwcdMatch();
+    const snapshot: LiveSnapshot = {
+      revision: 2,
+      generatedAt: 2100,
+      ingest: { state: 'connected', source: 'pcob', lastUpdateAt: 2100, message: null },
+      match,
+      matchInfo: { matchNumber: 1, mapName: 'Erangel' },
+      lastClosedMap: null,
+      closedMaps: [],
+      autoWwcdVariant: 'fullscreen',
+    };
+    const stdInstance: OverlayInstance = {
+      id: 'default-wwcd',
+      name: 'Standard WWCD',
+      type: 'wwcd',
+      enabled: true,
+      onAir: true,
+      appearance: DEFAULT_OVERLAY_APPEARANCE,
+    };
+    const fsInstance: OverlayInstance = {
+      id: 'default-wwcd-fullscreen',
+      name: 'Fullscreen WWCD',
+      type: 'wwcd-fullscreen',
+      enabled: true,
+      onAir: true,
+      appearance: DEFAULT_OVERLAY_APPEARANCE,
+    };
+
+    const stdHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-wwcd"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={stdInstance}
+        overlayState={{ instanceId: 'default-wwcd', visible: true, changedAt: 2100 }}
+      />,
+    );
+    const fsHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-wwcd-fullscreen"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={fsInstance}
+        overlayState={{ instanceId: 'default-wwcd-fullscreen', visible: true, changedAt: 2100 }}
+      />,
+    );
+
+    expect(stdHtml).not.toContain('data-testid="wwcd-overlay"');
+    expect(fsHtml).toContain('data-testid="wwcd-fullscreen-overlay"');
+    expect(fsHtml).toContain('CHAMPION SQUAD');
+    expect(fsHtml).toContain('14');
+  });
+
+  it('respects explicit HIDE (onAir: false / visible: false) on the selected WWCD variant without silently showing the wrong variant', () => {
+    const match = makeConfirmedWwcdMatch();
+    const snapshot: LiveSnapshot = {
+      revision: 3,
+      generatedAt: 2200,
+      ingest: { state: 'connected', source: 'pcob', lastUpdateAt: 2200, message: null },
+      match,
+      matchInfo: { matchNumber: 1, mapName: 'Erangel' },
+      lastClosedMap: null,
+      closedMaps: [],
+      autoWwcdVariant: 'fullscreen',
+    };
+    const fsHiddenInstance: OverlayInstance = {
+      id: 'default-wwcd-fullscreen',
+      name: 'Fullscreen WWCD',
+      type: 'wwcd-fullscreen',
+      enabled: true,
+      onAir: false,
+      appearance: DEFAULT_OVERLAY_APPEARANCE,
+    };
+    const stdInstance: OverlayInstance = {
+      id: 'default-wwcd',
+      name: 'Standard WWCD',
+      type: 'wwcd',
+      enabled: true,
+      onAir: true,
+      appearance: DEFAULT_OVERLAY_APPEARANCE,
+    };
+
+    const fsHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-wwcd-fullscreen"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={fsHiddenInstance}
+        overlayState={{ instanceId: 'default-wwcd-fullscreen', visible: false, changedAt: 2200 }}
+      />,
+    );
+    const stdHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-wwcd"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={stdInstance}
+        overlayState={{ instanceId: 'default-wwcd', visible: true, changedAt: 2200 }}
+      />,
+    );
+
+    expect(fsHtml).not.toContain('data-testid="wwcd-fullscreen-overlay"');
+    expect(stdHtml).not.toContain('data-testid="wwcd-overlay"');
+  });
+
+  it('latches the active WWCD variant during an already-running celebration so mid-WWCD preference edits do not trigger a new animation', () => {
+    // Initially latched when WWCD confirmed with 'standard'
+    const step1 = resolveActiveAutoWwcdVariant('wwcd', 'match-1', 'standard', null);
+    expect(step1.effectiveVariant).toBe('standard');
+    expect(step1.nextLatch).toEqual({ matchId: 'match-1', variant: 'standard' });
+
+    // Operator changes setting to 'fullscreen' while WWCD is still active -> stays 'standard'
+    const step2 = resolveActiveAutoWwcdVariant('wwcd', 'match-1', 'fullscreen', step1.nextLatch);
+    expect(step2.effectiveVariant).toBe('standard');
+
+    // Once match resets to 'tower', latch clears
+    const step3 = resolveActiveAutoWwcdVariant('tower', 'match-2', 'fullscreen', step2.nextLatch);
+    expect(step3.nextLatch).toBeNull();
+
+    // Next WWCD uses the new 'fullscreen' preference
+    const step4 = resolveActiveAutoWwcdVariant('wwcd', 'match-2', 'fullscreen', step3.nextLatch);
+    expect(step4.effectiveVariant).toBe('fullscreen');
+  });
+
+  it('FullscreenWwcdOverlay respects showFullscreenCharacters, showFullscreenMarquee, and showFullscreenStageBg toggles', () => {
+    const match = makeConfirmedWwcdMatch();
+    const winner = selectWwcdWinner(match, null);
+    const matchInfo = { matchNumber: 1, mapName: 'Erangel' };
+
+    const fullHtml = renderToStaticMarkup(
+      <FullscreenWwcdOverlay
+        winner={winner}
+        matchInfo={matchInfo}
+        appearance={{
+          ...DEFAULT_OVERLAY_APPEARANCE,
+          showFullscreenCharacters: true,
+          showFullscreenMarquee: true,
+          showFullscreenStageBg: true,
+        }}
+      />,
+    );
+    expect(fullHtml).toContain('data-testid="wwcd-fullscreen-characters"');
+    expect(fullHtml).toContain('data-testid="wwcd-fullscreen-marquee"');
+    expect(fullHtml).toContain('data-testid="wwcd-fullscreen-stage-bg"');
+
+    const minimalHtml = renderToStaticMarkup(
+      <FullscreenWwcdOverlay
+        winner={winner}
+        matchInfo={matchInfo}
+        appearance={{
+          ...DEFAULT_OVERLAY_APPEARANCE,
+          showFullscreenCharacters: false,
+          showFullscreenMarquee: false,
+          showFullscreenStageBg: false,
+        }}
+      />,
+    );
+    expect(minimalHtml).not.toContain('data-testid="wwcd-fullscreen-characters"');
+    expect(minimalHtml).not.toContain('data-testid="wwcd-fullscreen-marquee"');
+    expect(minimalHtml).not.toContain('data-testid="wwcd-fullscreen-stage-bg"');
+  });
+});
+
+describe('D-PMCC-09 — Postgame Match Historical Selection & Postgame Series Cumulative Standings', () => {
+  const closedMap1: ClosedMapResult = {
+    id: 'map-1-erangel',
+    mapNumber: 1,
+    mapName: 'Erangel',
+    matchId: 'match-1',
+    startedAt: 500,
+    endedAt: 1000,
+    teams: [
+      {
+        teamNo: 1,
+        placement: 1,
+        eliminations: 8,
+        placementPoints: 10,
+        killPoints: 8,
+        totalPoints: 18,
+      },
+      {
+        teamNo: 2,
+        placement: 2,
+        eliminations: 10,
+        placementPoints: 6,
+        killPoints: 10,
+        totalPoints: 16,
+      },
+    ],
+  };
+
+  const closedMap2: ClosedMapResult = {
+    id: 'map-2-miramar',
+    mapNumber: 2,
+    mapName: 'Miramar',
+    matchId: 'match-2',
+    startedAt: 1500,
+    endedAt: 2000,
+    teams: [
+      {
+        teamNo: 2,
+        placement: 1,
+        eliminations: 2,
+        placementPoints: 10,
+        killPoints: 2,
+        totalPoints: 12,
+      },
+      {
+        teamNo: 1,
+        placement: 2,
+        eliminations: 4,
+        placementPoints: 6,
+        killPoints: 4,
+        totalPoints: 10,
+      },
+    ],
+  };
+
+  const baseMatch: MatchState = {
+    matchId: 'live-match-3',
+    phase: 'ended',
+    standingTeamCount: 1,
+    teams: [
+      // Note: team.totalPoints on live match may include series total (e.g., 99),
+      // which MUST NEVER leak into single-match postgame totalMatchPoints!
+      makeTeam({
+        teamNo: 1,
+        name: 'ALPHA SQUAD',
+        logoUrl: '/api/team-logos/alpha.png',
+        rank: 1,
+        isEliminated: false,
+        placement: 1,
+        placementPoints: 10,
+        killPoints: 5,
+        eliminations: 5,
+        totalPoints: 99,
+      }),
+      makeTeam({
+        teamNo: 2,
+        name: 'BRAVO SQUAD',
+        logoUrl: '/api/team-logos/bravo.png',
+        rank: 2,
+        isEliminated: true,
+        placement: 2,
+        placementPoints: 6,
+        killPoints: 3,
+        eliminations: 3,
+        totalPoints: 80,
+      }),
+    ],
+  };
+
+  const matchInfo = { matchNumber: 2, mapName: 'Miramar' };
+
+  it('selectPostGameResults resolves pinned historical Match 1 even when Match 2 is the latest closed map', () => {
+    const match1Results = selectPostGameResults(baseMatch, closedMap2, matchInfo, {
+      closedMaps: [closedMap1, closedMap2],
+      postGameMatchSelection: 'map-1-erangel',
+    });
+    expect(match1Results?.mapNumber).toBe(1);
+    expect(match1Results?.mapName).toBe('Erangel');
+    expect(match1Results?.winner.name).toBe('ALPHA SQUAD');
+    expect(match1Results?.winner.totalMatchPoints).toBe(18);
+
+    const latestResults = selectPostGameResults(baseMatch, closedMap2, matchInfo, {
+      closedMaps: [closedMap1, closedMap2],
+      postGameMatchSelection: 'latest',
+    });
+    expect(latestResults?.mapNumber).toBe(2);
+    expect(latestResults?.mapName).toBe('Miramar');
+    expect(latestResults?.winner.name).toBe('BRAVO SQUAD');
+    expect(latestResults?.winner.totalMatchPoints).toBe(12);
+  });
+
+  it('renders deliberate unavailable state when a pinned historical match ID is missing and never substitutes another match', () => {
+    expect(
+      isPinnedPostGameMatchUnavailable('deleted-map-id', [closedMap1, closedMap2], closedMap2),
+    ).toBe(true);
+    const unavailableBoard = selectPostGameResults(baseMatch, closedMap2, matchInfo, {
+      closedMaps: [closedMap1, closedMap2],
+      postGameMatchSelection: 'deleted-map-id',
+    });
+    expect(unavailableBoard).toBeNull();
+
+    const html = renderToStaticMarkup(
+      <PostGameOverlay
+        board={unavailableBoard}
+        matchInfo={matchInfo}
+        unavailableSelection={true}
+        appearance={{
+          ...DEFAULT_OVERLAY_APPEARANCE,
+          postGameMatchSelection: 'deleted-map-id',
+        }}
+      />,
+    );
+    expect(html).toContain('data-testid="postgame-unavailable-state"');
+    expect(html).toContain('SELECTED MATCH RESULT UNAVAILABLE');
+    expect(html).not.toContain('BRAVO SQUAD');
+  });
+
+  it('never conflates cumulative series points into single-match PostGameOverlay when falling back to live match teams', () => {
+    const results = selectPostGameResults(baseMatch, null, matchInfo, {
+      closedMaps: [],
+      postGameMatchSelection: 'latest',
+    });
+    // Placement points (10) + Kill points (5) = 15 (NOT 99 from team.totalPoints)
+    expect(results?.winner.totalMatchPoints).toBe(15);
+  });
+
+  it('selectSeriesStandings and PostGameSeriesOverlay compute cumulative statistics and apply PUBG Esports tie-breakers', () => {
+    // Across Match 1 + Match 2:
+    // ALPHA SQUAD: 18 + 10 = 28 pts, 1 WWCD, 16 Place Pts, 12 Elim Pts, Latest Placement = 2
+    // BRAVO SQUAD: 16 + 12 = 28 pts, 1 WWCD, 16 Place Pts, 12 Elim Pts, Latest Placement = 1
+    // Tie-breaker #5 (Latest Match Placement) ranks BRAVO SQUAD #1 and ALPHA SQUAD #2!
+    const series = selectSeriesStandings(baseMatch, [closedMap1, closedMap2]);
+    expect(series?.completedMatchesCount).toBe(2);
+    expect(series?.rows).toHaveLength(2);
+    expect(series?.rows[0]?.name).toBe('BRAVO SQUAD');
+    expect(series?.rows[0]?.seriesRank).toBe(1);
+    expect(series?.rows[0]?.totalPoints).toBe(28);
+    expect(series?.rows[0]?.wwcdCount).toBe(1);
+    expect(series?.rows[1]?.name).toBe('ALPHA SQUAD');
+    expect(series?.rows[1]?.seriesRank).toBe(2);
+    expect(series?.rows[1]?.totalPoints).toBe(28);
+
+    const html = renderToStaticMarkup(
+      <PostGameSeriesOverlay
+        board={series}
+        matchInfo={matchInfo}
+        appearance={DEFAULT_OVERLAY_APPEARANCE}
+      />,
+    );
+    expect(html).toContain('data-testid="postgame-series-overlay"');
+    expect(html).toContain('OVERALL SERIES STANDINGS');
+    expect(html).toContain('AFTER MATCH 2');
+    expect(html).toContain('BRAVO SQUAD');
+    expect(html).toContain('ALPHA SQUAD');
+  });
+});
+
+describe('Universal ON AIR / HIDE enforcement across all overlay types', () => {
+  it('hides elimination, postgame-match, and postgame-series when overlayState.visible is false', () => {
+    const snapshot: LiveSnapshot = {
+      revision: 1,
+      generatedAt: 1000,
+      ingest: { state: 'connected', source: 'pcob', lastUpdateAt: 1000, message: null },
+      match: SAMPLE_MATCH,
+      matchInfo: { matchNumber: 1, mapName: 'Erangel' },
+      lastClosedMap: {
+        id: 'map-1',
+        mapNumber: 1,
+        mapName: 'Erangel',
+        matchId: 'match-1',
+        startedAt: 500,
+        endedAt: 1000,
+        teams: [
+          {
+            teamNo: 5,
+            placement: 1,
+            eliminations: 7,
+            placementPoints: 10,
+            killPoints: 7,
+            totalPoints: 17,
+          },
+        ],
+      },
+      closedMaps: [
+        {
+          id: 'map-1',
+          mapNumber: 1,
+          mapName: 'Erangel',
+          matchId: 'match-1',
+          startedAt: 500,
+          endedAt: 1000,
+          teams: [
+            {
+              teamNo: 5,
+              placement: 1,
+              eliminations: 7,
+              placementPoints: 10,
+              killPoints: 7,
+              totalPoints: 17,
+            },
+          ],
+        },
+      ],
+      autoWwcdVariant: 'standard',
+    };
+
+    const pgMatchInstance: OverlayInstance = {
+      id: 'default-postgame-match',
+      name: 'Postgame Match',
+      type: 'postgame-match',
+      enabled: true,
+      onAir: false,
+      appearance: DEFAULT_OVERLAY_APPEARANCE,
+    };
+    const pgSeriesInstance: OverlayInstance = {
+      id: 'default-postgame-series',
+      name: 'Postgame Series',
+      type: 'postgame-series',
+      enabled: true,
+      onAir: false,
+      appearance: DEFAULT_OVERLAY_APPEARANCE,
+    };
+
+    const hiddenMatchHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-postgame-match"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={pgMatchInstance}
+        overlayState={{ instanceId: 'default-postgame-match', visible: false, changedAt: 1000 }}
+      />,
+    );
+    const hiddenSeriesHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-postgame-series"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={pgSeriesInstance}
+        overlayState={{ instanceId: 'default-postgame-series', visible: false, changedAt: 1000 }}
+      />,
+    );
+
+    expect(hiddenMatchHtml).not.toContain('ALPHA SQUAD');
+    expect(hiddenSeriesHtml).not.toContain('ALPHA SQUAD');
+
+    // When visible: true, both render their respective content via surfaceMode="auto"
+    const visibleMatchHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-postgame-match"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={{ ...pgMatchInstance, onAir: true }}
+        overlayState={{ instanceId: 'default-postgame-match', visible: true, changedAt: 1000 }}
+      />,
+    );
+    const visibleSeriesHtml = renderToStaticMarkup(
+      <OverlayPage
+        instanceId="default-postgame-series"
+        surfaceMode="auto"
+        snapshot={snapshot}
+        instance={{ ...pgSeriesInstance, onAir: true }}
+        overlayState={{ instanceId: 'default-postgame-series', visible: true, changedAt: 1000 }}
+      />,
+    );
+
+    expect(visibleMatchHtml).toContain('ALPHA SQUAD');
+    expect(visibleSeriesHtml).toContain('OVERALL SERIES STANDINGS');
   });
 });

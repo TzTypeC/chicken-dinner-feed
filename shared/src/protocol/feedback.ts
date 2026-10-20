@@ -46,6 +46,11 @@ const overlayFeedbackAppearanceSchema = z.object({
   showTeamNumbers: z.boolean().default(true),
   showFinalFourLayout: z.boolean().default(true),
   showWwcdOverlay: z.boolean().default(true),
+  postGameMatchSelection: z.string().default('latest'),
+  showSeriesWwcdColumn: z.boolean().default(true),
+  showFullscreenCharacters: z.boolean().default(true),
+  showFullscreenMarquee: z.boolean().default(true),
+  showFullscreenStageBg: z.boolean().default(true),
   colors: overlayColorsSchema,
   animation: overlayAnimationSchema,
 });
@@ -54,6 +59,8 @@ export const overlayFeedbackSchema = z.object({
   id: z.string(),
   name: z.string(),
   type: z.string(),
+  enabled: z.boolean().default(true),
+  onAir: z.boolean().default(true),
 
   /** Whether it is on screen right now. The single most useful value here. */
   isVisible: z.boolean(),

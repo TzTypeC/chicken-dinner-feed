@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type {
+  AutoWwcdVariant,
   CustomFont,
   CustomFontsDocument,
   OverlayInstance,
@@ -106,6 +107,28 @@ export class ConfigStore {
     const saved = await this.instances.write({
       ...this.instances.current,
       instances,
+    });
+    this.emit('instances');
+    return saved;
+  }
+
+  async setInstanceOnAir(
+    instanceId: string,
+    onAir: boolean,
+  ): Promise<OverlayInstancesDocument | null> {
+    const existing = this.findInstance(instanceId);
+    if (!existing) return null;
+    if (existing.onAir === onAir) return this.instances.current;
+    const next = this.instances.current.instances.map((item) =>
+      item.id === instanceId ? { ...item, onAir } : item,
+    );
+    return this.saveInstances(next);
+  }
+
+  async saveAutoWwcdVariant(autoWwcdVariant: AutoWwcdVariant): Promise<OverlayInstancesDocument> {
+    const saved = await this.instances.write({
+      ...this.instances.current,
+      autoWwcdVariant,
     });
     this.emit('instances');
     return saved;

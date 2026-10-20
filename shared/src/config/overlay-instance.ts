@@ -151,10 +151,48 @@ export const overlayAppearanceSchema = z.object({
   showWwcdOverlay: z.boolean().default(true),
   /** Media behind the post-game standings screen. */
   postGameBackground: postGameBackgroundSchema.default(DEFAULT_POST_GAME_BACKGROUND),
+  /**
+   * Which completed match to display on a Postgame Match (`postgame-match`) instance (D-PMCC-09).
+   * `'latest'` resolves to the most recently closed map; any other value is a specific
+   * `ClosedMapResult.id` pinned by the operator.
+   */
+  postGameMatchSelection: z.string().min(1).default('latest'),
+  /** Whether the WWCD count column is displayed on the Postgame Series (`postgame-series`) table. */
+  showSeriesWwcdColumn: z.boolean().default(true),
+  /** Whether the 5-character squad lineup is shown on the Fullscreen WWCD (`wwcd-fullscreen`) stage. */
+  showFullscreenCharacters: z.boolean().default(true),
+  /** Whether the scrolling marquee ticker ribbon is shown on the Fullscreen WWCD stage. */
+  showFullscreenMarquee: z.boolean().default(true),
+  /**
+   * Whether the built-in 3D stage backdrop and volumetric lighting are shown on Fullscreen WWCD.
+   * When false (and `postGameBackground.mode === 'disabled'`), the canvas stays transparent for OBS.
+   */
+  showFullscreenStageBg: z.boolean().default(true),
   /** Trim the table for formats with fewer than 25 teams. */
   maxTeams: z.number().int().min(1).max(25),
 });
 export type OverlayAppearance = z.infer<typeof overlayAppearanceSchema>;
+
+/**
+ * Every distinct broadcast overlay surface supported by the system.
+ */
+export const overlayTypeSchema = z.enum([
+  'leaderboard',
+  'final4',
+  'match-info',
+  'elimination',
+  'wwcd',
+  'wwcd-fullscreen',
+  'postgame-match',
+  'postgame-series',
+]);
+export type OverlayType = z.infer<typeof overlayTypeSchema>;
+
+/**
+ * Which WWCD presentation variant activates on automatic match-end transitions (D-PMCC-08).
+ */
+export const autoWwcdVariantSchema = z.enum(['standard', 'fullscreen']);
+export type AutoWwcdVariant = z.infer<typeof autoWwcdVariantSchema>;
 
 /**
  * Instance ids appear in URLs — the browser-source address and the Companion button both use them —
@@ -171,17 +209,22 @@ export const overlayInstanceSchema = z.object({
   id: overlayInstanceIdSchema,
   /** Operator-facing label. The id is what goes in URLs. */
   name: z.string().min(1).max(60),
-  /**
-   * Overlay type. A registry of one for now; deliberately not generalised until there are two to
-   * generalise from.
-   */
-  type: z.literal('leaderboard'),
+  /** Overlay type rendered by this instance. */
+  type: overlayTypeSchema.default('leaderboard'),
+  /** Master enable switch for this instance. */
+  enabled: z.boolean().default(true),
+  /** Persistent operator ON AIR (true) / HIDE (false) status across reloads and server restarts. */
+  onAir: z.boolean().default(true),
   appearance: overlayAppearanceSchema,
 });
 export type OverlayInstance = z.infer<typeof overlayInstanceSchema>;
 
 export const overlayInstancesDocumentSchema = z.object({
   schemaVersion: z.number().int().min(1),
+  /**
+   * Which WWCD presentation variant is selected for automatic match-end transitions (D-PMCC-08).
+   */
+  autoWwcdVariant: autoWwcdVariantSchema.default('standard'),
   instances: z.array(overlayInstanceSchema),
 });
 export type OverlayInstancesDocument = z.infer<typeof overlayInstancesDocumentSchema>;
@@ -247,17 +290,139 @@ export const DEFAULT_OVERLAY_APPEARANCE: OverlayAppearance = {
   showFinalFourLayout: true,
   showWwcdOverlay: true,
   postGameBackground: DEFAULT_POST_GAME_BACKGROUND,
+  postGameMatchSelection: 'latest',
+  showSeriesWwcdColumn: true,
+  showFullscreenCharacters: true,
+  showFullscreenMarquee: true,
+  showFullscreenStageBg: true,
   maxTeams: 16,
 };
 
+/** Canonical default instance id for each overlay type. */
+export const DEFAULT_INSTANCE_ID_BY_TYPE: Record<OverlayType, string> = {
+  leaderboard: 'main',
+  final4: 'default-final4',
+  'match-info': 'default-match-info',
+  elimination: 'default-elimination',
+  wwcd: 'default-wwcd',
+  'wwcd-fullscreen': 'default-wwcd-fullscreen',
+  'postgame-match': 'default-postgame-match',
+  'postgame-series': 'default-postgame-series',
+};
+
+/** Default appearance tailored to a given overlay type. */
+export function defaultAppearanceForType(type: OverlayType): OverlayAppearance {
+  const base: OverlayAppearance = {
+    ...DEFAULT_OVERLAY_APPEARANCE,
+    colors: { ...DEFAULT_OVERLAY_APPEARANCE.colors },
+    postGameBackground: { ...DEFAULT_POST_GAME_BACKGROUND },
+    animation: {
+      ...DEFAULT_OVERLAY_APPEARANCE.animation,
+      rows: { ...DEFAULT_OVERLAY_APPEARANCE.animation.rows },
+    },
+  };
+
+  switch (type) {
+    case 'final4':
+    case 'elimination':
+      return {
+        ...base,
+        animation: { ...base.animation, type: 'slide', direction: 'top', durationMs: 380 },
+      };
+    case 'match-info':
+      return {
+        ...base,
+        animation: { ...base.animation, type: 'fade', durationMs: 320 },
+      };
+    case 'wwcd':
+      return {
+        ...base,
+        animation: { ...base.animation, type: 'zoom-fade', durationMs: 480 },
+      };
+    case 'wwcd-fullscreen':
+      return {
+        ...base,
+        animation: { ...base.animation, type: 'fade', durationMs: 600 },
+      };
+    case 'postgame-match':
+    case 'postgame-series':
+      return {
+        ...base,
+        animation: { ...base.animation, type: 'fade', durationMs: 420 },
+      };
+    case 'leaderboard':
+    default:
+      return base;
+  }
+}
+
 export const DEFAULT_OVERLAY_INSTANCES: OverlayInstancesDocument = {
   schemaVersion: CONFIG_SCHEMA_VERSION,
+  autoWwcdVariant: 'standard',
   instances: [
     {
       id: 'main',
       name: 'Main leaderboard',
       type: 'leaderboard',
-      appearance: DEFAULT_OVERLAY_APPEARANCE,
+      enabled: true,
+      onAir: true,
+      appearance: defaultAppearanceForType('leaderboard'),
+    },
+    {
+      id: 'default-final4',
+      name: 'Final-4 Top Bar',
+      type: 'final4',
+      enabled: true,
+      onAir: true,
+      appearance: defaultAppearanceForType('final4'),
+    },
+    {
+      id: 'default-match-info',
+      name: 'Match Info Pill',
+      type: 'match-info',
+      enabled: true,
+      onAir: true,
+      appearance: defaultAppearanceForType('match-info'),
+    },
+    {
+      id: 'default-elimination',
+      name: 'Elimination Alerts',
+      type: 'elimination',
+      enabled: true,
+      onAir: true,
+      appearance: defaultAppearanceForType('elimination'),
+    },
+    {
+      id: 'default-wwcd',
+      name: 'Standard WWCD Card',
+      type: 'wwcd',
+      enabled: true,
+      onAir: true,
+      appearance: defaultAppearanceForType('wwcd'),
+    },
+    {
+      id: 'default-wwcd-fullscreen',
+      name: 'Fullscreen WWCD Celebration',
+      type: 'wwcd-fullscreen',
+      enabled: true,
+      onAir: true,
+      appearance: defaultAppearanceForType('wwcd-fullscreen'),
+    },
+    {
+      id: 'default-postgame-match',
+      name: 'Postgame Match Results',
+      type: 'postgame-match',
+      enabled: true,
+      onAir: true,
+      appearance: defaultAppearanceForType('postgame-match'),
+    },
+    {
+      id: 'default-postgame-series',
+      name: 'Postgame Series Standings',
+      type: 'postgame-series',
+      enabled: true,
+      onAir: true,
+      appearance: defaultAppearanceForType('postgame-series'),
     },
   ],
 };

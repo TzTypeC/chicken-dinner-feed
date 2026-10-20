@@ -186,7 +186,11 @@ export async function buildApp(): Promise<AppContext> {
   };
   await syncManualProjection();
 
-  const overlayControl = new OverlayControlStore();
+  const overlayControl = new OverlayControlStore({
+    onPersist: (instanceId, visible) => configStore.setInstanceOnAir(instanceId, visible),
+  });
+  overlayControl.syncFromInstances(configStore.instances.current.instances);
+
   const hub = new LiveHub({
     store,
     overlayControl,
@@ -201,6 +205,8 @@ export async function buildApp(): Promise<AppContext> {
       };
     },
     resolveLastClosedMap: () => seriesStore.getState().closedMaps.at(-1) ?? null,
+    resolveClosedMaps: () => seriesStore.getState().closedMaps,
+    resolveAutoWwcdVariant: () => configStore.instances.current.autoWwcdVariant,
   });
   const ingestSource = createIngestSource(config.ingestSource, {
     pcobBaseUrl: config.pcobBaseUrl,
@@ -274,8 +280,10 @@ export async function buildApp(): Promise<AppContext> {
         hub.schedulePublish();
         break;
       case 'instances':
+        overlayControl.syncFromInstances(configStore.instances.current.instances);
         void pruneBackgrounds();
         hub.refreshAllOverlayStates();
+        hub.schedulePublish();
         break;
       case 'fonts':
         // A font uploaded mid-setup has to reach open browser sources without a reload.

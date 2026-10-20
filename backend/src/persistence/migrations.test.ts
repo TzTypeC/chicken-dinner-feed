@@ -282,6 +282,67 @@ describe('migrateOverlayInstances', () => {
       LEGACY_FACTORY_OVERLAY_COLORS.background,
     );
   });
+
+  it('migrates v4 to v5 by populating enabled/onAir/autoWwcdVariant and non-destructively seeding missing default instances', () => {
+    const v4Document = {
+      schemaVersion: 4,
+      instances: [
+        {
+          id: 'main',
+          name: 'Custom Main Leaderboard',
+          type: 'leaderboard',
+          appearance: {
+            ...V1_DOCUMENT.instances[0]!.appearance,
+            colors: { ...PMCC_2026_OVERLAY_COLORS, accent: '#123456' },
+            animation: {
+              type: 'slide',
+              direction: 'left',
+              durationMs: 420,
+              easing: 'smooth',
+              withFade: true,
+              rows: { enabled: false, staggerMs: 60, reverseOnHide: false },
+            },
+          },
+        },
+        {
+          id: 'secondary-board',
+          name: 'Secondary Board',
+          type: 'leaderboard',
+          appearance: {
+            ...V1_DOCUMENT.instances[0]!.appearance,
+            colors: { ...PMCC_2026_OVERLAY_COLORS },
+            animation: {
+              type: 'fade',
+              direction: 'left',
+              durationMs: 300,
+              easing: 'smooth',
+              withFade: true,
+              rows: { enabled: false, staggerMs: 60, reverseOnHide: false },
+            },
+          },
+        },
+      ],
+    };
+
+    const parsed = migrateAndParse(v4Document);
+    expect(parsed.schemaVersion).toBe(CONFIG_SCHEMA_VERSION);
+    expect(parsed.autoWwcdVariant).toBe('standard');
+    expect(parsed.instances[0]?.id).toBe('main');
+    expect(parsed.instances[0]?.name).toBe('Custom Main Leaderboard');
+    expect(parsed.instances[0]?.appearance.colors.accent).toBe('#123456');
+    expect(parsed.instances[0]?.enabled).toBe(true);
+    expect(parsed.instances[0]?.onAir).toBe(true);
+    expect(parsed.instances[1]?.id).toBe('secondary-board');
+
+    const ids = parsed.instances.map((inst) => inst.id);
+    expect(ids).toContain('default-final4');
+    expect(ids).toContain('default-match-info');
+    expect(ids).toContain('default-elimination');
+    expect(ids).toContain('default-wwcd');
+    expect(ids).toContain('default-wwcd-fullscreen');
+    expect(ids).toContain('default-postgame-match');
+    expect(ids).toContain('default-postgame-series');
+  });
 });
 
 describe('migrateTeamRoster', () => {

@@ -58,6 +58,8 @@ export {
   overlayAnimationDirectionSchema,
   overlayRowAnimationSchema,
   overlayAppearanceSchema,
+  overlayTypeSchema,
+  autoWwcdVariantSchema,
   overlayInstanceIdSchema,
   overlayInstanceSchema,
   overlayInstancesDocumentSchema,
@@ -69,6 +71,8 @@ export {
   LEGACY_FACTORY_OVERLAY_COLORS,
   PMCC_2026_OVERLAY_COLORS,
   DEFAULT_OVERLAY_APPEARANCE,
+  DEFAULT_INSTANCE_ID_BY_TYPE,
+  defaultAppearanceForType,
   DEFAULT_OVERLAY_INSTANCES,
 } from './config/overlay-instance.js';
 export type {
@@ -78,6 +82,8 @@ export type {
   OverlayAnimationDirection,
   OverlayRowAnimation,
   OverlayAppearance,
+  OverlayType,
+  AutoWwcdVariant,
   OverlayInstance,
   OverlayInstancesDocument,
   PostGameBackground,

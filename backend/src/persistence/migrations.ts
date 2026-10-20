@@ -1,6 +1,8 @@
 import {
   CONFIG_SCHEMA_VERSION,
+  DEFAULT_OVERLAY_INSTANCES,
   LEGACY_FACTORY_OVERLAY_COLORS,
+  overlayTypeSchema,
   PMCC_2026_OVERLAY_COLORS,
 } from '@cdf/shared';
 
@@ -105,24 +107,78 @@ export function migrateOverlayInstances(raw: unknown): unknown {
   // an empty list and written back over whatever was actually on disk.
   if (!Array.isArray(raw['instances'])) return raw;
 
+  const migratedInstances = raw['instances'].map((instance) => {
+    if (!isRecord(instance)) return instance;
+
+    let appearance = isRecord(instance['appearance']) ? instance['appearance'] : null;
+    if (appearance === null) return instance;
+
+    if (version < 2) {
+      appearance = { ...appearance, animation: migrateAnimationV1(appearance['animation']) };
+    }
+    if (version < 4) {
+      appearance = migrateFactoryColorsV3ToV4(appearance);
+    }
+
+    const parsedType = overlayTypeSchema.safeParse(instance['type']);
+    const resolvedType = parsedType.success ? parsedType.data : 'leaderboard';
+    const enabled = typeof instance['enabled'] === 'boolean' ? instance['enabled'] : true;
+    const onAir = typeof instance['onAir'] === 'boolean' ? instance['onAir'] : true;
+
+    return {
+      ...instance,
+      type: resolvedType,
+      enabled,
+      onAir,
+      appearance,
+    };
+  });
+
+  // v4 → v5: seed default instances for the newly introduced overlay types when upgrading a real
+  // configuration document, while preserving every existing instance in its exact position.
+  const canSeedDefaults =
+    version < 5 &&
+    migratedInstances.length > 0 &&
+    migratedInstances.every(
+      (item) =>
+        isRecord(item) &&
+        typeof item['id'] === 'string' &&
+        isRecord(item['appearance']) &&
+        isRecord(item['appearance']['colors']),
+    );
+
+  const finalInstances = [...migratedInstances];
+  if (canSeedDefaults) {
+    const existingIds = new Set(
+      migratedInstances
+        .filter(isRecord)
+        .map((item) => item['id'])
+        .filter((id): id is string => typeof id === 'string'),
+    );
+    const existingTypes = new Set(
+      migratedInstances
+        .filter(isRecord)
+        .map((item) => item['type'])
+        .filter((t): t is string => typeof t === 'string'),
+    );
+
+    for (const defaultInst of DEFAULT_OVERLAY_INSTANCES.instances) {
+      if (!existingIds.has(defaultInst.id) && !existingTypes.has(defaultInst.type)) {
+        finalInstances.push(structuredClone(defaultInst));
+      }
+    }
+  }
+
+  const autoWwcdVariant =
+    raw['autoWwcdVariant'] === 'fullscreen' || raw['autoWwcdVariant'] === 'standard'
+      ? raw['autoWwcdVariant']
+      : 'standard';
+
   return {
     ...raw,
     schemaVersion: CONFIG_SCHEMA_VERSION,
-    instances: raw['instances'].map((instance) => {
-      if (!isRecord(instance)) return instance;
-
-      let appearance = isRecord(instance['appearance']) ? instance['appearance'] : null;
-      if (appearance === null) return instance;
-
-      if (version < 2) {
-        appearance = { ...appearance, animation: migrateAnimationV1(appearance['animation']) };
-      }
-      if (version < 4) {
-        appearance = migrateFactoryColorsV3ToV4(appearance);
-      }
-
-      return { ...instance, appearance };
-    }),
+    autoWwcdVariant,
+    instances: finalInstances,
   };
 }
 

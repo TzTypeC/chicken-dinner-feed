@@ -51,6 +51,8 @@ describe('background routes', () => {
         id: 'main',
         name: 'Main leaderboard',
         type: 'leaderboard',
+        enabled: true,
+        onAir: true,
         appearance: structuredClone(DEFAULT_OVERLAY_APPEARANCE),
       },
     ]);

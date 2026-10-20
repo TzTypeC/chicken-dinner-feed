@@ -1,4 +1,10 @@
-import type { CustomFont, LiveSnapshot, OverlayInstance, OverlayVisibility } from '@cdf/shared';
+import type {
+  AutoWwcdVariant,
+  CustomFont,
+  LiveSnapshot,
+  OverlayInstance,
+  OverlayVisibility,
+} from '@cdf/shared';
 import { create } from 'zustand';
 import { applyCustomFontFaces } from '@/lib/font-faces';
 import { LiveConnection, type ConnectionPhase } from '@/lib/live-connection';
@@ -27,6 +33,8 @@ interface LiveState {
   instances: Record<string, OverlayInstance | null>;
   /** Fonts the operator uploaded. Global, but delivered on the same channel. */
   fonts: CustomFont[];
+  /** Operator-selected automatic WWCD presentation variant (D-PMCC-08). */
+  autoWwcdVariant: AutoWwcdVariant;
   /**
    * False until the first visibility message has been applied. Lets the overlay appear in its
    * current state on load instead of animating in as though a director had just triggered it.
@@ -44,6 +52,7 @@ export const useLiveStore = create<LiveState>((set, get) => ({
   overlayStates: {},
   instances: {},
   fonts: [],
+  autoWwcdVariant: 'standard',
   hasAnimatedIn: false,
 
   connect(instanceId, options) {
@@ -55,7 +64,10 @@ export const useLiveStore = create<LiveState>((set, get) => ({
       onMessage: (message) => {
         switch (message.type) {
           case 'snapshot':
-            set({ snapshot: message.snapshot });
+            set({
+              snapshot: message.snapshot,
+              autoWwcdVariant: message.snapshot.autoWwcdVariant ?? 'standard',
+            });
             break;
           case 'overlay':
             // Registered as soon as they arrive, so the overlay is never asked to render text in a
@@ -71,6 +83,7 @@ export const useLiveStore = create<LiveState>((set, get) => ({
                 [message.overlay.instanceId]: message.instance,
               },
               fonts: message.fonts,
+              autoWwcdVariant: message.autoWwcdVariant ?? state.autoWwcdVariant,
             }));
             break;
           case 'error':

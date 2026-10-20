@@ -1,27 +1,64 @@
-import type { OverlayVisibility } from '@cdf/shared';
+import type { OverlayInstance, OverlayVisibility } from '@cdf/shared';
 
 export type OverlayControlListener = (state: OverlayVisibility) => void;
+
+export interface OverlayControlStoreOptions {
+  defaultVisible?: boolean;
+  onPersist?: (instanceId: string, visible: boolean) => void | Promise<unknown>;
+}
 
 /**
  * Show/hide state per overlay instance, driven by the director rather than by the game.
  *
- * In memory only. Visibility is a moment-to-moment broadcast decision, not a preference: an
- * operator restarting the app mid-show wants overlays back in their default state, not whatever
- * happened to be on screen when it crashed.
- *
- * Instances are created on first reference. Overlay instances are not yet persisted entities, and
- * refusing to answer for an unknown id would mean a browser source pointed at a not-yet-configured
- * instance shows nothing with no explanation.
+ * Syncs with persisted `instance.onAir` on startup and whenever instances are saved, and persists
+ * operator show/hide/toggle actions via `onPersist` when configured.
  */
 export class OverlayControlStore {
   private readonly states = new Map<string, OverlayVisibility>();
   private readonly listeners = new Set<OverlayControlListener>();
+  private readonly defaultVisible: boolean;
+  private readonly onPersist?: (instanceId: string, visible: boolean) => void | Promise<unknown>;
 
   /**
-   * @param defaultVisible Overlays start visible so that opening one shows something. An operator
-   * who wants to start hidden can hide it from Companion before going on air.
+   * @param defaultVisibleOrOptions Overlays start visible so that opening one shows something. An
+   * operator who wants to start hidden can hide it from the Admin Panel or Companion.
    */
-  constructor(private readonly defaultVisible = true) {}
+  constructor(defaultVisibleOrOptions: boolean | OverlayControlStoreOptions = true) {
+    if (typeof defaultVisibleOrOptions === 'boolean') {
+      this.defaultVisible = defaultVisibleOrOptions;
+    } else {
+      this.defaultVisible = defaultVisibleOrOptions.defaultVisible ?? true;
+      this.onPersist = defaultVisibleOrOptions.onPersist;
+    }
+  }
+
+  /**
+   * Seed or synchronize in-memory visibility states from persisted overlay instances.
+   */
+  syncFromInstances(
+    instances: readonly Pick<OverlayInstance, 'id' | 'onAir'>[],
+    now: number = Date.now(),
+  ): void {
+    for (const inst of instances) {
+      const existing = this.states.get(inst.id);
+      const targetVisible = inst.onAir ?? this.defaultVisible;
+      if (!existing) {
+        this.states.set(inst.id, {
+          instanceId: inst.id,
+          visible: targetVisible,
+          changedAt: 0,
+        });
+      } else if (existing.visible !== targetVisible) {
+        const next: OverlayVisibility = {
+          instanceId: inst.id,
+          visible: targetVisible,
+          changedAt: now,
+        };
+        this.states.set(inst.id, next);
+        for (const listener of this.listeners) listener(next);
+      }
+    }
+  }
 
   get(instanceId: string): OverlayVisibility {
     const existing = this.states.get(instanceId);
@@ -47,6 +84,11 @@ export class OverlayControlStore {
 
     const next: OverlayVisibility = { instanceId, visible, changedAt: now };
     this.states.set(instanceId, next);
+    if (this.onPersist) {
+      void Promise.resolve(this.onPersist(instanceId, visible)).catch(() => {
+        // Persistence errors are handled by ConfigStore warnings
+      });
+    }
     for (const listener of this.listeners) listener(next);
     return next;
   }

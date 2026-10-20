@@ -1,24 +1,33 @@
 import {
+  DEFAULT_INSTANCE_ID_BY_TYPE,
   DEFAULT_OVERLAY_APPEARANCE,
+  type AutoWwcdVariant,
   type LiveSnapshot,
   type OverlayInstance,
+  type OverlayType,
   type OverlayVisibility,
 } from '@cdf/shared';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { appearanceToAnimation, appearanceToPosition } from '@/components/overlay/appearance';
 import {
+  isPinnedPostGameMatchUnavailable,
+  resolveActiveAutoWwcdVariant,
   resolveLeaderboardLayoutMode,
   selectFinalFourCohort,
   selectPostGameResults,
+  selectSeriesStandings,
   selectWwcdWinner,
   type LeaderboardLayoutMode,
+  type WwcdVariantLatch,
 } from '@/components/overlay/broadcast-state';
 import { EliminationOverlay } from '@/components/overlay/EliminationOverlay';
 import { FinalFourOverlay } from '@/components/overlay/FinalFourOverlay';
+import { FullscreenWwcdOverlay } from '@/components/overlay/FullscreenWwcdOverlay';
 import { LeaderboardOverlay } from '@/components/overlay/LeaderboardOverlay';
 import { MatchInfoOverlay } from '@/components/overlay/MatchInfoOverlay';
 import { PostGameOverlay } from '@/components/overlay/PostGameOverlay';
+import { PostGameSeriesOverlay } from '@/components/overlay/PostGameSeriesOverlay';
 import { WwcdOverlay } from '@/components/overlay/WwcdOverlay';
 import { u } from '@/components/overlay/overlay-scale';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
@@ -26,9 +35,19 @@ import { useEliminationQueue, type EliminationAlertItem } from '@/hooks/useElimi
 import { useLiveStore } from '@/stores/live-store';
 
 export type OverlaySurfaceMode =
-  'leaderboard' | 'final-four' | 'elimination' | 'match-info' | 'wwcd' | 'postgame';
+  | 'auto'
+  | 'leaderboard'
+  | 'final-four'
+  | 'elimination'
+  | 'match-info'
+  | 'wwcd'
+  | 'wwcd-fullscreen'
+  | 'postgame'
+  | 'postgame-match'
+  | 'postgame-series';
 
-export type OverlayPreviewViewMode = 'auto' | LeaderboardLayoutMode | 'postgame';
+export type OverlayPreviewViewMode =
+  'auto' | LeaderboardLayoutMode | 'wwcd-fullscreen' | 'postgame' | 'postgame-series';
 
 export interface OverlayPageProps {
   instanceId?: string;
@@ -36,6 +55,7 @@ export interface OverlayPageProps {
   snapshot?: LiveSnapshot | null;
   instance?: OverlayInstance | null;
   overlayState?: OverlayVisibility | null;
+  autoWwcdVariant?: AutoWwcdVariant;
 }
 
 export interface OverlayPreviewLayerConfig {
@@ -72,16 +92,62 @@ const PREVIEW_BACKDROP: CSSProperties = {
   backgroundPosition: '0 0, 0 24px, 24px -24px, -24px 0px',
 };
 
+function defaultInstanceIdForSurface(
+  surfaceMode: OverlaySurfaceMode,
+  storeInstances: Record<string, OverlayInstance | null>,
+): string {
+  switch (surfaceMode) {
+    case 'final-four':
+      return DEFAULT_INSTANCE_ID_BY_TYPE.final4;
+    case 'match-info':
+      return DEFAULT_INSTANCE_ID_BY_TYPE['match-info'];
+    case 'elimination':
+      return DEFAULT_INSTANCE_ID_BY_TYPE.elimination;
+    case 'wwcd':
+      return DEFAULT_INSTANCE_ID_BY_TYPE.wwcd;
+    case 'wwcd-fullscreen':
+      return DEFAULT_INSTANCE_ID_BY_TYPE['wwcd-fullscreen'];
+    case 'postgame':
+    case 'postgame-match':
+      return DEFAULT_INSTANCE_ID_BY_TYPE['postgame-match'];
+    case 'postgame-series':
+      return DEFAULT_INSTANCE_ID_BY_TYPE['postgame-series'];
+    case 'leaderboard':
+    case 'auto':
+    default:
+      return storeInstances['main'] ? 'main' : (Object.keys(storeInstances)[0] ?? 'main');
+  }
+}
+
+function surfaceFromInstanceType(
+  type: OverlayType | undefined,
+): Exclude<OverlaySurfaceMode, 'auto' | 'postgame-match'> {
+  switch (type) {
+    case 'final4':
+      return 'final-four';
+    case 'match-info':
+      return 'match-info';
+    case 'elimination':
+      return 'elimination';
+    case 'wwcd':
+      return 'wwcd';
+    case 'wwcd-fullscreen':
+      return 'wwcd-fullscreen';
+    case 'postgame-match':
+      return 'postgame';
+    case 'postgame-series':
+      return 'postgame-series';
+    case 'leaderboard':
+    default:
+      return 'leaderboard';
+  }
+}
+
 /**
  * A single overlay surface, rendered for consumption as a broadcast browser source.
  *
- * Supports five broadcast routes:
- * - `'leaderboard'` (`/overlay/:instanceId` — automatically transitions between Standard Tower,
- *   Final-4 Top Bar, and WWCD Victory Screen based on live alive-team count and appearance toggles)
- * - `'elimination'` (`/overlay/elimination` or `/overlay/:instanceId/elimination`)
- * - `'match-info'`  (`/overlay/match-info` or `/overlay/:instanceId/match-info`)
- * - `'wwcd'`        (`/overlay/wwcd` or `/overlay/:instanceId/wwcd`)
- * - `'postgame'`    (`/overlay/postgame` or `/overlay/:instanceId/postgame`)
+ * Supports all 8 overlay types with independent per-instance configuration, ON AIR / HIDE controls,
+ * selectable automatic WWCD presentation (`D-PMCC-08`), and historical Postgame Match selection (`D-PMCC-09`).
  */
 export function OverlayPage({
   instanceId,
@@ -89,6 +155,7 @@ export function OverlayPage({
   snapshot: propSnapshot,
   instance: propInstance,
   overlayState: propOverlayState,
+  autoWwcdVariant: propAutoWwcdVariant,
 }: OverlayPageProps) {
   const [searchConfig] = useState(() => {
     if (typeof window === 'undefined') {
@@ -112,11 +179,12 @@ export function OverlayPage({
 
   const storeSnapshot = useLiveStore((state) => state.snapshot);
   const storeInstances = useLiveStore((state) => state.instances);
+  const storeAutoWwcdVariant = useLiveStore((state) => state.autoWwcdVariant);
   const snapshot = propSnapshot !== undefined ? propSnapshot : storeSnapshot;
 
   const requestedId = instanceId ?? searchConfig.queryInstanceId;
   const resolvedInstanceId =
-    requestedId ?? (storeInstances['main'] ? 'main' : (Object.keys(storeInstances)[0] ?? 'main'));
+    requestedId ?? defaultInstanceIdForSurface(surfaceMode, storeInstances);
 
   const storeOverlay = useLiveStore((state) => state.overlayStates[resolvedInstanceId]);
   const storeInstance = useLiveStore((state) => state.instances[resolvedInstanceId] ?? null);
@@ -126,10 +194,19 @@ export function OverlayPage({
   const protocolMismatch = useLiveStore((state) => state.protocolMismatch);
   const connect = useLiveStore((state) => state.connect);
 
-  // Remembers the 4-squad cohort when the match first reaches 4 alive teams (`D-PMCC-02` / `A1`),
-  // so when the 4th and 3rd teams are eliminated (leaving 3 or 2 alive), their cards stay in their
-  // exact slots and turn gray rather than jumping or disappearing.
+  const effectiveSurface: Exclude<OverlaySurfaceMode, 'auto' | 'postgame-match'> =
+    surfaceMode === 'auto'
+      ? surfaceFromInstanceType(instance?.type)
+      : surfaceMode === 'postgame-match'
+        ? 'postgame'
+        : surfaceMode;
+
+  // Remembers the 4-squad cohort when the match first reaches 4 alive teams (`D-PMCC-02` / `A1`).
   const lockedFinalFourRef = useRef<{ matchId: string | null; teamNos: number[] } | null>(null);
+
+  // Latches the automatic WWCD variant while an active WWCD celebration is running so changing the
+  // preference mid-WWCD does not replay or switch victory animations (`D-PMCC-08` Req 10).
+  const latchedWwcdRef = useRef<WwcdVariantLatch | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.surface = 'overlay';
@@ -144,8 +221,13 @@ export function OverlayPage({
   );
 
   const appearance = instance?.appearance ?? DEFAULT_OVERLAY_APPEARANCE;
+  const isEnabled = instance?.enabled ?? true;
+  const isOnAir = overlay ? overlay.visible : (instance?.onAir ?? true);
+  const isOperatorVisible = isEnabled && isOnAir;
+
   const eliminationEnabled =
-    (surfaceMode === 'elimination' || (isPreview && previewLayers.elimination)) &&
+    isOperatorVisible &&
+    (effectiveSurface === 'elimination' || (isPreview && previewLayers.elimination)) &&
     (appearance.showEliminationAlerts ?? true);
 
   const { activeAlert, triggerTestAlert } = useEliminationQueue(snapshot?.match ?? null, {
@@ -174,8 +256,6 @@ export function OverlayPage({
     return () => window.removeEventListener('message', handleMessage);
   }, [isPreview, triggerTestAlert]);
 
-  // Update the locked Final-4 cohort ref whenever the live match is at 4 standing teams (or reset
-  // when >= 5 teams are alive or the match enters warmup / changes matchId).
   useEffect(() => {
     const match = snapshot?.match;
     if (!match) return;
@@ -203,17 +283,21 @@ export function OverlayPage({
   }, [snapshot?.match]);
 
   const titlePrefix =
-    surfaceMode === 'elimination'
+    effectiveSurface === 'elimination'
       ? 'Elimination Alert'
-      : surfaceMode === 'match-info'
+      : effectiveSurface === 'match-info'
         ? 'Match Info'
-        : surfaceMode === 'final-four'
+        : effectiveSurface === 'final-four'
           ? 'Final-4 Leaderboard'
-          : surfaceMode === 'wwcd'
+          : effectiveSurface === 'wwcd'
             ? 'WWCD Victory'
-            : surfaceMode === 'postgame'
-              ? 'Post-Game Standings'
-              : (instance?.name ?? resolvedInstanceId);
+            : effectiveSurface === 'wwcd-fullscreen'
+              ? 'WWCD Fullscreen'
+              : effectiveSurface === 'postgame'
+                ? 'Post-Game Match Standings'
+                : effectiveSurface === 'postgame-series'
+                  ? 'Post-Game Series Standings'
+                  : (instance?.name ?? resolvedInstanceId);
   useDocumentTitle(titlePrefix);
 
   if (protocolMismatch !== null) {
@@ -238,11 +322,12 @@ export function OverlayPage({
   }
 
   if (!snapshot) return null;
-  if (surfaceMode === 'leaderboard' && !overlay) return null;
+  if (effectiveSurface === 'leaderboard' && !overlay && !instance) return null;
 
   const animation = appearanceToAnimation(appearance);
   const matchInfo = snapshot.matchInfo ?? { matchNumber: 1, mapName: 'Erangel' };
   const lastClosedMap = snapshot.lastClosedMap ?? null;
+  const closedMaps = snapshot.closedMaps ?? (lastClosedMap ? [lastClosedMap] : []);
 
   const previewViewMode = isPreview ? (previewLayers.viewMode ?? 'auto') : 'auto';
   const layoutOverride: LeaderboardLayoutMode | null =
@@ -252,26 +337,37 @@ export function OverlayPage({
 
   const activeLayoutMode = resolveLeaderboardLayoutMode(snapshot.match, appearance, layoutOverride);
 
+  const configuredAutoWwcd: AutoWwcdVariant =
+    propAutoWwcdVariant ?? snapshot.autoWwcdVariant ?? storeAutoWwcdVariant ?? 'standard';
+  const { effectiveVariant: effectiveAutoWwcdVariant, nextLatch } = resolveActiveAutoWwcdVariant(
+    activeLayoutMode,
+    snapshot.match.matchId,
+    configuredAutoWwcd,
+    latchedWwcdRef.current,
+  );
+  latchedWwcdRef.current = nextLatch;
+
   const lockedNos =
     lockedFinalFourRef.current?.matchId === snapshot.match.matchId
       ? lockedFinalFourRef.current.teamNos
       : null;
 
-  // Dedicated standalone routes:
-  if (surfaceMode === 'elimination') {
+  // Dedicated standalone & typed instance routes:
+  if (effectiveSurface === 'elimination') {
     return (
       <>
         {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
-        <EliminationOverlay alert={activeAlert} appearance={appearance} />
+        <EliminationOverlay
+          alert={isOperatorVisible ? activeAlert : null}
+          appearance={appearance}
+        />
       </>
     );
   }
 
-  if (surfaceMode === 'match-info') {
+  if (effectiveSurface === 'match-info') {
     const isMatchInfoVisible =
-      (overlay ? overlay.visible : true) &&
-      (appearance.showMatchInfo ?? true) &&
-      activeLayoutMode === 'tower';
+      isOperatorVisible && (appearance.showMatchInfo ?? true) && activeLayoutMode === 'tower';
     return (
       <>
         {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
@@ -284,15 +380,14 @@ export function OverlayPage({
     );
   }
 
-  if (surfaceMode === 'final-four') {
+  if (effectiveSurface === 'final-four') {
+    const isPreviewingFinalFour =
+      isPreview && (previewViewMode === 'final-four' || instance?.type === 'final4');
     const isFinalFourVisible =
-      (overlay ? overlay.visible : true) &&
-      (activeLayoutMode === 'final-four' || (isPreview && previewViewMode === 'final-four'));
-    const cohort = selectFinalFourCohort(
-      snapshot.match,
-      lockedNos,
-      isPreview && previewViewMode === 'final-four',
-    );
+      isOperatorVisible &&
+      (appearance.showFinalFourLayout ?? true) &&
+      (activeLayoutMode === 'final-four' || isPreviewingFinalFour);
+    const cohort = selectFinalFourCohort(snapshot.match, lockedNos, isPreviewingFinalFour);
     return (
       <>
         {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
@@ -307,13 +402,16 @@ export function OverlayPage({
     );
   }
 
-  if (surfaceMode === 'wwcd') {
+  if (effectiveSurface === 'wwcd') {
+    const isPreviewingWwcd = isPreview && (previewViewMode === 'wwcd' || instance?.type === 'wwcd');
     const isWwcdVisible =
-      (overlay ? overlay.visible : true) &&
-      (activeLayoutMode === 'wwcd' || (isPreview && previewViewMode === 'wwcd'));
+      isOperatorVisible &&
+      (appearance.showWwcdOverlay ?? true) &&
+      ((activeLayoutMode === 'wwcd' && effectiveAutoWwcdVariant === 'standard') ||
+        isPreviewingWwcd);
     const winner = selectWwcdWinner(snapshot.match, lastClosedMap, {
       allowClosedMapFallback: true,
-      isPreviewSimulation: isPreview && previewViewMode === 'wwcd',
+      isPreviewSimulation: isPreviewingWwcd,
     });
     return (
       <>
@@ -329,19 +427,98 @@ export function OverlayPage({
     );
   }
 
-  if (surfaceMode === 'postgame') {
-    const board = selectPostGameResults(snapshot.match, lastClosedMap, matchInfo, {
-      isPreviewSimulation: isPreview,
+  if (effectiveSurface === 'wwcd-fullscreen') {
+    const isPreviewingFullscreenWwcd =
+      isPreview &&
+      (previewViewMode === 'wwcd' ||
+        previewViewMode === 'wwcd-fullscreen' ||
+        instance?.type === 'wwcd-fullscreen');
+    const isFullscreenWwcdVisible =
+      isOperatorVisible &&
+      (appearance.showWwcdOverlay ?? true) &&
+      ((activeLayoutMode === 'wwcd' && effectiveAutoWwcdVariant === 'fullscreen') ||
+        isPreviewingFullscreenWwcd);
+    const winner = selectWwcdWinner(snapshot.match, lastClosedMap, {
+      allowClosedMapFallback: true,
+      isPreviewSimulation: isPreviewingFullscreenWwcd,
     });
     return (
       <>
         {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
-        <PostGameOverlay board={board} matchInfo={matchInfo} appearance={appearance} />
+        <FullscreenWwcdOverlay
+          winner={winner}
+          matchInfo={matchInfo}
+          appearance={appearance}
+          totalTeams={snapshot.match.teams.length > 0 ? snapshot.match.teams.length : 25}
+          source={snapshot.ingest.source}
+          visible={isFullscreenWwcdVisible}
+        />
       </>
     );
   }
 
-  // Main leaderboard route (`/overlay/:instanceId` & `/main`):
+  if (effectiveSurface === 'postgame') {
+    const unavailableSelection = isPinnedPostGameMatchUnavailable(
+      appearance.postGameMatchSelection,
+      closedMaps,
+      lastClosedMap,
+    );
+    const board = selectPostGameResults(snapshot.match, lastClosedMap, matchInfo, {
+      isPreviewSimulation: isPreview,
+      closedMaps,
+      postGameMatchSelection: appearance.postGameMatchSelection,
+    });
+    return (
+      <>
+        {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
+        <AnimatePresence mode="wait" initial={false}>
+          {isOperatorVisible && (
+            <motion.div
+              key="postgame-match-surface"
+              variants={animation.variants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+            >
+              <PostGameOverlay
+                board={board}
+                matchInfo={matchInfo}
+                appearance={appearance}
+                unavailableSelection={unavailableSelection}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </>
+    );
+  }
+
+  if (effectiveSurface === 'postgame-series') {
+    const board = selectSeriesStandings(snapshot.match, closedMaps, {
+      isPreviewSimulation: isPreview,
+      lastClosedMap,
+    });
+    return (
+      <>
+        {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
+        <AnimatePresence mode="wait" initial={false}>
+          {isOperatorVisible && (
+            <motion.div
+              key="postgame-series-surface"
+              variants={animation.variants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+            >
+              <PostGameSeriesOverlay board={board} matchInfo={matchInfo} appearance={appearance} />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </>
+    );
+  }
+
+  // Main leaderboard route (`/overlay/:instanceId` when type==='leaderboard', `/overlay/:instanceId/main`, & `/main`):
   // Strictly renders LeaderboardOverlay only. When in Final-4 or WWCD, the vertical tower hides cleanly.
   return (
     <>
@@ -359,9 +536,9 @@ export function OverlayPage({
         <EliminationOverlay alert={activeAlert} appearance={appearance} />
       )}
 
-      {(!isPreview || previewLayers.leaderboard) && overlay && (
+      {(!isPreview || previewLayers.leaderboard) && (
         <AnimatePresence mode="wait" initial={false}>
-          {overlay.visible && activeLayoutMode === 'tower' && (
+          {isOperatorVisible && activeLayoutMode === 'tower' && (
             <div key="layout-tower" style={appearanceToPosition(appearance)}>
               <motion.div
                 key="panel"

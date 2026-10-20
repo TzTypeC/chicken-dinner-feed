@@ -5,9 +5,14 @@ import { OverlayPage } from './OverlayPage';
  * Reads the instance id from the URL and hands it to the overlay.
  *
  * Kept separate so `OverlayPage` takes a plain prop and can be rendered without a router — which is
- * what the admin's live preview will need.
+ * what the admin's live preview and static markup tests use.
  */
 export function OverlayRoute() {
+  const { instanceId } = (useParams({ strict: false }) as { instanceId?: string }) ?? {};
+  return <OverlayPage instanceId={instanceId} surfaceMode={instanceId ? 'auto' : 'leaderboard'} />;
+}
+
+export function OverlayInstanceMainRoute() {
   const { instanceId } = (useParams({ strict: false }) as { instanceId?: string }) ?? {};
   return <OverlayPage instanceId={instanceId} surfaceMode="leaderboard" />;
 }
@@ -26,7 +31,7 @@ export function OverlayInstanceFinalFourRoute() {
 }
 
 export function OverlayInstanceEliminationRoute() {
-  const { instanceId } = useParams({ from: '/overlay/$instanceId/elimination' });
+  const { instanceId } = useParams({ strict: false }) as { instanceId?: string };
   return <OverlayPage instanceId={instanceId} surfaceMode="elimination" />;
 }
 
@@ -35,7 +40,7 @@ export function OverlayMatchInfoRoute() {
 }
 
 export function OverlayInstanceMatchInfoRoute() {
-  const { instanceId } = useParams({ from: '/overlay/$instanceId/match-info' });
+  const { instanceId } = useParams({ strict: false }) as { instanceId?: string };
   return <OverlayPage instanceId={instanceId} surfaceMode="match-info" />;
 }
 
@@ -44,8 +49,17 @@ export function OverlayWwcdRoute() {
 }
 
 export function OverlayInstanceWwcdRoute() {
-  const { instanceId } = useParams({ from: '/overlay/$instanceId/wwcd' });
+  const { instanceId } = useParams({ strict: false }) as { instanceId?: string };
   return <OverlayPage instanceId={instanceId} surfaceMode="wwcd" />;
+}
+
+export function OverlayWwcdFullscreenRoute() {
+  return <OverlayPage surfaceMode="wwcd-fullscreen" />;
+}
+
+export function OverlayInstanceWwcdFullscreenRoute() {
+  const { instanceId } = useParams({ strict: false }) as { instanceId?: string };
+  return <OverlayPage instanceId={instanceId} surfaceMode="wwcd-fullscreen" />;
 }
 
 export function OverlayPostGameRoute() {
@@ -53,6 +67,15 @@ export function OverlayPostGameRoute() {
 }
 
 export function OverlayInstancePostGameRoute() {
-  const { instanceId } = useParams({ from: '/overlay/$instanceId/postgame' });
+  const { instanceId } = useParams({ strict: false }) as { instanceId?: string };
   return <OverlayPage instanceId={instanceId} surfaceMode="postgame" />;
+}
+
+export function OverlayPostGameSeriesRoute() {
+  return <OverlayPage surfaceMode="postgame-series" />;
+}
+
+export function OverlayInstancePostGameSeriesRoute() {
+  const { instanceId } = useParams({ strict: false }) as { instanceId?: string };
+  return <OverlayPage instanceId={instanceId} surfaceMode="postgame-series" />;
 }
