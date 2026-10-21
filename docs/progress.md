@@ -411,10 +411,12 @@ Chronological record of phases, tasks, files changed, and verification results.
   - **`WS-7.7` (Admin UX & Prettier Formatting Fixes):**
     - Rebuilt `ImportExport.tsx` with dedicated cards for Backup & Restore (.zip) and PMCC 2026 Excel Scoring Sheets (.xlsx), scope toggles (`Full Sync`, `Roster Only`, `Matches Only`), and safety snapshot callouts.
     - Formatted entire repository with Prettier, eliminating all pre-existing format check issues.
-  - **`WS-7.8` (Quality Gates & Verification):**
-    - Added 5 new tests in `backup.test.ts` (11 total), 6 tests in `excel.test.ts`, 3 tests in `excel.test.ts` routes, 2 new tests in `config.test.ts`, and 1 inverted ranking test in `overlays.test.tsx`.
+  - **`WS-7.8` (Quality Gates, Excel Import Crash Fix & Final Verification):**
+    - Resolved React Error #31 (`Minified React error #31: Objects are not valid as a React child (found: object with keys {location, message})`) by properly typing and normalizing `ApiValidationError` objects into location chips and text in `ImportExport.tsx`.
+    - Resolved parser failure where slot formula cells (`=I6+1`) evaluated to `[object Object]` / `NaN` by implementing robust cell extraction (`extractCellNumber`, `extractCellString`).
+    - Added regression tests in `backend/src/excel/excel.test.ts`, `backend/src/routes/excel.test.ts`, and `frontend/src/features/admin/ImportExport.test.tsx`.
 - **Verification Results:**
-  - `npm test`: **All 32 test files passed, 392 tests passed** (26 backend test files / 304 tests; 6 frontend test files / 88 tests).
+  - `npm test`: **All 33 test files passed, 398 tests passed** (26 backend test files / 308 tests; 7 frontend test files / 90 tests).
   - `npm run typecheck`: Passed with **0 errors** across all workspaces.
   - `npm run lint`: Passed with **0 warnings and 0 errors** across all workspaces.
   - `npm run format:check`: Passed (`All matched files use Prettier code style!`).

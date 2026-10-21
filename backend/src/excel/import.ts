@@ -63,6 +63,30 @@ const ROUND_COLUMNS = [
   { placement: 'P', kills: 'U' },
 ] as const;
 
+function extractCellNumber(cell: ExcelJS.Cell | undefined | null): number | null {
+  if (!cell) return null;
+  const val = cell.value;
+  if (val === null || val === undefined || val === '') return null;
+  if (typeof val === 'number') return isNaN(val) ? null : val;
+  if (typeof val === 'object' && val !== null && 'result' in val) {
+    const res = Number(val.result);
+    return isNaN(res) ? null : res;
+  }
+  const parsed = Number(val);
+  return isNaN(parsed) ? null : parsed;
+}
+
+function extractCellString(cell: ExcelJS.Cell | undefined | null): string {
+  if (!cell) return '';
+  const val = cell.value;
+  if (val === null || val === undefined) return '';
+  if (typeof val === 'string') return val.trim();
+  if (typeof val === 'object' && val !== null && 'result' in val) {
+    return String(val.result ?? '').trim();
+  }
+  return String(val).trim();
+}
+
 export async function validateExcelImport(
   buffer: Buffer,
   mode: ExcelImportMode = 'full',
@@ -106,13 +130,12 @@ export async function validateExcelImport(
 
   for (let r = 6; r <= 30; r++) {
     const row = ws.getRow(r);
-    const rawSlot = row.getCell('I').value;
-    const slot = typeof rawSlot === 'number' ? rawSlot : Number(rawSlot);
+    const slot = extractCellNumber(row.getCell('I')) ?? r - 5;
 
-    if (!slot || isNaN(slot) || slot < 1 || slot > 25) {
+    if (!slot || slot < 1 || slot > 25) {
       errors.push({
         location: `I${r}`,
-        message: `Row ${r}: Invalid or missing team slot number (${String(rawSlot)}). Expected integer 1..25.`,
+        message: `Row ${r}: Invalid or missing team slot number. Expected integer 1..25.`,
       });
       continue;
     }
@@ -127,21 +150,9 @@ export async function validateExcelImport(
     seenSlots.add(slot);
 
     // Read team name from Col K, with fallback to Col B
-    const nameCellK = row.getCell('K').value;
-    const nameCellB = row.getCell('B').value;
-    let name = '';
-
-    if (typeof nameCellK === 'string') {
-      name = nameCellK.trim();
-    } else if (nameCellK && typeof nameCellK === 'object' && 'result' in nameCellK) {
-      name = String(nameCellK.result ?? '').trim();
-    }
-
-    if (!name && typeof nameCellB === 'string') {
-      name = nameCellB.trim();
-    } else if (!name && nameCellB && typeof nameCellB === 'object' && 'result' in nameCellB) {
-      name = String(nameCellB.result ?? '').trim();
-    }
+    const nameK = extractCellString(row.getCell('K'));
+    const nameB = extractCellString(row.getCell('B'));
+    const name = nameK || nameB;
 
     if (!name) {
       errors.push({
@@ -173,32 +184,32 @@ export async function validateExcelImport(
 
     for (let r = 6; r <= 30; r++) {
       const row = ws.getRow(r);
-      const slot =
-        typeof row.getCell('I').value === 'number' ? (row.getCell('I').value as number) : r - 5;
-      const rawPlace = row.getCell(cols.placement).value;
-      const rawElims = row.getCell(cols.kills).value;
+      const slot = extractCellNumber(row.getCell('I')) ?? r - 5;
+      const placeNum = extractCellNumber(row.getCell(cols.placement));
+      const elimsNum = extractCellNumber(row.getCell(cols.kills));
 
-      if (rawPlace !== null && rawPlace !== undefined && rawPlace !== '') {
+      if (placeNum !== null) {
         hasAnyData = true;
-        const placement = Number(rawPlace);
-        const eliminations =
-          rawElims !== null && rawElims !== undefined && rawElims !== '' ? Number(rawElims) : 0;
-
-        if (isNaN(placement) || placement < 1 || placement > 25) {
+        if (placeNum < 1 || placeNum > 25) {
           errors.push({
             location: `${cols.placement}${r}`,
-            message: `Round ${roundNumber}, Row ${r} (Slot ${slot}): Invalid placement (${String(rawPlace)}). Must be an integer 1..25.`,
+            message: `Round ${roundNumber}, Row ${r} (Slot ${slot}): Invalid placement (${placeNum}). Must be an integer 1..25.`,
           });
         }
 
-        if (isNaN(eliminations) || eliminations < 0) {
+        const eliminations = elimsNum !== null ? elimsNum : 0;
+        if (eliminations < 0) {
           errors.push({
             location: `${cols.kills}${r}`,
-            message: `Round ${roundNumber}, Row ${r} (Slot ${slot}): Invalid eliminations (${String(rawElims)}). Must be non-negative.`,
+            message: `Round ${roundNumber}, Row ${r} (Slot ${slot}): Invalid eliminations (${eliminations}). Must be non-negative.`,
           });
         }
 
-        roundTeams.push({ teamNo: slot, placement, eliminations: Math.max(0, eliminations) });
+        roundTeams.push({
+          teamNo: slot,
+          placement: placeNum,
+          eliminations: Math.max(0, eliminations),
+        });
       }
     }
 
@@ -224,13 +235,19 @@ export async function validateExcelImport(
     }
   }
 
-  // If mode requires match history, ensure at least one round was detected
-  if ((mode === 'matches' || mode === 'full') && rounds.length === 0) {
+  // Handle cases where no completed matches were found
+  if (mode === 'matches' && rounds.length === 0) {
+    errors.push({
+      location: 'L4:P30',
+      message:
+        'No completed match scoring rounds (placements/kills) were found in the workbook for "Matches Only" import mode. To import the 25 teams found, select "Roster Only" or "Full Sync" mode.',
+    });
+  } else if (mode === 'full' && rounds.length === 0) {
     warnings.push({
-      message: 'No completed match scoring rounds (placements/kills) were found in the workbook.',
+      message:
+        'No completed match scoring rounds (placements/kills) were found. The 25 teams will be imported into the roster, but no match history will be recorded.',
     });
   }
-
   const valid = errors.length === 0;
 
   const preview: ExcelImportPreview = {

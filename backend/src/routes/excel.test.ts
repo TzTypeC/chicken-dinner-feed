@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -11,7 +11,7 @@ import { LogoStore } from '../persistence/logo-store.js';
 import { ManualStore } from '../state/manual-store.js';
 import { SeriesStore } from '../state/series-store.js';
 import { excelRoutes } from './excel.js';
-import { buildExcelExport } from '../excel/export.js';
+import { buildExcelExport, resolveDefaultTemplatePath } from '../excel/export.js';
 import {
   DEFAULT_PMCC_2026_ROSTER,
   DEFAULT_SCORING_RULESET,
@@ -154,5 +154,62 @@ describe('excel routes (WS-7.3 & WS-7.4)', () => {
     expect(body.result.importedTeamsCount).toBe(25);
     expect(importedCount).toBe(1);
     expect(configStore.teams.current.teams).toHaveLength(25);
+  });
+
+  it('POST /api/excel/import previews PMCC template file in roster mode with 200 OK', async () => {
+    const templateBytes = await readFile(resolveDefaultTemplatePath());
+    const boundary = '---------------------------excelboundary789';
+    const payload = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="PMCC.xlsx"\r\nContent-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n`,
+      ),
+      templateBytes,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/excel/import?confirm=false&mode=roster',
+      headers: {
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.confirmed).toBe(false);
+    expect(body.preview.valid).toBe(true);
+    expect(body.preview.teamsFound).toBe(25);
+    expect(body.preview.teamNames[0]).toBe('SUKA SUKA SQUAD');
+  });
+
+  it('POST /api/excel/import returns structured 400 error with location coordinates on invalid mode', async () => {
+    const templateBytes = await readFile(resolveDefaultTemplatePath());
+    const boundary = '---------------------------excelboundary999';
+    const payload = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="PMCC.xlsx"\r\nContent-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\r\n\r\n`,
+      ),
+      templateBytes,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/excel/import?confirm=false&mode=matches',
+      headers: {
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload,
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json();
+    expect(body.error).toContain('could not be validated');
+    expect(Array.isArray(body.errors)).toBe(true);
+    expect(body.errors[0]).toHaveProperty('location');
+    expect(body.errors[0]).toHaveProperty('message');
+    expect(body.errors[0].location).toBe('L4:P30');
   });
 });

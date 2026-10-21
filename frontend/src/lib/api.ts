@@ -27,12 +27,19 @@ import type {
  * wrong in operator language ("Each team number can only appear once"), and re-wording it here would
  * lose that.
  */
+export interface ApiValidationError {
+  location?: string;
+  message: string;
+}
+
+export type ApiErrorDetail = string | ApiValidationError;
+
 export class ApiError extends Error {
   readonly status: number;
-  /** Every distinct problem found, when the server has more than one to report (a backup import). */
-  readonly errors?: string[];
+  /** Every distinct problem found, when the server has more than one to report. */
+  readonly errors?: ApiErrorDetail[];
 
-  constructor(status: number, message: string, errors?: string[]) {
+  constructor(status: number, message: string, errors?: ApiErrorDetail[]) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
@@ -59,9 +66,21 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       body && typeof body === 'object' && 'error' in body && typeof body.error === 'string'
         ? body.error
         : `Request failed (HTTP ${response.status})`;
-    const errors =
+    const errors: ApiErrorDetail[] | undefined =
       body && typeof body === 'object' && 'errors' in body && Array.isArray(body.errors)
-        ? (body.errors as string[])
+        ? body.errors.map((item): ApiErrorDetail => {
+            if (typeof item === 'string') return item;
+            if (item && typeof item === 'object') {
+              const location =
+                'location' in item && typeof item.location === 'string' ? item.location : undefined;
+              const msg =
+                'message' in item && typeof item.message === 'string'
+                  ? item.message
+                  : JSON.stringify(item);
+              return { location, message: msg };
+            }
+            return String(item);
+          })
         : undefined;
     throw new ApiError(response.status, message, errors);
   }

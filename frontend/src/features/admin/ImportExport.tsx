@@ -36,8 +36,10 @@ export function ImportExport() {
   // Excel state
   const [excelMode, setExcelMode] = useState<ExcelImportMode>('full');
   const [pendingExcel, setPendingExcel] = useState<PendingExcelImport | null>(null);
-  const [excelErrors, setExcelErrors] = useState<string[] | null>(null);
-
+  const [excelErrors, setExcelErrors] = useState<Array<{
+    location?: string;
+    message: string;
+  }> | null>(null);
   // --- Backup Handlers ---
   const processBackupFile = async (file: File) => {
     setBackupErrors(null);
@@ -46,12 +48,24 @@ export function ImportExport() {
       const preview = await api.previewImport(file);
       setPendingBackup({ file, preview });
     } catch (error) {
-      const problems =
-        error instanceof ApiError ? (error.errors ?? [error.message]) : [describe(error)];
+      const problems: string[] = [];
+      if (error instanceof ApiError && error.errors && error.errors.length > 0) {
+        for (const err of error.errors) {
+          if (typeof err === 'string') {
+            problems.push(err);
+          } else if (err && typeof err === 'object') {
+            problems.push(`${err.location ? `[${err.location}] ` : ''}${err.message}`);
+          }
+        }
+      } else {
+        problems.push(describe(error));
+      }
       setBackupErrors(problems);
       toast.error(
         'This backup could not be imported',
-        problems.length === 1 ? problems[0] : `${problems.length} problems were found — see below.`,
+        problems.length === 1
+          ? problems[0]!
+          : `${problems.length} problems were found — see below.`,
       );
     } finally {
       setBusy(false);
@@ -86,14 +100,28 @@ export function ImportExport() {
         setPendingExcel({ file, preview: res.preview, mode });
       }
     } catch (error) {
-      const problems =
-        error instanceof ApiError ? (error.errors ?? [error.message]) : [describe(error)];
+      const problems: Array<{ location?: string; message: string }> = [];
+      if (error instanceof ApiError && error.errors && error.errors.length > 0) {
+        for (const err of error.errors) {
+          if (typeof err === 'string') {
+            problems.push({ message: err });
+          } else if (err && typeof err === 'object') {
+            problems.push({
+              location: err.location,
+              message: err.message,
+            });
+          }
+        }
+      } else {
+        problems.push({ message: describe(error) });
+      }
       setExcelErrors(problems);
       toast.error(
         'This Excel sheet could not be imported',
-        problems.length === 1 ? problems[0] : `${problems.length} errors found.`,
+        problems.length === 1
+          ? `${problems[0]!.location ? `[${problems[0]!.location}] ` : ''}${problems[0]!.message}`
+          : `${problems.length} errors found — see below.`,
       );
-    } finally {
       setBusy(false);
     }
   };
@@ -455,8 +483,13 @@ export function ImportExport() {
           <div className="border-destructive/50 bg-destructive/10 mt-4 rounded border p-3 text-xs text-destructive">
             <p className="font-semibold">Excel validation failed:</p>
             <ul className="list-disc pl-4 mt-1 space-y-0.5">
-              {excelErrors.map((msg, idx) => (
-                <li key={idx}>{msg}</li>
+              {excelErrors.map((err, idx) => (
+                <li key={idx}>
+                  {err.location ? (
+                    <span className="font-mono font-bold mr-1">[{err.location}]</span>
+                  ) : null}
+                  {err.message}
+                </li>
               ))}
             </ul>
           </div>

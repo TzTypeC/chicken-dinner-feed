@@ -3,7 +3,7 @@
 - **Last Updated:** 2026-10-21
 - **Current Task:** Part 7 — Application Backup & Restore, Excel Integration, Default Team Roster & Postgame Ranking Correction
 - **Current Phase:** Implementation & Quality Gate Verification Complete (`COMPLETED`)
-- **Last Completed Checkpoint:** WS-7.1 through WS-7.8 Implemented and Verified (392/392 tests pass, 0 typecheck errors, 0 lint warnings/errors, 100% Prettier compliance, clean build)
+- **Last Completed Checkpoint:** WS-7.1 through WS-7.8 & Excel Import Crash Fix Implemented and Verified (398/398 tests pass across 33 test files, 0 typecheck errors, 0 lint warnings/errors, 100% Prettier compliance, clean build)
 
 ---
 
@@ -52,8 +52,8 @@
 - **Feature B (Exact Excel Integration):** Integrated `exceljs` for 100% fidelity round-trip against the official `assets/PMCC 2026 OFLINE SCORING SHEETS.xlsx` tournament workbook. Preserves worksheet `10. Offline Scoring Sheets`, freeze panes (`A6`), 14 merged cell ranges, 28 hidden rows (32..59 ruleset legend), and hidden Round 5 columns (`P`, `U`, `Z`, dynamically unhidden when $\ge 5$ matches exist). Populates literal team names into `K6:K30` (eliminating fragile external file links), preserves downstream calculation formulas (`INDEX`, `MATCH`, `RANK`, `COUNTIF`, placing points `IF` ladders, sums), and populates cached formula evaluation results. Built 2-stage Excel importer with 3 operator-selectable modes (`roster`, `matches`, `full`) and cell-coordinate validation.
 - **Feature C (Default Team Roster & Length Expansion):** Expanded `TEAM_NAME_MAX_LENGTH` from 24 to 32 characters in `@cdf/shared`, safely accommodating official tournament teams such as Team 20 (`Lanang nak chicken main pubg` = 28 chars) without truncation. Defined `DEFAULT_PMCC_2026_ROSTER` and added a non-destructive "Reset to PMCC 2026" button in `TeamRosterEditor.tsx` with confirmation modal and backend API `POST /api/config/teams/seed-pmcc`.
 - **Feature D (Postgame Match vs Series Ranking Alignment):** Enforced architectural separation between single-match result ranking (`totalMatchPoints` descending $\to$ elims $\to$ placement $\to$ slot) and cumulative tournament series standings (`totalPoints` $\to$ WWCD $\to$ place pts $\to$ elim pts $\to$ latest placement $\to$ slot). Updated admin `SeriesControl.tsx` finished maps view with clear `PLACE` and `MATCH PTS` columns and match points ordering. Added regression fixture proving ranking inversion (Team B wins match with 25 pts while Team C leads tournament series with 100 pts).
-- **Feature E (Admin UX Enhancements):** Rebuilt `ImportExport.tsx` with dedicated cards for Backup & Restore (`.zip`) and PMCC 2026 Excel Scoring Sheets (`.xlsx`), scope selectors (`Full Sync`, `Roster Only`, `Matches Only`), and safety snapshot callouts. Resolved all pre-existing Prettier format check warnings.
-- **Full Quality Gates:** **392/392 unit and integration tests passed** across 32 test files, 0 TypeScript errors, 0 ESLint/Oxlint warnings or errors, 100% Prettier compliance, clean production build.
+- **Feature E (Admin UX Enhancements & Excel Import Crash Fix):** Rebuilt `ImportExport.tsx` with dedicated cards for Backup & Restore (`.zip`) and PMCC 2026 Excel Scoring Sheets (`.xlsx`), scope selectors (`Full Sync`, `Roster Only`, `Matches Only`), and safety snapshot callouts. Resolved React Error #31 by properly normalizing structured `{ location, message }` validation errors into accessible location badges and messages, and fixed ExcelJS formula object extraction for slots (`I6+1`) and team names.
+- **Full Quality Gates:** **398/398 unit and integration tests passed** across 33 test files, 0 TypeScript errors, 0 ESLint/Oxlint warnings or errors, 100% Prettier compliance, clean production build.
 
 ---
 
@@ -69,4 +69,5 @@
 ---
 
 ## 3. Exact Next Action
+
 All Part 7 requirements have been implemented, tested, and verified. Ready for production broadcast operation.

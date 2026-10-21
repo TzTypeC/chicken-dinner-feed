@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import ExcelJS from 'exceljs';
@@ -14,7 +14,7 @@ import { FontStore } from '../persistence/font-store.js';
 import { LogoStore } from '../persistence/logo-store.js';
 import { ManualStore } from '../state/manual-store.js';
 import { SeriesStore } from '../state/series-store.js';
-import { buildExcelExport } from './export.js';
+import { buildExcelExport, resolveDefaultTemplatePath } from './export.js';
 import { applyExcelImport, validateExcelImport } from './import.js';
 
 describe('Excel Integration (WS-7.3 & WS-7.4)', () => {
@@ -294,5 +294,47 @@ describe('Excel Integration (WS-7.3 & WS-7.4)', () => {
     expect(result.errors.some((e) => e.message.includes('Multiple teams share placement #1'))).toBe(
       true,
     );
+  });
+
+  it('imports the actual pristine template assets/PMCC 2026 OFLINE SCORING SHEETS.xlsx cleanly across modes', async () => {
+    const templateBytes = await readFile(resolveDefaultTemplatePath());
+
+    // Mode 1: Roster mode succeeds with all 25 teams
+    const rosterRes = await validateExcelImport(templateBytes, 'roster');
+    expect(rosterRes.ok).toBe(true);
+    if (!rosterRes.ok) return;
+    expect(rosterRes.value.teams).toHaveLength(25);
+    expect(rosterRes.value.teams[0]?.name).toBe('SUKA SUKA SQUAD');
+    expect(rosterRes.value.teams[19]?.name).toBe('Lanang nak chicken main pubg');
+    expect(rosterRes.value.rounds).toHaveLength(0);
+
+    // Mode 2: Full sync mode succeeds with 25 teams and warning that no match rounds exist
+    const fullRes = await validateExcelImport(templateBytes, 'full');
+    expect(fullRes.ok).toBe(true);
+    if (!fullRes.ok) return;
+    expect(fullRes.value.teams).toHaveLength(25);
+    expect(
+      fullRes.value.preview.warnings.some((w) =>
+        w.message.includes('No completed match scoring rounds'),
+      ),
+    ).toBe(true);
+
+    // Mode 3: Matches only mode on clean template produces explicit error without crashing
+    const matchesRes = await validateExcelImport(templateBytes, 'matches');
+    expect(matchesRes.ok).toBe(false);
+    if (matchesRes.ok) return;
+    expect(matchesRes.errors.some((e) => e.location === 'L4:P30')).toBe(true);
+    expect(matchesRes.errors[0]?.message).toContain('No completed match scoring rounds');
+  });
+
+  it('parses formula cells in slot column (e.g. =I6+1) without evaluating to NaN or [object Object]', async () => {
+    const templateBytes = await readFile(resolveDefaultTemplatePath());
+    const res = await validateExcelImport(templateBytes, 'roster');
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+
+    // Slots 1 to 25 must be contiguous integers
+    const slots = res.value.teams.map((t) => t.teamNo);
+    expect(slots).toEqual(Array.from({ length: 25 }, (_, i) => i + 1));
   });
 });
