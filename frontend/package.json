@@ -5,6 +5,7 @@
   "description": "Overlay surfaces consumed as broadcast browser sources, plus the admin UI that configures them.",
   "type": "module",
   "scripts": {
+    "prebuild": "npm run build -w @cdf/shared",
     "build": "tsc -b && vite build",
     "dev": "vite",
     "lint": "oxlint",
