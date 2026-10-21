@@ -1,4 +1,9 @@
-import type { TeamRosterDocument, TeamRosterEntry } from '@cdf/shared';
+import {
+  DEFAULT_PMCC_2026_ROSTER,
+  TEAM_NAME_MAX_LENGTH,
+  type TeamRosterDocument,
+  type TeamRosterEntry,
+} from '@cdf/shared';
 import {
   AlertTriangle,
   ChevronDown,
@@ -6,6 +11,7 @@ import {
   GripVertical,
   Layers,
   Plus,
+  Sparkles,
   Trash2,
 } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
@@ -32,10 +38,10 @@ export function TeamRosterEditor({
 
   // Dialog states
   const [bulkDialogOpen, setBulkDialogOpen] = useState(false);
+  const [pmccSeedConfirmOpen, setPmccSeedConfirmOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteAllConfirmOpen, setDeleteAllConfirmOpen] = useState(false);
   const [singleDeleteTeamNo, setSingleDeleteTeamNo] = useState<number | null>(null);
-
   const sortedTeams = useMemo(
     () => [...document.teams].sort((a, b) => a.teamNo - b.teamNo),
     [document.teams],
@@ -214,6 +220,16 @@ export function TeamRosterEditor({
           >
             <Layers className="size-3.5" />
             Bulk Add Teams
+          </button>
+          <button
+            type="button"
+            data-testid="seed-pmcc-roster-btn"
+            onClick={() => setPmccSeedConfirmOpen(true)}
+            className="border-border hover:bg-secondary flex min-h-8 items-center gap-1.5 rounded border px-2.5 py-1 text-xs font-medium"
+            title="Seed the official PMCC 2026 25-team roster"
+          >
+            <Sparkles className="size-3.5 text-[var(--brand-gold)]" />
+            Reset to PMCC 2026
           </button>
           <button
             type="button"
@@ -417,7 +433,7 @@ export function TeamRosterEditor({
                     <input
                       type="text"
                       aria-label={`Team ${team.teamNo} name`}
-                      maxLength={24}
+                      maxLength={TEAM_NAME_MAX_LENGTH}
                       value={team.name}
                       onChange={(event) => patch(team.teamNo, { name: event.target.value })}
                       className="border-border bg-background min-h-8 w-full rounded border px-2 py-1 text-sm font-semibold"
@@ -450,6 +466,26 @@ export function TeamRosterEditor({
         onCommit={handleBulkAddCommit}
         onClose={() => setBulkDialogOpen(false)}
       />
+
+      {/* Seed PMCC 2026 Default Roster Confirm Dialog */}
+      <ConfirmDialog
+        open={pmccSeedConfirmOpen}
+        title="Reset roster to official PMCC 2026 teams?"
+        confirmLabel="Reset to PMCC 2026 (25 Teams)"
+        onCancel={() => setPmccSeedConfirmOpen(false)}
+        onConfirm={() => {
+          setPmccSeedConfirmOpen(false);
+          onChange(DEFAULT_PMCC_2026_ROSTER);
+        }}
+      >
+        <p>
+          This will replace your current roster with the 25 official tournament teams from the PMCC
+          2026 offline scoring sheet (Slot 1: SUKA SUKA SQUAD to Slot 25: DTMK NOT JTMK.).
+        </p>
+        <p className="text-muted-foreground text-xs">
+          Team logos will be reset to empty until uploaded.
+        </p>
+      </ConfirmDialog>
 
       {/* Delete Selected Teams Confirmation Dialog */}
       <ConfirmDialog

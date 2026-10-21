@@ -167,5 +167,48 @@ describe('config routes - Part 6 enhancements', () => {
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toContain('Each team number can only appear once');
   });
-});
 
+  it('POST /api/config/teams/seed-pmcc resets roster to official PMCC 2026 25 teams', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/config/teams/seed-pmcc',
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.teams).toHaveLength(25);
+    expect(body.teams[0]?.name).toBe('SUKA SUKA SQUAD');
+    expect(body.teams[19]?.name).toBe('Lanang nak chicken main pubg');
+    expect(body.teams[19]?.name).toHaveLength(28);
+    expect(body.teams[24]?.name).toBe('DTMK NOT JTMK.');
+  });
+
+  it('PUT /api/config/teams validates TEAM_NAME_MAX_LENGTH=32 boundaries', async () => {
+    // 24, 25, 28, 32 characters should pass
+    const validRes = await app.inject({
+      method: 'PUT',
+      url: '/api/config/teams',
+      payload: {
+        schemaVersion: 1,
+        teams: [
+          { teamNo: 1, name: 'A'.repeat(24), logoUrl: null },
+          { teamNo: 2, name: 'B'.repeat(25), logoUrl: null },
+          { teamNo: 3, name: 'C'.repeat(28), logoUrl: null },
+          { teamNo: 4, name: 'D'.repeat(32), logoUrl: null },
+        ],
+      },
+    });
+    expect(validRes.statusCode).toBe(200);
+    expect(configStore.teams.current.teams).toHaveLength(4);
+
+    // 33 characters should be rejected by Zod schema
+    const invalidRes = await app.inject({
+      method: 'PUT',
+      url: '/api/config/teams',
+      payload: {
+        schemaVersion: 1,
+        teams: [{ teamNo: 1, name: 'E'.repeat(33), logoUrl: null }],
+      },
+    });
+    expect(invalidRes.statusCode).toBe(400);
+  });
+});

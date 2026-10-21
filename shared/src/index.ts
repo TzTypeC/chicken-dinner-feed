@@ -102,6 +102,7 @@ export {
   teamRosterEntrySchema,
   teamRosterDocumentSchema,
   DEFAULT_TEAM_ROSTER,
+  DEFAULT_PMCC_2026_ROSTER,
   TEAM_NAME_MAX_LENGTH,
 } from './config/team-roster.js';
 export type { TeamRosterEntry, TeamRosterDocument } from './config/team-roster.js';
@@ -144,3 +145,18 @@ export type {
   ManualTeamPatch,
   ManualMatchDocument,
 } from './domain/manual.js';
+
+export {
+  excelImportModeSchema,
+  excelValidationIssueSchema,
+  excelRoundSummarySchema,
+  excelImportPreviewSchema,
+  excelImportResultSchema,
+} from './domain/excel.js';
+export type {
+  ExcelImportMode,
+  ExcelValidationIssue,
+  ExcelRoundSummary,
+  ExcelImportPreview,
+  ExcelImportResult,
+} from './domain/excel.js';

@@ -3,6 +3,9 @@ import type {
   BackupPreview,
   CustomFont,
   CustomFontsDocument,
+  ExcelImportMode,
+  ExcelImportPreview,
+  ExcelImportResult,
   ManualMatchDocument,
   ManualTeamPatch,
   OperatingMode,
@@ -205,6 +208,29 @@ export const api = {
     body.append('file', file);
     return request<{ imported: true; summary: BackupPreview['summary'] }>(
       '/backup/import?confirm=true',
+      { method: 'POST', body },
+    );
+  },
+
+  seedPmccTeams: () => request<TeamRosterDocument>('/config/teams/seed-pmcc', { method: 'POST' }),
+
+  /** Not a fetch — a plain navigable URL for downloading the Excel scoring workbook. */
+  excelExportUrl: '/api/excel/export',
+
+  previewExcelImport: (file: File, mode: ExcelImportMode = 'full') => {
+    const body = new FormData();
+    body.append('file', file);
+    return request<{ confirmed: false; preview: ExcelImportPreview }>(
+      `/excel/import?confirm=false&mode=${encodeURIComponent(mode)}`,
+      { method: 'POST', body },
+    );
+  },
+
+  confirmExcelImport: (file: File, mode: ExcelImportMode = 'full') => {
+    const body = new FormData();
+    body.append('file', file);
+    return request<{ confirmed: true; result: ExcelImportResult }>(
+      `/excel/import?confirm=true&mode=${encodeURIComponent(mode)}`,
       { method: 'POST', body },
     );
   },

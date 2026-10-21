@@ -360,4 +360,63 @@ Chronological record of phases, tasks, files changed, and verification results.
   - `npm run lint`: Passed with **0 warnings and 0 errors** across 60 files.
   - `npm run format:check`: Passed (`All matched files use Prettier code style!`).
   - `npm run build`: Full production build of `@cdf/shared`, `@cdf/backend`, and `@cdf/frontend` succeeded with exit code 0.
-- **Next Steps:** Part 6 complete and fully verified. Ready for production broadcast deployment.
+- **Next Steps:** Proceed to Part 7 implementation after approval.
+
+---
+
+## Entry 7 — 2026-10-21 — Part 7: Application Backup & Restore, Excel Integration, Default Team Roster & Postgame Ranking Correction (`WS-7.1`–`WS-7.8`)
+
+- **Phase:** Part 7 Implementation & Quality Gate Verification
+- **Task:** Implement full application backup/restore v2 with SHA256 checksums and automated rollback, high-fidelity Excel import/export matching official PMCC 2026 workbook, official 25-team default roster with length expansion (max 32), postgame single-match points ranking correction vs series standings, and Admin UI controls.
+- **Status:** `COMPLETED`
+- **Files Affected:**
+  - `shared/src/config/team-roster.ts`, `shared/src/domain/backup.ts`, `shared/src/domain/excel.ts`, `shared/src/index.ts`
+  - `backend/package.json`, `backend/src/app.ts`, `backend/src/state/manual-store.ts`, `backend/src/backup/export.ts`, `backend/src/backup/import.ts`, `backend/src/backup/backup.test.ts`
+  - `backend/src/excel/export.ts`, `backend/src/excel/import.ts`, `backend/src/excel/excel.test.ts`, `backend/src/routes/excel.ts`, `backend/src/routes/excel.test.ts`, `backend/src/routes/config.ts`, `backend/src/routes/config.test.ts`, `backend/src/routes/backup.ts`
+  - `frontend/src/lib/api.ts`, `frontend/src/components/overlay/broadcast-state.ts`, `frontend/src/components/overlay/overlays.test.tsx`
+  - `frontend/src/features/admin/bulk-teams.ts`, `frontend/src/features/admin/BulkTeamDialog.tsx`, `frontend/src/features/admin/TeamRosterEditor.tsx`, `frontend/src/features/admin/TeamManagement.test.ts`, `frontend/src/features/admin/SeriesControl.tsx`, `frontend/src/features/admin/ImportExport.tsx`
+  - `docs/checkpoint.md`, `docs/progress.md`, `docs/part7-audit-and-proposal.md`
+- **Changes Made:**
+  - **`WS-7.1` (Schema & Domain Updates):**
+    - Expanded `TEAM_NAME_MAX_LENGTH` from 24 to 32 characters in `team-roster.ts` to accommodate official names like Team 20 (`Lanang nak chicken main pubg` = 28 chars).
+    - Defined `DEFAULT_PMCC_2026_ROSTER` with all 25 official tournament teams extracted from workbook.
+    - Bumped `BACKUP_FORMAT_VERSION` to 2 in `backup.ts` with optional `sha256Checksums` and `artifacts` in `backupManifestSchema`, and added `hasManualMatch` and `backgrounds` to `backupSummarySchema`.
+    - Created `shared/src/domain/excel.ts` with `excelImportModeSchema` (`roster`, `matches`, `full`), `excelImportPreviewSchema`, and `excelImportResultSchema`.
+  - **`WS-7.2` (Safe Backup & Restore Pipeline):**
+    - Included `manual-match.json` in `BACKUP_ENTRIES` and `ExportDependencies`, supporting manual scoring state backup.
+    - Added `replaceState` to `ManualStore`.
+    - Implemented SHA-256 entry checksum computation during export and validation on import.
+    - Implemented Zip Slip / path traversal protection (`CVE-2018-1002204`) rejecting entries with traversal tokens.
+    - Added automatic pre-restore safety snapshot creation (`data/.pre-restore-snapshot.zip` with rotation to `.prev.zip`), in-memory self-validation, and automatic rollback on failure.
+    - Maintained 100% backward compatibility for v1 backups.
+  - **`WS-7.3` (Exact Excel Template Exporter):**
+    - Added `exceljs` dependency in `@cdf/backend`.
+    - Created `backend/src/excel/export.ts` using `assets/PMCC 2026 OFLINE SCORING SHEETS.xlsx` as template.
+    - Populated literal team names in `K6:K30` (decoupling from broken external links while allowing Table 1 Col B `=INDEX($K$6:$K$30,MATCH(I6,$J$6:$J$30,0))` to resolve cleanly).
+    - Evaluated and populated cached results for all formulas (`V..Z`, `AA`, `AB`, `AC`, `J`, and Table 1 `B..G`).
+    - Preserved 100% of workbook geometry: freeze panes `A6`, 14 merged ranges, 28 hidden rows, and unhiding Round 5 columns (`P`, `U`, `Z`) when $\ge 5$ matches exist.
+  - **`WS-7.4` (Excel Importer & 2-Stage Validator):**
+    - Created `backend/src/excel/import.ts` with 3 operator-selectable modes (`roster`, `matches`, `full`).
+    - Added cell-coordinate error and warning reporting for slot validation, duplicate placements, and negative kills.
+    - Built `POST /api/excel/import` and `GET /api/excel/export` in `backend/src/routes/excel.ts`.
+  - **`WS-7.5` (Default Team Roster Seed API & Admin Integration):**
+    - Added `POST /api/config/teams/seed-pmcc` endpoint in `backend/src/routes/config.ts`.
+    - Added "Reset to PMCC 2026" action button and confirmation dialog in `TeamRosterEditor.tsx`.
+    - Updated `bulk-teams.ts` and `BulkTeamDialog.tsx` to respect `TEAM_NAME_MAX_LENGTH = 32`.
+  - **`WS-7.6` (Postgame Match vs Series Ranking Alignment):**
+    - Verified `selectPostGameResults` sorts strictly by single-match total points.
+    - Updated `selectSeriesStandings` to prioritize most recent snapshot names and logos over active roster.
+    - Enhanced `SeriesControl.tsx` finished maps view with clear `PLACE` (#1..#25) and `MATCH PTS` columns sorted by match points.
+    - Added inverted ranking regression fixture in `overlays.test.tsx` proving match rank (B, A, C) differs from series rank (C, A, B).
+  - **`WS-7.7` (Admin UX & Prettier Formatting Fixes):**
+    - Rebuilt `ImportExport.tsx` with dedicated cards for Backup & Restore (.zip) and PMCC 2026 Excel Scoring Sheets (.xlsx), scope toggles (`Full Sync`, `Roster Only`, `Matches Only`), and safety snapshot callouts.
+    - Formatted entire repository with Prettier, eliminating all pre-existing format check issues.
+  - **`WS-7.8` (Quality Gates & Verification):**
+    - Added 5 new tests in `backup.test.ts` (11 total), 6 tests in `excel.test.ts`, 3 tests in `excel.test.ts` routes, 2 new tests in `config.test.ts`, and 1 inverted ranking test in `overlays.test.tsx`.
+- **Verification Results:**
+  - `npm test`: **All 32 test files passed, 392 tests passed** (26 backend test files / 304 tests; 6 frontend test files / 88 tests).
+  - `npm run typecheck`: Passed with **0 errors** across all workspaces.
+  - `npm run lint`: Passed with **0 warnings and 0 errors** across all workspaces.
+  - `npm run format:check`: Passed (`All matched files use Prettier code style!`).
+  - `npm run build`: Full production build of `@cdf/shared`, `@cdf/backend`, and `@cdf/frontend` succeeded with exit code 0.
+- **Next Steps:** All Part 7 workstreams complete and verified. Ready for demonstration and broadcast production.

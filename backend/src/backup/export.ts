@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
@@ -8,7 +9,7 @@ import type { SeriesStore } from '../state/series-store.js';
 import type { LogoStore } from '../persistence/logo-store.js';
 import type { FontStore } from '../persistence/font-store.js';
 import type { BackgroundStore } from '../persistence/background-store.js';
-
+import type { ManualStore } from '../state/manual-store.js';
 export interface ExportDependencies {
   config: ConfigStore;
   series: SeriesStore;
@@ -16,6 +17,8 @@ export interface ExportDependencies {
   fonts: FontStore;
   /** Optional so older callers (and tests) that predate post-game backgrounds keep working. */
   backgrounds?: BackgroundStore;
+  /** Optional manual store to export operator manual match scoring state (Fitur A). */
+  manual?: ManualStore;
 }
 
 /** Every entry name the export/import pipeline agrees on — the single source of truth for both. */
@@ -26,6 +29,7 @@ export const BACKUP_ENTRIES = {
   scoringRuleset: 'scoring-ruleset.json',
   customFonts: 'custom-fonts.json',
   series: 'series.json',
+  manualMatch: 'manual-match.json',
   logosDir: 'logos/',
   fontsDir: 'fonts/',
   /** Post-game background media. Absent from backups made before it existed — that is fine. */
@@ -45,24 +49,55 @@ export const BACKUP_ENTRIES = {
  */
 export async function buildExportZip(deps: ExportDependencies): Promise<Buffer> {
   const zip = new AdmZip();
+  const fileMap = new Map<string, Buffer>();
+
+  fileMap.set(BACKUP_ENTRIES.overlayInstances, jsonBuffer(deps.config.instances.current));
+  fileMap.set(BACKUP_ENTRIES.teamRoster, jsonBuffer(deps.config.teams.current));
+  fileMap.set(BACKUP_ENTRIES.scoringRuleset, jsonBuffer(deps.config.scoring.current));
+  fileMap.set(BACKUP_ENTRIES.customFonts, jsonBuffer(deps.config.fonts.current));
+  fileMap.set(BACKUP_ENTRIES.series, jsonBuffer(deps.series.getState()));
+
+  if (deps.manual) {
+    fileMap.set(BACKUP_ENTRIES.manualMatch, jsonBuffer(deps.manual.getState()));
+  }
+
+  await collectDirectory(fileMap, BACKUP_ENTRIES.logosDir, deps.logos.root);
+  await collectDirectory(fileMap, BACKUP_ENTRIES.fontsDir, deps.fonts.root);
+  if (deps.backgrounds) {
+    await collectDirectory(fileMap, BACKUP_ENTRIES.backgroundsDir, deps.backgrounds.root);
+  }
+
+  const sha256Checksums: Record<string, string> = {};
+  for (const [name, bytes] of fileMap) {
+    sha256Checksums[name] = createHash('sha256').update(bytes).digest('hex');
+  }
+
+  let logoCount = 0;
+  let backgroundCount = 0;
+  for (const name of fileMap.keys()) {
+    if (name.startsWith(BACKUP_ENTRIES.logosDir)) logoCount++;
+    if (name.startsWith(BACKUP_ENTRIES.backgroundsDir)) backgroundCount++;
+  }
 
   const manifest: BackupManifest = {
     backupFormatVersion: BACKUP_FORMAT_VERSION,
     exportedAt: Date.now(),
     appVersion: APP_VERSION,
+    sha256Checksums,
+    artifacts: {
+      overlayInstances: deps.config.instances.current.instances.length,
+      teams: deps.config.teams.current.teams.length,
+      logos: logoCount,
+      customFonts: deps.config.fonts.current.fonts.length,
+      closedMaps: deps.series.getState().closedMaps.length,
+      hasManualMatch: Boolean(deps.manual),
+      backgrounds: backgroundCount,
+    },
   };
 
   zip.addFile(BACKUP_ENTRIES.manifest, jsonBuffer(manifest));
-  zip.addFile(BACKUP_ENTRIES.overlayInstances, jsonBuffer(deps.config.instances.current));
-  zip.addFile(BACKUP_ENTRIES.teamRoster, jsonBuffer(deps.config.teams.current));
-  zip.addFile(BACKUP_ENTRIES.scoringRuleset, jsonBuffer(deps.config.scoring.current));
-  zip.addFile(BACKUP_ENTRIES.customFonts, jsonBuffer(deps.config.fonts.current));
-  zip.addFile(BACKUP_ENTRIES.series, jsonBuffer(deps.series.getState()));
-
-  await addDirectory(zip, BACKUP_ENTRIES.logosDir, deps.logos.root);
-  await addDirectory(zip, BACKUP_ENTRIES.fontsDir, deps.fonts.root);
-  if (deps.backgrounds) {
-    await addDirectory(zip, BACKUP_ENTRIES.backgroundsDir, deps.backgrounds.root);
+  for (const [name, bytes] of fileMap) {
+    zip.addFile(name, bytes);
   }
 
   return zip.toBuffer();
@@ -72,12 +107,16 @@ function jsonBuffer(value: unknown): Buffer {
   return Buffer.from(JSON.stringify(value, null, 2));
 }
 
-/** Every regular file directly inside `directory`, added under `zipPrefix` — never recurses. */
-async function addDirectory(zip: AdmZip, zipPrefix: string, directory: string): Promise<void> {
+/** Every regular file directly inside `directory`, collected under `zipPrefix` — never recurses. */
+async function collectDirectory(
+  fileMap: Map<string, Buffer>,
+  zipPrefix: string,
+  directory: string,
+): Promise<void> {
   const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
   for (const entry of entries) {
-    if (!entry.isFile()) continue;
+    if (!entry.isFile() || entry.name.startsWith('.')) continue;
     const bytes = await readFile(path.join(directory, entry.name));
-    zip.addFile(`${zipPrefix}${entry.name}`, bytes);
+    fileMap.set(`${zipPrefix}${entry.name}`, bytes);
   }
 }

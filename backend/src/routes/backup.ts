@@ -65,7 +65,9 @@ export const backupRoutes: FastifyPluginAsyncZod<BackupRoutesOptions> = async (a
            * writes it — re-uploading the same small file rather than staging it server-side between
            * the two calls.
            */
-          confirm: z.coerce.boolean().default(false),
+          confirm: z
+            .preprocess((val) => val === 'true' || val === true || val === '1', z.boolean())
+            .default(false),
         }),
         response: { 200: importResponseSchema, 400: importErrorSchema },
       },

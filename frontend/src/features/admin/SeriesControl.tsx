@@ -344,19 +344,34 @@ export function SeriesControl() {
               </div>
 
               <div className="grid gap-1">
+                <div className="text-muted-foreground grid grid-cols-[2.5rem_minmax(0,1fr)_3.75rem_3.25rem] gap-2 px-1 text-[11px] font-semibold uppercase">
+                  <span>Place</span>
+                  <span>Team</span>
+                  <span className="text-right">Match Pts</span>
+                  <span className="text-right">Elims</span>
+                </div>
                 {[...map.teams]
-                  .sort((a, b) => a.placement - b.placement)
+                  .sort((a, b) => {
+                    if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
+                    if (b.killPoints !== a.killPoints) return b.killPoints - a.killPoints;
+                    if (a.placement !== b.placement) return a.placement - b.placement;
+                    return a.teamNo - b.teamNo;
+                  })
                   .map((team) => (
                     <div
                       key={team.teamNo}
-                      className="grid grid-cols-[2rem_1fr_3rem_3rem] items-center gap-2 text-sm"
+                      className="grid grid-cols-[2.5rem_minmax(0,1fr)_3.75rem_3.25rem] items-center gap-2 text-sm"
                     >
-                      <span className="tabular-nums">{team.placement}</span>
-                      <span className="truncate">{teamName(team.teamNo)}</span>
-                      <span className="text-right tabular-nums font-semibold">
+                      <span className="tabular-nums font-medium text-muted-foreground">
+                        #{team.placement}
+                      </span>
+                      <span className="truncate">{team.name ?? teamName(team.teamNo)}</span>
+                      <span className="text-right tabular-nums font-semibold text-foreground">
                         {team.totalPoints}
                       </span>
-                      <span className="text-right tabular-nums">{team.eliminations}</span>
+                      <span className="text-right tabular-nums text-muted-foreground">
+                        {team.eliminations}
+                      </span>
                     </div>
                   ))}
               </div>

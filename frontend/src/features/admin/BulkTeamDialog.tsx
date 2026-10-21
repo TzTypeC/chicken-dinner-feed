@@ -1,3 +1,4 @@
+import { TEAM_NAME_MAX_LENGTH } from '@cdf/shared';
 import type { TeamRosterEntry } from '@cdf/shared';
 import { AlertCircle, CheckCircle2, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -89,7 +90,7 @@ export function BulkTeamDialog({ open, existingTeams, onCommit, onClose }: BulkT
               Supported: <code>1 TeamName</code>, <code>1, TeamName</code>, or just{' '}
               <code>TeamName</code>
             </span>
-            <span>Max 24 characters per name</span>
+            <span>Max {TEAM_NAME_MAX_LENGTH} characters per name</span>
             <span>Roster capacity: {existingTeams.length}/25 slots</span>
           </div>
         </div>

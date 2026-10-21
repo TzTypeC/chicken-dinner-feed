@@ -1,3 +1,5 @@
+import { TEAM_NAME_MAX_LENGTH } from '@cdf/shared';
+
 export interface ParsedBulkTeamRow {
   lineIndex: number;
   raw: string;
@@ -93,8 +95,8 @@ export function parseBulkTeamLines(
 
     if (!item.name) {
       error = 'Team name cannot be empty';
-    } else if (item.name.length > 24) {
-      error = `Name exceeds 24 characters (${item.name.length} chars)`;
+    } else if (item.name.length > TEAM_NAME_MAX_LENGTH) {
+      error = `Name exceeds ${TEAM_NAME_MAX_LENGTH} characters (${item.name.length} chars)`;
     }
 
     if (!error && targetSlot !== null) {
@@ -155,4 +157,3 @@ export function parseBulkTeamLines(
     errorMessage: anyError ? 'Please resolve errors in the input before adding teams.' : null,
   };
 }
-

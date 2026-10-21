@@ -25,6 +25,7 @@ import {
 import { backgroundRoutes } from './routes/backgrounds.js';
 import { backupRoutes } from './routes/backup.js';
 import { configRoutes } from './routes/config.js';
+import { excelRoutes } from './routes/excel.js';
 import { feedbackRoutes } from './routes/feedback.js';
 import { fontRoutes } from './routes/fonts.js';
 import { logoRoutes } from './routes/logos.js';
@@ -359,6 +360,25 @@ export async function buildApp(): Promise<AppContext> {
     logos: logoStore,
     fonts: fontStore,
     backgrounds: backgroundStore,
+    manual: manualStore,
+    onImported: () => {
+      refreshSeriesContext();
+      hub.schedulePublish();
+    },
+  });
+
+  await app.register(excelRoutes, {
+    prefix: '/api',
+    config: configStore,
+    series: seriesStore,
+    backupDeps: {
+      config: configStore,
+      series: seriesStore,
+      logos: logoStore,
+      fonts: fontStore,
+      backgrounds: backgroundStore,
+      manual: manualStore,
+    },
     onImported: () => {
       refreshSeriesContext();
       hub.schedulePublish();

@@ -107,4 +107,3 @@ export function applyDirectSwap(
     })
     .sort((a, b) => a.teamNo - b.teamNo);
 }
-

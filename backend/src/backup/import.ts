@@ -1,10 +1,13 @@
-import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { copyFile, mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import AdmZip from 'adm-zip';
 import {
   BACKUP_FORMAT_VERSION,
   backupManifestSchema,
   customFontsDocumentSchema,
+  manualMatchDocumentSchema,
   overlayInstancesDocumentSchema,
   scoringRulesetSchema,
   seriesDocumentSchema,
@@ -12,6 +15,7 @@ import {
   type BackupManifest,
   type BackupSummary,
   type CustomFontsDocument,
+  type ManualMatchDocument,
   type OverlayInstancesDocument,
   type ScoringRuleset,
   type SeriesDocument,
@@ -24,7 +28,7 @@ import {
   migrateTeamRoster,
 } from '../persistence/migrations.js';
 import { BackgroundStore, fileNameFromBackgroundUrl } from '../persistence/background-store.js';
-import { BACKUP_ENTRIES, type ExportDependencies } from './export.js';
+import { BACKUP_ENTRIES, buildExportZip, type ExportDependencies } from './export.js';
 
 export interface ValidatedImport {
   manifest: BackupManifest;
@@ -33,6 +37,7 @@ export interface ValidatedImport {
   scoring: ScoringRuleset;
   fonts: CustomFontsDocument;
   series: SeriesDocument;
+  manualMatch: ManualMatchDocument | null;
   /** File name (no path) → bytes, exactly as they will be written back to disk. */
   logoFiles: Map<string, Buffer>;
   fontFiles: Map<string, Buffer>;
@@ -60,6 +65,19 @@ export function validateImportZip(buffer: Buffer): ImportValidationResult {
   } catch (cause) {
     return { ok: false, errors: [`Not a valid ZIP file. (${String(cause)})`] };
   }
+  // Protect against Zip Slip / path traversal entries across entire archive
+  for (const entry of zip.getEntries()) {
+    if (
+      entry.entryName.includes('..') ||
+      entry.entryName.startsWith('/') ||
+      entry.entryName.startsWith('\\') ||
+      path.isAbsolute(entry.entryName)
+    ) {
+      errors.push(
+        `Suspicious entry path "${entry.entryName}" blocked by Zip Slip / path traversal protection.`,
+      );
+    }
+  }
 
   const manifest = parseEntry(
     zip,
@@ -75,6 +93,23 @@ export function validateImportZip(buffer: Buffer): ImportValidationResult {
     );
   }
 
+  // Verify SHA256 checksums if supplied by manifest (introduced in v2)
+  if (manifest?.sha256Checksums) {
+    for (const [entryName, expectedHash] of Object.entries(manifest.sha256Checksums)) {
+      const entry = zip.getEntry(entryName);
+      if (!entry) {
+        errors.push(`Manifest refers to entry "${entryName}" which is missing in archive.`);
+        continue;
+      }
+      const data = zip.readFile(entry) ?? Buffer.alloc(0);
+      const actualHash = createHash('sha256').update(data).digest('hex');
+      if (actualHash !== expectedHash) {
+        errors.push(
+          `Integrity error: Checksum mismatch for "${entryName}" (expected ${expectedHash}, got ${actualHash}).`,
+        );
+      }
+    }
+  }
   const instances = parseEntry(
     zip,
     BACKUP_ENTRIES.overlayInstances,
@@ -111,13 +146,24 @@ export function validateImportZip(buffer: Buffer): ImportValidationResult {
     errors,
   );
 
+  const manualEntry = zip.getEntry(BACKUP_ENTRIES.manualMatch);
+  const manualMatch = manualEntry
+    ? parseEntry(
+        zip,
+        BACKUP_ENTRIES.manualMatch,
+        manualMatchDocumentSchema,
+        migrateSchemaVersionOnly,
+        errors,
+      )
+    : null;
+
   if (!manifest || !instances || !teams || !scoring || !fonts || !series) {
     return { ok: false, errors };
   }
 
-  const logoFiles = readDirectoryEntries(zip, BACKUP_ENTRIES.logosDir);
-  const fontFiles = readDirectoryEntries(zip, BACKUP_ENTRIES.fontsDir);
-  const backgroundFiles = readDirectoryEntries(zip, BACKUP_ENTRIES.backgroundsDir);
+  const logoFiles = readDirectoryEntries(zip, BACKUP_ENTRIES.logosDir, errors);
+  const fontFiles = readDirectoryEntries(zip, BACKUP_ENTRIES.fontsDir, errors);
+  const backgroundFiles = readDirectoryEntries(zip, BACKUP_ENTRIES.backgroundsDir, errors);
   const backgroundSniffer = new BackgroundStore('.');
 
   for (const instance of instances.instances) {
@@ -171,12 +217,15 @@ export function validateImportZip(buffer: Buffer): ImportValidationResult {
       logoFiles,
       fontFiles,
       backgroundFiles,
+      manualMatch,
       summary: {
         overlayInstances: instances.instances.length,
         teams: teams.teams.length,
         logos: logoFiles.size,
         customFonts: fonts.fonts.length,
         closedMaps: series.closedMaps.length,
+        hasManualMatch: manualMatch !== null,
+        backgrounds: backgroundFiles.size,
       },
     },
   };
@@ -195,28 +244,75 @@ export async function applyImport(
   validated: ValidatedImport,
   deps: ExportDependencies,
 ): Promise<void> {
-  await replaceDirectory(deps.logos.root, validated.logoFiles);
-  await replaceDirectory(deps.fonts.root, validated.fontFiles);
-  if (deps.backgrounds) {
-    // Only files an imported instance actually refers to are written; anything else in the
-    // archive's backgrounds/ folder is ignored rather than copied blindly onto disk.
-    const referenced = new Set(
-      validated.instances.instances
-        .map((instance) => instance.appearance.postGameBackground.mediaUrl)
-        .filter((url): url is string => url !== null)
-        .map(fileNameFromBackgroundUrl),
-    );
-    await replaceDirectory(
-      deps.backgrounds.root,
-      new Map([...validated.backgroundFiles].filter(([name]) => referenced.has(name))),
+  // Stage 1: Create in-memory safety snapshot before modifying active state
+  const safetySnapshotBytes = await buildExportZip(deps);
+  const snapshotValidation = validateImportZip(safetySnapshotBytes);
+  if (!snapshotValidation.ok) {
+    throw new Error(
+      `Pre-restore safety snapshot failed self-validation. Restore aborted. Details: ${snapshotValidation.errors.join('; ')}`,
     );
   }
 
-  await deps.config.saveTeams(validated.teams);
-  await deps.config.saveScoring(validated.scoring);
-  await deps.config.saveInstances(validated.instances.instances);
-  await deps.config.saveFonts(validated.fonts.fonts);
-  await deps.series.replaceState(validated.series);
+  // Rotate and persist safety recovery snapshot on disk (with rotation e.g. .prev.zip)
+  const baseDir = deps.logos.root ? path.dirname(deps.logos.root) : '.';
+  const snapshotPath = path.join(baseDir, '.pre-restore-snapshot.zip');
+  const prevSnapshotPath = path.join(baseDir, '.pre-restore-snapshot.prev.zip');
+  if (existsSync(snapshotPath)) {
+    await copyFile(snapshotPath, prevSnapshotPath).catch(() => {});
+  }
+  await writeFile(snapshotPath, safetySnapshotBytes);
+
+  // Stage 2: Apply with automated rollback on failure
+  try {
+    await replaceDirectory(deps.logos.root, validated.logoFiles);
+    await replaceDirectory(deps.fonts.root, validated.fontFiles);
+    if (deps.backgrounds) {
+      const referenced = new Set(
+        validated.instances.instances
+          .map((instance) => instance.appearance.postGameBackground.mediaUrl)
+          .filter((url): url is string => url !== null)
+          .map(fileNameFromBackgroundUrl),
+      );
+      await replaceDirectory(
+        deps.backgrounds.root,
+        new Map([...validated.backgroundFiles].filter(([name]) => referenced.has(name))),
+      );
+    }
+
+    await deps.config.saveTeams(validated.teams);
+    await deps.config.saveScoring(validated.scoring);
+    await deps.config.saveInstances(validated.instances.instances);
+    await deps.config.saveFonts(validated.fonts.fonts);
+    await deps.series.replaceState(validated.series);
+    if (validated.manualMatch && deps.manual) {
+      await deps.manual.replaceState(validated.manualMatch);
+    }
+  } catch (error) {
+    // Automated rollback using validated safety snapshot
+    try {
+      const recovery = snapshotValidation.value;
+      await replaceDirectory(deps.logos.root, recovery.logoFiles);
+      await replaceDirectory(deps.fonts.root, recovery.fontFiles);
+      if (deps.backgrounds) {
+        await replaceDirectory(deps.backgrounds.root, recovery.backgroundFiles);
+      }
+      await deps.config.saveTeams(recovery.teams);
+      await deps.config.saveScoring(recovery.scoring);
+      await deps.config.saveInstances(recovery.instances.instances);
+      await deps.config.saveFonts(recovery.fonts.fonts);
+      await deps.series.replaceState(recovery.series);
+      if (recovery.manualMatch && deps.manual) {
+        await deps.manual.replaceState(recovery.manualMatch);
+      }
+    } catch (rollbackError) {
+      throw new Error(
+        `Restore failed midway, and automated rollback also encountered an error: ${String(rollbackError)}. A pre-restore snapshot remains at ${snapshotPath}. Original error: ${String(error)}`,
+      );
+    }
+    throw new Error(
+      `Restore failed midway and was cleanly rolled back to the prior safety snapshot. Original error: ${String(error)}`,
+    );
+  }
 }
 
 function parseEntry<T>(
@@ -253,14 +349,30 @@ function parseEntry<T>(
   return result.data;
 }
 
-/** Every file directly inside `zipPrefix`, keyed by its bare file name — never recurses. */
-function readDirectoryEntries(zip: AdmZip, zipPrefix: string): Map<string, Buffer> {
+/** Every file directly inside `zipPrefix`, keyed by its bare file name — protects against zip slip traversal. */
+function readDirectoryEntries(
+  zip: AdmZip,
+  zipPrefix: string,
+  errors: string[],
+): Map<string, Buffer> {
   const files = new Map<string, Buffer>();
   for (const entry of zip.getEntries()) {
     if (entry.isDirectory) continue;
     if (!entry.entryName.startsWith(zipPrefix)) continue;
     const relative = entry.entryName.slice(zipPrefix.length);
-    if (relative === '' || relative.includes('/')) continue; // Not directly inside, skip.
+    if (relative === '') continue;
+    // Guard against directory traversal / zip slip tokens
+    if (
+      relative.includes('..') ||
+      relative.includes('/') ||
+      relative.includes('\\') ||
+      path.basename(relative) !== relative
+    ) {
+      errors.push(
+        `Suspicious entry path "${entry.entryName}" blocked by Zip Slip / path traversal protection.`,
+      );
+      continue;
+    }
     files.set(relative, zip.readFile(entry) ?? Buffer.alloc(0));
   }
   return files;
@@ -279,12 +391,19 @@ async function replaceDirectory(
 
   const existing = await readdir(directory).catch(() => []);
   for (const name of existing) {
+    // Retain hidden files such as .gitkeep or .pre-restore-snapshot
+    if (name.startsWith('.')) continue;
     await unlink(path.join(directory, name)).catch(() => {
       // Already gone is the outcome we wanted.
     });
   }
 
   for (const [name, bytes] of files) {
-    await writeFile(path.join(directory, name), bytes);
+    const targetPath = path.resolve(directory, name);
+    const resolvedDir = path.resolve(directory);
+    if (!targetPath.startsWith(resolvedDir + path.sep)) {
+      throw new Error(`Directory traversal attempt blocked: "${name}"`);
+    }
+    await writeFile(targetPath, bytes);
   }
 }

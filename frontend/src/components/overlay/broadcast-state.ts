@@ -554,8 +554,8 @@ export function selectSeriesStandings(
 
       unsorted.push({
         teamNo,
-        name: rosterTeam?.name ?? snapshotName ?? `Team ${teamNo}`,
-        logoUrl: rosterTeam?.logoUrl !== undefined ? rosterTeam.logoUrl : (snapshotLogoUrl ?? null),
+        name: snapshotName ?? rosterTeam?.name ?? `Team ${teamNo}`,
+        logoUrl: snapshotLogoUrl !== undefined ? snapshotLogoUrl : (rosterTeam?.logoUrl ?? null),
         matchesPlayed,
         wwcdCount,
         placementPoints,

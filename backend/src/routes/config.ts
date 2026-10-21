@@ -1,6 +1,7 @@
 import {
   autoWwcdVariantSchema,
   defaultAppearanceForType,
+  DEFAULT_PMCC_2026_ROSTER,
   overlayInstanceIdSchema,
   overlayInstanceSchema,
   overlayInstancesDocumentSchema,
@@ -256,6 +257,21 @@ export const configRoutes: FastifyPluginAsyncZod<ConfigRoutesOptions> = async (a
           teams: sanitizedTeams,
         }),
       );
+    },
+  );
+
+  app.post(
+    '/config/teams/seed-pmcc',
+    {
+      schema: {
+        summary: 'Seed the team roster with the official PMCC 2026 25 teams',
+        tags: ['config'],
+        response: { 200: teamRosterDocumentSchema },
+      },
+    },
+    async (_request, reply) => {
+      const saved = await store.saveTeams(DEFAULT_PMCC_2026_ROSTER);
+      return reply.send(saved);
     },
   );
 

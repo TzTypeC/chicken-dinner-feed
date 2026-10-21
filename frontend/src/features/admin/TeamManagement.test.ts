@@ -55,13 +55,27 @@ describe('BulkTeamDialog - parseBulkTeamLines', () => {
     expect(result.rows[1]?.error).toContain('out of bounds');
   });
 
-  it('rejects team names exceeding 24 characters', () => {
+  it('accepts team names of lengths 24, 25, 28, and 32 characters', () => {
+    const raw = `
+      1 ${'A'.repeat(24)}
+      2 ${'B'.repeat(25)}
+      3 Lanang nak chicken main pubg
+      4 ${'D'.repeat(32)}
+    `;
+    const result = parseBulkTeamLines(raw, new Set(), 25, 0);
+    expect(result.canCommit).toBe(true);
+    expect(result.validTeams).toHaveLength(4);
+    expect(result.validTeams[2]?.name).toBe('Lanang nak chicken main pubg');
+    expect(result.validTeams[2]?.name.length).toBe(28);
+  });
+
+  it('rejects team names exceeding 32 characters', () => {
     const raw = `
       1 This Name Has Way Too Many Characters For An Esports Feed
     `;
     const result = parseBulkTeamLines(raw, new Set(), 25, 0);
     expect(result.canCommit).toBe(false);
-    expect(result.rows[0]?.error).toContain('exceeds 24 characters');
+    expect(result.rows[0]?.error).toContain('exceeds 32 characters');
   });
 
   it('rejects inputs exceeding max roster limit of 25 teams', () => {

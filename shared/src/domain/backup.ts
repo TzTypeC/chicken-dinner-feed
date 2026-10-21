@@ -7,7 +7,7 @@ import { z } from 'zod';
  * functions a fresh app start already runs); this number is for if the *set of files in the ZIP*
  * itself ever changes — a future export gaining a new document a reader must know is optional.
  */
-export const BACKUP_FORMAT_VERSION = 1;
+export const BACKUP_FORMAT_VERSION = 2;
 
 export const backupManifestSchema = z.object({
   backupFormatVersion: z.number().int().min(1),
@@ -15,6 +15,10 @@ export const backupManifestSchema = z.object({
   exportedAt: z.number().int(),
   /** The exporting app's own version, informational only — never used to gate whether import works. */
   appVersion: z.string().min(1),
+  /** SHA256 hex digests for archive entries (introduced in v2). */
+  sha256Checksums: z.record(z.string(), z.string()).optional(),
+  /** Informational artifact counts in v2 exports. */
+  artifacts: z.record(z.string(), z.union([z.number(), z.boolean(), z.string()])).optional(),
 });
 export type BackupManifest = z.infer<typeof backupManifestSchema>;
 
@@ -28,6 +32,10 @@ export const backupSummarySchema = z.object({
   logos: z.number().int().min(0),
   customFonts: z.number().int().min(0),
   closedMaps: z.number().int().min(0),
+  /** True if the backup contains persisted manual scoring match state (v2). */
+  hasManualMatch: z.boolean().default(false),
+  /** Count of postgame background media files in the backup. */
+  backgrounds: z.number().int().min(0).default(0),
 });
 export type BackupSummary = z.infer<typeof backupSummarySchema>;
 

@@ -116,6 +116,16 @@ export class ManualStore {
   }
 
   /**
+   * Replaces the manual match state entirely, used by backup restore.
+   */
+  replaceState(document: ManualMatchDocument): Promise<ManualMatchDocument> {
+    return this.mutate(async () => {
+      assertUniquePlacementOverrides(document.teams);
+      return this.document.write(document);
+    });
+  }
+
+  /**
    * Called when the operator saves a new team roster on the Teams tab or imports an INI file.
    */
   syncRoster(roster: readonly TeamRosterEntry[]): Promise<ManualMatchDocument> {

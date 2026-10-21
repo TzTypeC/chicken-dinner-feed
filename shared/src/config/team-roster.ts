@@ -6,7 +6,7 @@ import { CONFIG_SCHEMA_VERSION } from '../versions.js';
  * the ini-import route can truncate to it up front rather than letting a long `TeamName=` value
  * fail schema validation deep inside a save.
  */
-export const TEAM_NAME_MAX_LENGTH = 24;
+export const TEAM_NAME_MAX_LENGTH = 32;
 
 /**
  * What the overlay prints for a given PCOB team slot.
@@ -68,5 +68,42 @@ export const DEFAULT_TEAM_ROSTER: TeamRosterDocument = {
     { teamNo: 14, name: 'M4', logoUrl: null },
     { teamNo: 15, name: '2A', logoUrl: null },
     { teamNo: 16, name: 'NC', logoUrl: null },
+  ],
+};
+
+/**
+ * The official twenty-five teams from `assets/PMCC 2026 OFLINE SCORING SHEETS.xlsx`.
+ *
+ * Used for bootstrapping or seeding the official PMCC 2026 offline tournament roster without
+ * destroying or overwriting an existing operator roster on startup.
+ */
+export const DEFAULT_PMCC_2026_ROSTER: TeamRosterDocument = {
+  schemaVersion: CONFIG_SCHEMA_VERSION,
+  teams: [
+    { teamNo: 1, name: 'SUKA SUKA SQUAD', logoUrl: null },
+    { teamNo: 2, name: 'NTR', logoUrl: null },
+    { teamNo: 3, name: 'KP PENS', logoUrl: null },
+    { teamNo: 4, name: 'tes doang', logoUrl: null },
+    { teamNo: 5, name: 'TIM HORE 2.0', logoUrl: null },
+    { teamNo: 6, name: 'DI SURUH REHAN IKUT!!', logoUrl: null },
+    { teamNo: 7, name: 'ERIM', logoUrl: null },
+    { teamNo: 8, name: 'APAA', logoUrl: null },
+    { teamNo: 9, name: 'Timbang tak hack', logoUrl: null },
+    { teamNo: 10, name: 'PM Team', logoUrl: null },
+    { teamNo: 11, name: 'Cacing Zone', logoUrl: null },
+    { teamNo: 12, name: 'LONG BLACK', logoUrl: null },
+    { teamNo: 13, name: 'Aves Gebang', logoUrl: null },
+    { teamNo: 14, name: 'EMB', logoUrl: null },
+    { teamNo: 15, name: 'KeputihKidulPasar', logoUrl: null },
+    { teamNo: 16, name: 'Jox Gopo', logoUrl: null },
+    { teamNo: 17, name: 'Blar Balr X', logoUrl: null },
+    { teamNo: 18, name: 'Bagi Hotspot', logoUrl: null },
+    { teamNo: 19, name: 'Ya Ndak Tau', logoUrl: null },
+    { teamNo: 20, name: 'Lanang nak chicken main pubg', logoUrl: null },
+    { teamNo: 21, name: 'PENYETAN ALLAN', logoUrl: null },
+    { teamNo: 22, name: '^VOLTRA^', logoUrl: null },
+    { teamNo: 23, name: 'TRIKARSA', logoUrl: null },
+    { teamNo: 24, name: 'BERKAH JAYAA', logoUrl: null },
+    { teamNo: 25, name: 'DTMK NOT JTMK.', logoUrl: null },
   ],
 };

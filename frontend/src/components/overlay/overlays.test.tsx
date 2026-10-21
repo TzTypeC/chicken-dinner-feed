@@ -1491,6 +1491,125 @@ describe('D-PMCC-09 — Postgame Match Historical Selection & Postgame Series Cu
     expect(html).toContain('BRAVO SQUAD');
     expect(html).toContain('ALPHA SQUAD');
   });
+
+  it('correctly ranks single-match results by match points vs series standings by cumulative points (Inverted Ranking Fixture)', () => {
+    // Fixture per Feature D specification:
+    // Match 1:
+    // Team A (Slot 1): 60 pts
+    // Team B (Slot 2): 45 pts
+    // Team C (Slot 3): 85 pts
+    const map1: ClosedMapResult = {
+      id: 'fixture-map-1',
+      mapNumber: 1,
+      mapName: 'Erangel',
+      matchId: null,
+      startedAt: 1000,
+      endedAt: 2000,
+      teams: [
+        {
+          teamNo: 1,
+          placement: 2,
+          eliminations: 54,
+          placementPoints: 6,
+          killPoints: 54,
+          totalPoints: 60,
+          name: 'Team A',
+        },
+        {
+          teamNo: 2,
+          placement: 3,
+          eliminations: 40,
+          placementPoints: 5,
+          killPoints: 40,
+          totalPoints: 45,
+          name: 'Team B',
+        },
+        {
+          teamNo: 3,
+          placement: 1,
+          eliminations: 75,
+          placementPoints: 10,
+          killPoints: 75,
+          totalPoints: 85,
+          name: 'Team C',
+        },
+      ],
+    };
+
+    // Match 2:
+    // Team A: 20 pts (Place #2, 14 elims) -> Series Total = 80
+    // Team B: 25 pts (Place #1, 15 elims) -> Series Total = 70
+    // Team C: 15 pts (Place #3, 10 elims) -> Series Total = 100
+    const map2: ClosedMapResult = {
+      id: 'fixture-map-2',
+      mapNumber: 2,
+      mapName: 'Miramar',
+      matchId: null,
+      startedAt: 3000,
+      endedAt: 4000,
+      teams: [
+        {
+          teamNo: 1,
+          placement: 2,
+          eliminations: 14,
+          placementPoints: 6,
+          killPoints: 14,
+          totalPoints: 20,
+          name: 'Team A',
+        },
+        {
+          teamNo: 2,
+          placement: 1,
+          eliminations: 15,
+          placementPoints: 10,
+          killPoints: 15,
+          totalPoints: 25,
+          name: 'Team B',
+        },
+        {
+          teamNo: 3,
+          placement: 3,
+          eliminations: 10,
+          placementPoints: 5,
+          killPoints: 10,
+          totalPoints: 15,
+          name: 'Team C',
+        },
+      ],
+    };
+
+    // 1. Postgame single-match for Match 2: Expected order is Team B (25), Team A (20), Team C (15)
+    const match2Results = selectPostGameResults(
+      baseMatch,
+      map2,
+      { matchNumber: 2, mapName: 'Miramar' },
+      {
+        closedMaps: [map1, map2],
+        postGameMatchSelection: 'fixture-map-2',
+      },
+    );
+    expect(match2Results).not.toBeNull();
+    expect(match2Results?.winner.name).toBe('Team B');
+    expect(match2Results?.rows.map((r) => r.name)).toEqual(['Team B', 'Team A', 'Team C']);
+    expect(match2Results?.rows[0]?.matchRank).toBe(1);
+    expect(match2Results?.rows[0]?.totalMatchPoints).toBe(25);
+    expect(match2Results?.rows[1]?.matchRank).toBe(2);
+    expect(match2Results?.rows[1]?.totalMatchPoints).toBe(20);
+    expect(match2Results?.rows[2]?.matchRank).toBe(3);
+    expect(match2Results?.rows[2]?.totalMatchPoints).toBe(15);
+
+    // 2. Series Standings across Match 1 + Match 2: Expected order is Team C (100), Team A (80), Team B (70)
+    const seriesStandings = selectSeriesStandings(baseMatch, [map1, map2]);
+    expect(seriesStandings).not.toBeNull();
+    expect(seriesStandings?.leader.name).toBe('Team C');
+    expect(seriesStandings?.rows.map((r) => r.name)).toEqual(['Team C', 'Team A', 'Team B']);
+    expect(seriesStandings?.rows[0]?.seriesRank).toBe(1);
+    expect(seriesStandings?.rows[0]?.totalPoints).toBe(100);
+    expect(seriesStandings?.rows[1]?.seriesRank).toBe(2);
+    expect(seriesStandings?.rows[1]?.totalPoints).toBe(80);
+    expect(seriesStandings?.rows[2]?.seriesRank).toBe(3);
+    expect(seriesStandings?.rows[2]?.totalPoints).toBe(70);
+  });
 });
 
 describe('Universal ON AIR / HIDE enforcement across all overlay types', () => {

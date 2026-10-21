@@ -6,21 +6,24 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ConfigStore } from '../persistence/config-store.js';
 import { FontStore } from '../persistence/font-store.js';
 import { LogoStore } from '../persistence/logo-store.js';
+import { ManualStore } from '../state/manual-store.js';
 import { MatchStore } from '../state/match-store.js';
 import { SeriesStore } from '../state/series-store.js';
 import { buildExportZip, type ExportDependencies } from './export.js';
 import { applyImport, validateImportZip } from './import.js';
 
-async function makeDeps(dataDir: string): Promise<ExportDependencies> {
+async function makeDeps(dataDir: string): Promise<ExportDependencies & { manual: ManualStore }> {
   const config = new ConfigStore({ dataDir });
   await config.load();
   const series = new SeriesStore({ dataDir });
   await series.load();
+  const manual = new ManualStore({ dataDir });
+  await manual.load();
   const logos = new LogoStore(dataDir);
   await logos.init();
   const fonts = new FontStore(dataDir);
   await fonts.init();
-  return { config, series, logos, fonts };
+  return { config, series, manual, logos, fonts };
 }
 
 describe('backup export/import', () => {
@@ -98,6 +101,8 @@ describe('backup export/import', () => {
       logos: 1,
       customFonts: 1,
       closedMaps: 1,
+      hasManualMatch: true,
+      backgrounds: 0,
     });
 
     await applyImport(validated.value, target);
@@ -173,5 +178,110 @@ describe('backup export/import', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.errors.some((message) => message.includes('scoring-ruleset.json'))).toBe(true);
+  });
+
+  it('round-trips manual-match.json state onto a fresh install', async () => {
+    const source = await makeDeps(sourceDir);
+    await source.manual.setMode('manual');
+    await source.manual.patchTeam(1, { eliminations: 7, aliveCount: 0 });
+
+    const zip = await buildExportZip(source);
+    const target = await makeDeps(targetDir);
+    const validated = validateImportZip(zip);
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) return;
+
+    expect(validated.value.manualMatch?.mode).toBe('manual');
+    expect(validated.value.manualMatch?.teams.find((t) => t.teamNo === 1)?.eliminations).toBe(7);
+
+    await applyImport(validated.value, target);
+    expect(target.manual.getMode()).toBe('manual');
+    expect(target.manual.getState().teams.find((t) => t.teamNo === 1)?.eliminations).toBe(7);
+  });
+
+  it('imports legacy backup format v1 cleanly without manualMatch and checksums', async () => {
+    const source = await makeDeps(sourceDir);
+    const v2Zip = await buildExportZip(source);
+    const archive = new AdmZip(v2Zip);
+
+    // Convert to v1: remove manual-match.json and downgrade manifest
+    archive.deleteFile('manual-match.json');
+    archive.updateFile(
+      'manifest.json',
+      Buffer.from(
+        JSON.stringify({
+          backupFormatVersion: 1,
+          exportedAt: 123456789,
+          appVersion: '1.1.0',
+        }),
+      ),
+    );
+
+    const validated = validateImportZip(archive.toBuffer());
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) return;
+    expect(validated.value.manifest.backupFormatVersion).toBe(1);
+    expect(validated.value.manualMatch).toBeNull();
+    expect(validated.value.summary.hasManualMatch).toBe(false);
+  });
+
+  it('rejects tampered archives when a sha256 checksum does not match', async () => {
+    const source = await makeDeps(sourceDir);
+    const zip = await buildExportZip(source);
+    const archive = new AdmZip(zip);
+
+    // Tamper with scoring ruleset without updating manifest hash
+    archive.updateFile(
+      'scoring-ruleset.json',
+      Buffer.from(
+        JSON.stringify({
+          schemaVersion: 1,
+          placementPoints: [100, 50, 20],
+          pointsPerElimination: 5,
+        }),
+      ),
+    );
+
+    const validated = validateImportZip(archive.toBuffer());
+    expect(validated.ok).toBe(false);
+    if (validated.ok) return;
+    expect(validated.errors.some((err) => err.includes('Checksum mismatch'))).toBe(true);
+  });
+
+  it('blocks zip slip and directory traversal attacks', async () => {
+    const source = await makeDeps(sourceDir);
+    const zip = await buildExportZip(source);
+    const archive = new AdmZip(zip);
+
+    // Inject evil zip entry attempting path traversal
+    archive.addFile('evil.sh', Buffer.from('rm -rf /'));
+    const evilEntry = archive.getEntries().find((e) => e.entryName === 'evil.sh');
+    if (evilEntry) evilEntry.entryName = '../evil.sh';
+    const validated = validateImportZip(archive.toBuffer());
+    expect(validated.ok).toBe(false);
+    if (validated.ok) return;
+    expect(validated.errors.some((err) => err.includes('Zip Slip'))).toBe(true);
+  });
+
+  it('creates and rotates safety recovery snapshot on disk before applying destructive restore', async () => {
+    const source = await makeDeps(sourceDir);
+    const target = await makeDeps(targetDir);
+
+    const zip = await buildExportZip(source);
+    const validated = validateImportZip(zip);
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) return;
+
+    await applyImport(validated.value, target);
+
+    const snapshotFile = path.join(targetDir, '.pre-restore-snapshot.zip');
+    const entries = await readdir(targetDir);
+    expect(entries).toContain('.pre-restore-snapshot.zip');
+
+    // A second import rotates snapshot into .prev.zip
+    await applyImport(validated.value, target);
+    const updatedEntries = await readdir(targetDir);
+    expect(updatedEntries).toContain('.pre-restore-snapshot.zip');
+    expect(updatedEntries).toContain('.pre-restore-snapshot.prev.zip');
   });
 });
