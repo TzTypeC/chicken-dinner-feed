@@ -1,6 +1,12 @@
 import { z } from 'zod';
 import { CONFIG_SCHEMA_VERSION } from '../versions.js';
 
+/** Inclusive bounds for an operator's per-team, per-map bonus or penalty (Part 8). */
+export const ADDITIONAL_POINTS_MIN = -100;
+export const ADDITIONAL_POINTS_MAX = 100;
+/** Longest optional reason an operator can attach to an adjustment. */
+export const ADJUSTMENT_NOTE_MAX_LENGTH = 120;
+
 /**
  * One team's result in a map that has already closed.
  *
@@ -8,6 +14,15 @@ import { CONFIG_SCHEMA_VERSION } from '../versions.js';
  * correcting a wrong auto-detected result edits `placement`/`eliminations` (the raw inputs), and
  * `killPoints`/`placementPoints`/`totalPoints` are always re-derived from the scoring ruleset, never
  * accepted as a direct override — the same rule that governs live scoring.
+ *
+ * `additionalPoints` (Part 8, ADR-0018) is a third raw input, not an override: a discretionary
+ * bonus or penalty stored on its own, which the re-derivation adds exactly once —
+ * `totalPoints = killPoints + placementPoints + additionalPoints`. The official `killPoints` and
+ * `placementPoints` never include it, so tie-breakers and audits keep seeing the ruleset values.
+ *
+ * The adjustment fields are optional rather than defaulted: a map recorded before Part 8 reads back
+ * exactly as it was written (absent = no adjustment, read with `additionalPointsOf`), and its
+ * stored `totalPoints` is never recomputed on load.
  */
 export const closedMapTeamResultSchema = z.object({
   teamNo: z.number().int().min(1).max(25),
@@ -16,7 +31,19 @@ export const closedMapTeamResultSchema = z.object({
   eliminations: z.number().int().min(0),
   killPoints: z.number().int().min(0),
   placementPoints: z.number().int().min(0),
-  totalPoints: z.number().int().min(0),
+  /** Signed: a penalty larger than the official points takes a map total below zero. */
+  totalPoints: z.number().int(),
+  /** Operator bonus (+) or penalty (−) for this map. Absent means 0. */
+  additionalPoints: z
+    .number()
+    .int()
+    .min(ADDITIONAL_POINTS_MIN)
+    .max(ADDITIONAL_POINTS_MAX)
+    .optional(),
+  /** Optional operator reason for the adjustment. */
+  adjustmentNote: z.string().max(ADJUSTMENT_NOTE_MAX_LENGTH).optional(),
+  /** Epoch ms of the last change to `additionalPoints`/`adjustmentNote`; absent/null if never set. */
+  adjustedAt: z.number().int().nullable().optional(),
   /**
    * Snapshot of the team's identity at the moment this map closed (D-PMCC Part 6).
    * Preserves historical accuracy if the active roster is subsequently renumbered or teams deleted.
@@ -25,6 +52,11 @@ export const closedMapTeamResultSchema = z.object({
   logoUrl: z.string().nullable().optional(),
 });
 export type ClosedMapTeamResult = z.infer<typeof closedMapTeamResultSchema>;
+
+/** The adjustment recorded for one team in one map; 0 for maps recorded before Part 8. */
+export function additionalPointsOf(team: Pick<ClosedMapTeamResult, 'additionalPoints'>): number {
+  return team.additionalPoints ?? 0;
+}
 
 /**
  * One map's final result, permanently recorded once it closes.
@@ -64,6 +96,41 @@ export const closedMapResultSchema = z.object({
   teams: z.array(closedMapTeamResultSchema),
 });
 export type ClosedMapResult = z.infer<typeof closedMapResultSchema>;
+
+/** One non-zero operator adjustment, flattened for warnings and audit displays. */
+export interface RecordedAdjustment {
+  mapId: string;
+  mapNumber: number;
+  mapName: string | null;
+  teamNo: number;
+  /** The team name snapshotted with that map, when one was recorded. */
+  teamName: string | null;
+  additionalPoints: number;
+  adjustmentNote: string | null;
+}
+
+/**
+ * Every non-zero adjustment across `closedMaps`, in map then slot order. The official Excel scoring
+ * sheet has no column for these (Part 8, Q12), so this is what its export and import warn about.
+ */
+export function listRecordedAdjustments(
+  closedMaps: readonly ClosedMapResult[],
+): RecordedAdjustment[] {
+  return closedMaps.flatMap((map) =>
+    map.teams
+      .filter((team) => additionalPointsOf(team) !== 0)
+      .sort((a, b) => a.teamNo - b.teamNo)
+      .map((team) => ({
+        mapId: map.id,
+        mapNumber: map.mapNumber,
+        mapName: map.mapName,
+        teamNo: team.teamNo,
+        teamName: team.name ?? null,
+        additionalPoints: additionalPointsOf(team),
+        adjustmentNote: team.adjustmentNote ?? null,
+      })),
+  );
+}
 
 /**
  * Built-in competitive PUBG / PUBG Mobile map presets offered in the Admin Match Configuration bar.

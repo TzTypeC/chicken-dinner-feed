@@ -89,6 +89,18 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+/**
+ * One team's inputs for correcting or hand-adding a closed map. Points are derived server-side;
+ * `additionalPoints` is the operator's bonus/penalty (ADR-0018), `adjustmentNote` its reason.
+ */
+export interface ClosedMapTeamPayload {
+  teamNo: number;
+  placement: number;
+  eliminations: number;
+  additionalPoints?: number;
+  adjustmentNote?: string;
+}
+
 export const api = {
   getOverlays: () => request<OverlayInstancesDocument>('/config/overlays'),
 
@@ -192,19 +204,13 @@ export const api = {
   resetSeries: () => request<SeriesDocument>('/series/reset', { method: 'POST' }),
 
   /** `position` is 1-based and clamped server-side, so anything past the end simply appends. */
-  addManualMap: (
-    position: number,
-    teams: { teamNo: number; placement: number; eliminations: number }[],
-  ) =>
+  addManualMap: (position: number, teams: ClosedMapTeamPayload[]) =>
     request<SeriesDocument>('/series/maps', {
       method: 'POST',
       body: JSON.stringify({ position, teams }),
     }),
 
-  updateClosedMap: (
-    mapId: string,
-    teams: { teamNo: number; placement: number; eliminations: number }[],
-  ) =>
+  updateClosedMap: (mapId: string, teams: ClosedMapTeamPayload[]) =>
     request<SeriesDocument>(`/series/maps/${mapId}`, {
       method: 'PUT',
       body: JSON.stringify({ teams }),

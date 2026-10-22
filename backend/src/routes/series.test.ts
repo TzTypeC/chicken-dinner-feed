@@ -286,4 +286,118 @@ describe('series routes', () => {
     expect(body.activeMapName).toBe('Sanhok');
     expect(seriesChanged).toBe(1);
   });
+
+  describe('additional points (Part 8)', () => {
+    async function closedMapId(): Promise<string> {
+      match.applyUpdate(
+        update({
+          players: [
+            player({ teamNo: 1, slot: 1, kills: 1, liveState: 'alive' }),
+            player({ teamNo: 2, slot: 1, kills: 0, liveState: 'dead' }),
+          ],
+        }),
+      );
+      const closed = (await app.inject({ method: 'POST', url: '/api/series/close-map' })).json();
+      return closed.closedMaps[0].id as string;
+    }
+
+    it('applies a signed adjustment to the edited map and returns the recalculated document', async () => {
+      const mapId = await closedMapId();
+
+      const response = await app.inject({
+        method: 'PUT',
+        url: `/api/series/maps/${mapId}`,
+        payload: {
+          teams: [
+            {
+              teamNo: 1,
+              placement: 1,
+              eliminations: 1,
+              additionalPoints: -15,
+              adjustmentNote: ' Warning ',
+            },
+            { teamNo: 2, placement: 2, eliminations: 0, additionalPoints: 3 },
+          ],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const teams = response.json().closedMaps[0].teams as {
+        teamNo: number;
+        totalPoints: number;
+        adjustmentNote?: string;
+      }[];
+      const team1 = teams.find((team) => team.teamNo === 1)!;
+      expect(team1.totalPoints).toBe(10 + 1 - 15);
+      expect(team1.adjustmentNote).toBe('Warning');
+      expect(teams.find((team) => team.teamNo === 2)!.totalPoints).toBe(6 + 3);
+      expect(seriesChanged).toBe(2); // close + edit
+    });
+
+    it('rejects malformed, non-finite and out-of-range adjustments without touching the map', async () => {
+      const mapId = await closedMapId();
+      const before = structuredClone(series.getState());
+
+      for (const additionalPoints of ['5', 1.5, 101, -101, null]) {
+        const response = await app.inject({
+          method: 'PUT',
+          url: `/api/series/maps/${mapId}`,
+          payload: {
+            teams: [
+              { teamNo: 1, placement: 1, eliminations: 1, additionalPoints },
+              { teamNo: 2, placement: 2, eliminations: 0 },
+            ],
+          },
+        });
+        expect(response.statusCode, String(additionalPoints)).toBe(400);
+      }
+
+      // JSON has no Infinity literal, but an overflowing number parses to it.
+      const infinite = await app.inject({
+        method: 'PUT',
+        url: `/api/series/maps/${mapId}`,
+        headers: { 'content-type': 'application/json' },
+        payload: `{"teams":[{"teamNo":1,"placement":1,"eliminations":1,"additionalPoints":1e999},{"teamNo":2,"placement":2,"eliminations":0}]}`,
+      });
+      expect(infinite.statusCode).toBe(400);
+
+      const longNote = await app.inject({
+        method: 'PUT',
+        url: `/api/series/maps/${mapId}`,
+        payload: {
+          teams: [
+            {
+              teamNo: 1,
+              placement: 1,
+              eliminations: 1,
+              additionalPoints: 1,
+              adjustmentNote: 'x'.repeat(121),
+            },
+            { teamNo: 2, placement: 2, eliminations: 0 },
+          ],
+        },
+      });
+      expect(longNote.statusCode).toBe(400);
+
+      expect(series.getState()).toEqual(before);
+    });
+
+    it('POST /series/maps records an adjustment on a hand-added map', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/series/maps',
+        payload: {
+          position: 1,
+          teams: [{ teamNo: 2, placement: 1, eliminations: 2, additionalPoints: 4 }],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().closedMaps[0].teams[0]).toMatchObject({
+        additionalPoints: 4,
+        totalPoints: 10 + 2 + 4,
+      });
+      expect(series.getSeriesTotals().get(2)).toBe(16);
+    });
+  });
 });

@@ -118,6 +118,20 @@ export function backgroundMediaKind(mediaUrl: string | null): 'image' | 'video' 
   return match[1] === 'mp4' || match[1] === 'webm' ? 'video' : 'image';
 }
 
+/**
+ * Display-only bounds for leaderboard team names (Part 8). These shape what `/overlay/main` prints;
+ * the stored team name is never changed.
+ *
+ * - `maxChars` counts user-perceived characters (grapheme clusters). Below 6 an overlong name keeps
+ *   at most 3 characters before `...`; 32 equals `TEAM_NAME_MAX_LENGTH`, so nothing is ever cut.
+ * - `maxExtension` is in design-canvas pixels (ADR-0011). 480 keeps a side-anchored panel well
+ *   clear of the centre of a 1920-wide canvas.
+ */
+export const TEAM_NAME_DISPLAY_LIMITS = {
+  maxChars: { min: 6, max: 32, default: 14 },
+  maxExtension: { min: 0, max: 480, default: 200 },
+} as const;
+
 export const overlayAppearanceSchema = z.object({
   /** Which edge the panel is pinned to. */
   anchor: z.enum(['left', 'right']),
@@ -168,6 +182,28 @@ export const overlayAppearanceSchema = z.object({
    * When false (and `postGameBackground.mode === 'disabled'`), the canvas stays transparent for OBS.
    */
   showFullscreenStageBg: z.boolean().default(true),
+  /**
+   * Most characters of a team name the vertical leaderboard prints before ending it with `...`
+   * (which counts toward the limit). Also sets the uniform name font size (Part 8).
+   */
+  teamNameMaxChars: z
+    .number()
+    .int()
+    .min(TEAM_NAME_DISPLAY_LIMITS.maxChars.min)
+    .max(TEAM_NAME_DISPLAY_LIMITS.maxChars.max)
+    .default(TEAM_NAME_DISPLAY_LIMITS.maxChars.default),
+  /**
+   * Extended mode: full names, no `...`. The panel widens to the left (up to
+   * `teamNameMaxExtension`) and a name that still does not fit scrolls as a continuous marquee.
+   */
+  teamNameExtendedMode: z.boolean().default(false),
+  /** Most the leaderboard may widen to the left in extended mode, in design-canvas pixels. */
+  teamNameMaxExtension: z
+    .number()
+    .int()
+    .min(TEAM_NAME_DISPLAY_LIMITS.maxExtension.min)
+    .max(TEAM_NAME_DISPLAY_LIMITS.maxExtension.max)
+    .default(TEAM_NAME_DISPLAY_LIMITS.maxExtension.default),
   /** Trim the table for formats with fewer than 25 teams. */
   maxTeams: z.number().int().min(1).max(25),
 });
@@ -296,6 +332,9 @@ export const DEFAULT_OVERLAY_APPEARANCE: OverlayAppearance = {
   showFullscreenCharacters: true,
   showFullscreenMarquee: true,
   showFullscreenStageBg: true,
+  teamNameMaxChars: TEAM_NAME_DISPLAY_LIMITS.maxChars.default,
+  teamNameExtendedMode: false,
+  teamNameMaxExtension: TEAM_NAME_DISPLAY_LIMITS.maxExtension.default,
   maxTeams: 16,
 };
 

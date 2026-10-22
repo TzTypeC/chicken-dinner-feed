@@ -1,8 +1,12 @@
 import type { IngestSourceKind, MatchState, OverlayAppearance } from '@cdf/shared';
 import { motion } from 'motion/react';
+import { useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { appearanceToCssVariables, ROW_VARIANTS } from './appearance';
-import { LEADERBOARD_METRICS as M, u } from './overlay-scale';
+import { formatTeamSlot, LEADERBOARD_METRICS as M, leaderboardColumns, u } from './overlay-scale';
 import { TeamRow } from './TeamRow';
+import { SLOT_BADGE_CLASS, SLOT_BADGE_STYLE, TEAM_NAME_CLASS } from './team-row-styles';
+import { truncateTeamName } from './team-name-fit';
+import { useTeamNameLayout } from './useTeamNameLayout';
 
 const LEGEND = [
   { label: 'ALIVE', color: 'var(--player-alive)' },
@@ -20,6 +24,11 @@ export interface LeaderboardOverlayProps {
    * orchestrated by the panel above, so this only decides whether a row takes part.
    */
   animateRows?: boolean;
+  /**
+   * Extended mode: how far the panel currently widens to the left, in design px. The page uses it
+   * to keep a left-anchored panel's right edge in place (see `appearanceToPosition`).
+   */
+  onExtensionChange?(extension: number): void;
 }
 
 /**
@@ -34,29 +43,76 @@ export function LeaderboardOverlay({
   appearance,
   source,
   animateRows = false,
+  onExtensionChange,
 }: LeaderboardOverlayProps) {
   const showLogos = appearance.showLogos ?? true;
   const showTeamNumbers = appearance.showTeamNumbers ?? true;
-  const columns = showLogos
-    ? `${u(M.rankColumn)} ${u(M.logoColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`
-    : `${u(M.rankColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`;
+  const columns = leaderboardColumns(showLogos);
   const teams = match.teams.slice(0, appearance.maxTeams);
   const legendEntries =
     source === 'manual' ? LEGEND.filter((entry) => entry.label !== 'KNOCKED') : LEGEND;
 
+  const probeRef = useRef<HTMLDivElement>(null);
+  const probeTextRef = useRef<HTMLSpanElement>(null);
+  const probeBadgeRef = useRef<HTMLSpanElement>(null);
+  const probeRefs = useMemo(
+    () => ({ probe: probeRef, text: probeTextRef, badge: probeBadgeRef }),
+    [],
+  );
+  // Every team in the snapshot, not only the visible rows: standings moving on air never resize.
+  const nameLayout = useTeamNameLayout(match.teams, appearance, probeRefs);
+  const extension = nameLayout.extension;
+
+  // Layout effect: the page repositions in the same frame, before anything is painted.
+  useLayoutEffect(() => {
+    onExtensionChange?.(extension);
+  }, [extension, onExtensionChange]);
+
   return (
     <div
+      data-testid="leaderboard-panel"
       style={{
         ...appearanceToCssVariables(appearance),
-        width: u(M.panelWidth),
+        // Extended mode widens the panel to the LEFT only: the right edge — and with it the ALIVE,
+        // PTS and ELIMS columns — stays exactly where it is. A right-anchored panel grows leftward
+        // by itself; a left-anchored one is moved left by the page (`onExtensionChange`).
+        width: u(M.panelWidth + extension),
+        position: 'relative',
         backgroundColor: 'var(--overlay-bg)',
         fontFamily: 'var(--overlay-font-family)',
         borderRadius: u(3),
-        border: `${u(1)} solid rgba(129, 96, 54, 0.55)`,
+        border: `${u(M.panelBorder)} solid rgba(129, 96, 54, 0.55)`,
         boxShadow: `0 ${u(10)} ${u(28)} rgba(0, 0, 0, 0.52)`,
         overflow: 'hidden',
       }}
     >
+      {/*
+       * Measuring probe for the name layout. `--overlay-unit: 1px` makes every length inside it one
+       * real pixel per design pixel, so measurements are scale-independent. Never visible.
+       */}
+      <div
+        ref={probeRef}
+        aria-hidden
+        style={
+          {
+            '--overlay-unit': '1px',
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            visibility: 'hidden',
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+            width: 0,
+            overflow: 'hidden',
+          } as CSSProperties
+        }
+      >
+        <span ref={probeTextRef} className={TEAM_NAME_CLASS} style={{ fontSize: '100px' }} />
+        <span ref={probeBadgeRef} className={SLOT_BADGE_CLASS} style={SLOT_BADGE_STYLE}>
+          {formatTeamSlot(25)}
+        </span>
+      </div>
+
       {/*
        * The accent strip. Styled with the PMCC 2026 championship gold gradient and subtle diamond
        * centre accent while respecting the operator's `--overlay-accent` colour.
@@ -75,7 +131,7 @@ export function LeaderboardOverlay({
           height: u(M.headerHeight),
           paddingInline: u(M.paddingX),
           gridTemplateColumns: columns,
-          columnGap: u(6),
+          columnGap: u(M.columnGap),
           backgroundColor: 'var(--overlay-header-bg)',
           color: 'var(--overlay-text-muted)',
           fontSize: u(11),
@@ -93,31 +149,36 @@ export function LeaderboardOverlay({
       </div>
 
       <div className="flex flex-col">
-        {teams.map((team, index) =>
-          animateRows ? (
+        {teams.map((team, index) => {
+          const row = (
+            <TeamRow
+              key={animateRows ? undefined : team.teamNo}
+              team={team}
+              isAlternate={index % 2 === 1}
+              showLogo={showLogos}
+              showTeamNumber={showTeamNumbers}
+              nameFontSize={nameLayout.fontSize}
+              namePlan={
+                nameLayout.rows.get(team.teamNo) ?? {
+                  mode: 'static',
+                  text: truncateTeamName(team.name, appearance.teamNameMaxChars),
+                }
+              }
+            />
+          );
+          return animateRows ? (
             /*
              * A wrapper rather than variants on TeamRow itself: the row already animates its own
              * opacity to dim eliminated teams, and two things writing the same property fight. The
              * two opacities simply multiply, which is the behaviour we want anyway.
              */
             <motion.div key={team.teamNo} variants={ROW_VARIANTS}>
-              <TeamRow
-                team={team}
-                isAlternate={index % 2 === 1}
-                showLogo={showLogos}
-                showTeamNumber={showTeamNumbers}
-              />
+              {row}
             </motion.div>
           ) : (
-            <TeamRow
-              key={team.teamNo}
-              team={team}
-              isAlternate={index % 2 === 1}
-              showLogo={showLogos}
-              showTeamNumber={showTeamNumbers}
-            />
-          ),
-        )}
+            row
+          );
+        })}
       </div>
 
       {appearance.showLegend && (

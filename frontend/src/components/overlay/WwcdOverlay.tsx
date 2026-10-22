@@ -1,5 +1,5 @@
 import type { IngestSourceKind, LiveMatchInfo, OverlayAppearance } from '@cdf/shared';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { AlivePlayerBars } from './AlivePlayerBars';
 import { appearanceToCssVariables } from './appearance';
 import type { WwcdWinnerSummary } from './broadcast-state';
@@ -13,18 +13,45 @@ export interface WwcdOverlayProps {
   visible?: boolean;
 }
 
+/** Geometry in 1920×1080 design pixels. */
+const CARD_WIDTH = 1160;
+const BANNER_LEFT = 48;
+const BANNER_WIDTH = 148;
+/** How far the banner hangs past the card's bottom edge. */
+const BANNER_OVERHANG = 44;
+/** Depth of the swallowtail notch cut into the banner's hem. */
+const BANNER_NOTCH = 28;
+const CONTENT_LEFT = BANNER_LEFT + BANNER_WIDTH + 44;
+const PLAQUE_CHAMFER = 18;
+
+const BRONZE = '#816036';
+const BRONZE_RULE = 'rgba(129, 96, 54, 0.55)';
+const INK = '#160f0a';
+const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
+
 /**
- * Winner Winner Chicken Dinner (WWCD) Victory Screen (`docs/wwcd-screen-requirements.md`, `D-PMCC-03`).
+ * The team name is the headline, so it is sized to the name rather than truncated: short names
+ * get the full display size, long ones step down so they still fit on one line of the plaque.
+ */
+function teamNameSize(name: string): number {
+  const length = name.trim().length;
+  if (length <= 12) return 84;
+  if (length <= 18) return 64;
+  if (length <= 26) return 48;
+  return 40;
+}
+
+/**
+ * Winner Winner Chicken Dinner card (`docs/wwcd-screen-requirements.md`, `D-PMCC-03`).
  *
- * Art-directed in the PMCC 2026 visual identity (`assets/KV_2026 PMCC ID.png`):
- * - Deep espresso-obsidian & mahogany surface framed by burnished bronze hairlines and `◇` diamond nodes.
- * - Championship nib-gold vertical collegiate banner & `#1 VICTORY` crest.
- * - Displays Winner Logo, Persistent Team Slot (`T##`), Team Name, Match Number & Map, `#1` Placement,
- *   Match Eliminations, Match Points, Series Points, and surviving squad status:
- *   - In PCOB Mode (when real player names exist): renders the 4 squad player cards with real names,
- *     alive/eliminated status, and individual match kills.
- *   - In Manual Mode (where player names are synthetic `Slot 1..4`): renders the 4-segment visual
- *     `AlivePlayerBars` + `SURVIVING SQUAD: X / 4 ALIVE` without fake player names.
+ * Drawn from the PMCC 2026 ID key visual's library hall: the winning squad's banner hangs from a
+ * bronze rod, carrying the `#1`, logo and slot, over a dark plaque that holds the team name, squad
+ * and points. The banner unfurling is the screen's single entrance moment.
+ *
+ * Squad line:
+ * - PCOB mode (real player names): each player with alive/eliminated state and match kills.
+ * - Manual mode (synthetic `Slot 1..4` names): the 4-segment `AlivePlayerBars` and a survivor
+ *   count, never the synthetic names.
  */
 export function WwcdOverlay({
   winner,
@@ -35,6 +62,7 @@ export function WwcdOverlay({
 }: WwcdOverlayProps) {
   const showLogos = appearance.showLogos ?? true;
   const showTeamNumbers = appearance.showTeamNumbers ?? true;
+  const reduceMotion = useReducedMotion() ?? false;
 
   // Real player names are available only in PCOB/mock mode when players are not synthetic "Slot N"
   const hasRealPlayerNames =
@@ -44,6 +72,11 @@ export function WwcdOverlay({
       winner.players.length > 0 &&
       winner.players.some((player) => !/^Slot\s+\d+$/i.test(player.name.trim())),
     );
+
+  const mapName = matchInfo.mapName.trim();
+  const matchContext = mapName
+    ? `Match ${matchInfo.matchNumber}, ${mapName}`
+    : `Match ${matchInfo.matchNumber}`;
 
   return (
     <div
@@ -64,193 +97,226 @@ export function WwcdOverlay({
           <motion.div
             key={`wwcd-${winner.teamNo}-${matchInfo.matchNumber}`}
             data-testid="wwcd-overlay"
-            initial={{ opacity: 0, y: 20, scale: 0.965 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 12, scale: 0.985 }}
-            transition={{ duration: 0.48, ease: [0.16, 1, 0.3, 1] }}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.26, ease: 'easeIn' } }}
+            transition={{ duration: 0.24, ease: 'easeOut' }}
+            className="relative"
             style={{
-              width: ub(1140),
-              borderRadius: ub(4),
-              overflow: 'hidden',
-              backgroundColor: 'var(--overlay-bg)',
+              width: ub(CARD_WIDTH),
               color: 'var(--overlay-text)',
-              border: `${ub(1)} solid rgba(129, 96, 54, 0.82)`,
-              boxShadow: `0 ${ub(24)} ${ub(64)} rgba(0, 0, 0, 0.72), 0 0 0 ${ub(1)} rgba(238, 176, 88, 0.22) inset`,
+              // A filter rather than box-shadow: the plaque's chamfer is a clip-path, which would
+              // cut a box-shadow off, and the banner needs the same lift off the gameplay.
+              filter: `drop-shadow(0 ${ub(18)} ${ub(32)} rgba(0, 0, 0, 0.62))`,
             }}
           >
-            {/* Top Championship Gold Architectural Bar */}
+            {/* Plaque */}
             <div
               style={{
-                height: ub(5),
-                background:
-                  'linear-gradient(90deg, #816036 0%, var(--overlay-accent) 30%, #ffefc8 50%, var(--overlay-accent) 70%, #816036 100%)',
-              }}
-            />
-
-            {/* Match & Map Context Ribbon with PMCC Diamond Nodes */}
-            <div
-              className="flex items-center justify-between"
-              style={{
-                height: ub(44),
-                paddingInline: ub(28),
-                backgroundColor: 'var(--overlay-header-bg)',
-                borderBottom: `${ub(1)} solid rgba(129, 96, 54, 0.55)`,
+                backgroundColor: 'var(--overlay-bg)',
+                clipPath: `polygon(0 0, 100% 0, 100% calc(100% - ${ub(PLAQUE_CHAMFER)}), calc(100% - ${ub(PLAQUE_CHAMFER)}) 100%, ${ub(PLAQUE_CHAMFER)} 100%, 0 calc(100% - ${ub(PLAQUE_CHAMFER)}))`,
+                paddingLeft: ub(CONTENT_LEFT),
+                paddingRight: ub(48),
+                paddingTop: ub(30),
+                paddingBottom: ub(30),
               }}
             >
-              <div className="flex items-center" style={{ gap: ub(10) }}>
-                <span style={{ fontSize: ub(12), color: 'var(--overlay-accent)' }} aria-hidden>
-                  ◇
-                </span>
-                <span
-                  className="font-extrabold uppercase"
+              <motion.div
+                initial={reduceMotion ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.4, delay: 0.38, ease: 'easeOut' }}
+              >
+                <p
+                  className="font-semibold tabular-nums"
                   style={{
-                    fontSize: ub(12),
-                    letterSpacing: ub(2.4),
-                    color: 'var(--overlay-accent)',
+                    fontSize: ub(17),
+                    lineHeight: 1.2,
+                    color: 'var(--overlay-text-muted)',
                   }}
                 >
-                  CHAMPIONSHIP VICTORY
-                </span>
-              </div>
+                  {matchContext}
+                </p>
 
-              <div className="flex items-center tabular-nums" style={{ gap: ub(10) }}>
-                <span
+                <h1
                   className="font-extrabold uppercase"
                   style={{
-                    fontSize: ub(13),
-                    letterSpacing: ub(1.6),
+                    marginTop: ub(14),
+                    fontSize: ub(24),
+                    lineHeight: 1,
+                    letterSpacing: '0.01em',
                     color: 'var(--overlay-text)',
                   }}
                 >
-                  MATCH {matchInfo.matchNumber}
-                </span>
-                {matchInfo.mapName.trim() && (
-                  <>
-                    <span style={{ color: 'rgba(129, 96, 54, 0.9)', fontSize: ub(11) }}>◇</span>
-                    <span
-                      className="font-bold uppercase"
-                      style={{
-                        fontSize: ub(13),
-                        letterSpacing: ub(1.6),
-                        color: 'var(--overlay-accent)',
-                      }}
-                    >
-                      {matchInfo.mapName.trim()}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
+                  WINNER WINNER CHICKEN DINNER
+                </h1>
 
-            {/* Hero Headline Banner: WINNER WINNER CHICKEN DINNER */}
-            <div
-              className="flex flex-col items-center justify-center text-center"
-              style={{
-                paddingBlock: ub(20),
-                paddingInline: ub(32),
-                background:
-                  'radial-gradient(ellipse at 50% 0%, rgba(229, 169, 60, 0.22) 0%, rgba(38, 24, 15, 0.65) 70%, transparent 100%)',
-                borderBottom: `${ub(1)} solid rgba(129, 96, 54, 0.55)`,
-              }}
-            >
-              <motion.h1
-                initial={{ opacity: 0, letterSpacing: ub(6) }}
-                animate={{ opacity: 1, letterSpacing: ub(3.2) }}
-                transition={{ duration: 0.52, ease: [0.22, 1, 0.36, 1] }}
-                className="font-black uppercase"
-                style={{
-                  fontSize: ub(40),
-                  lineHeight: 1.05,
-                  color: 'var(--overlay-text)',
-                  textShadow: `0 ${ub(3)} ${ub(14)} rgba(0, 0, 0, 0.65)`,
-                }}
-              >
-                WINNER WINNER CHICKEN DINNER
-              </motion.h1>
-            </div>
-
-            {/* Main Winner Spotlight Body */}
-            <div
-              className="grid items-stretch"
-              style={{
-                gridTemplateColumns: '1fr auto',
-                minHeight: ub(188),
-              }}
-            >
-              {/* Left & Center: Collegiate Gold Pillar + Logo + Team Identity + Survivors */}
-              <div
-                className="flex items-center"
-                style={{
-                  paddingInline: ub(28),
-                  paddingBlock: ub(24),
-                  gap: ub(24),
-                  minWidth: 0,
-                }}
-              >
-                {/* Vertical PMCC Championship #1 Crest */}
                 <div
-                  className="flex shrink-0 flex-col items-center justify-center tabular-nums"
+                  data-testid="wwcd-team-name"
+                  className="truncate font-black uppercase"
                   style={{
-                    width: ub(76),
-                    height: ub(124),
-                    borderRadius: ub(3),
-                    background:
-                      'linear-gradient(180deg, #eeb058 0%, var(--overlay-accent) 55%, #816036 100%)',
-                    color: '#160f0a',
-                    boxShadow: `0 ${ub(6)} ${ub(18)} rgba(0, 0, 0, 0.45)`,
+                    marginTop: ub(6),
+                    fontSize: ub(teamNameSize(winner.name)),
+                    lineHeight: 1.08,
+                    letterSpacing: '-0.01em',
+                    color: 'var(--overlay-text)',
                   }}
                 >
-                  <span
-                    className="font-extrabold uppercase"
-                    style={{
-                      fontSize: ub(10),
-                      letterSpacing: ub(1.5),
-                      opacity: 0.85,
-                    }}
-                  >
-                    RANK
-                  </span>
-                  <span
-                    className="font-black tabular-nums"
-                    style={{
-                      fontSize: ub(36),
-                      lineHeight: 1.05,
-                    }}
-                  >
-                    #1
-                  </span>
+                  {winner.name}
                 </div>
 
-                {/* Winner Team Logo */}
+                {hasRealPlayerNames ? (
+                  <ul
+                    data-testid="wwcd-player-list"
+                    className="flex flex-wrap"
+                    style={{ marginTop: ub(16), columnGap: ub(36), rowGap: ub(8) }}
+                  >
+                    {winner.players.slice(0, 4).map((player, idx) => {
+                      const isAlive = player.liveState !== 'dead';
+                      return (
+                        <li
+                          key={`${player.name}-${idx}`}
+                          className="flex min-w-0 items-center"
+                          style={{ gap: ub(10), opacity: isAlive ? 1 : 0.5 }}
+                        >
+                          <span
+                            aria-hidden
+                            style={{
+                              width: ub(4),
+                              height: ub(18),
+                              backgroundColor: isAlive
+                                ? 'var(--player-alive)'
+                                : 'var(--player-dead)',
+                            }}
+                          />
+                          <span
+                            className="truncate font-semibold"
+                            style={{ fontSize: ub(17), maxWidth: ub(170) }}
+                          >
+                            {player.name}
+                          </span>
+                          <span
+                            className="shrink-0 tabular-nums"
+                            style={{ fontSize: ub(15), color: 'var(--overlay-text-muted)' }}
+                          >
+                            {player.kills} {player.kills === 1 ? 'elim' : 'elims'}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <div
+                    data-testid="wwcd-survivor-bars"
+                    className="flex items-end"
+                    style={{ marginTop: ub(16), gap: ub(14) }}
+                  >
+                    {winner.players.length > 0 && <AlivePlayerBars players={winner.players} />}
+                    <span
+                      className="font-semibold tabular-nums"
+                      style={{ fontSize: ub(17), lineHeight: 1 }}
+                    >
+                      {winner.aliveCount} of 4 still standing
+                    </span>
+                  </div>
+                )}
+
+                <dl
+                  className="flex tabular-nums"
+                  style={{
+                    marginTop: ub(22),
+                    paddingTop: ub(18),
+                    borderTop: `${ub(1)} solid ${BRONZE_RULE}`,
+                    gap: ub(64),
+                  }}
+                >
+                  <WwcdStat
+                    testId="wwcd-match-elims"
+                    value={String(winner.eliminations)}
+                    label="Eliminations"
+                  />
+                  <WwcdStat
+                    testId="wwcd-match-pts"
+                    value={`+${winner.matchPoints}`}
+                    label="Points this match"
+                  />
+                  <WwcdStat
+                    testId="wwcd-series-pts"
+                    value={String(winner.seriesPoints)}
+                    label="Series total"
+                  />
+                </dl>
+              </motion.div>
+            </div>
+
+            {/* Rod the banner hangs from, with the key visual's diamond finials */}
+            <div
+              aria-hidden
+              className="absolute"
+              style={{ left: 0, right: 0, top: 0, height: ub(2), backgroundColor: BRONZE }}
+            >
+              {(['left', 'right'] as const).map((side) => (
+                <span
+                  key={side}
+                  className="absolute"
+                  style={{
+                    [side]: ub(-5),
+                    top: ub(-4),
+                    width: ub(10),
+                    height: ub(10),
+                    transform: 'rotate(45deg)',
+                    backgroundColor: 'var(--overlay-accent)',
+                  }}
+                />
+              ))}
+            </div>
+
+            {/* Banner: unfurls from the rod */}
+            <motion.div
+              className="absolute"
+              initial={reduceMotion ? false : { clipPath: 'inset(0 0 100% 0)' }}
+              animate={{ clipPath: 'inset(0 0 0% 0)' }}
+              transition={{ duration: 0.62, delay: 0.08, ease: EASE_OUT }}
+              style={{
+                left: ub(BANNER_LEFT),
+                width: ub(BANNER_WIDTH),
+                top: ub(-4),
+                bottom: ub(-BANNER_OVERHANG),
+              }}
+            >
+              <div
+                className="flex h-full flex-col items-center tabular-nums"
+                style={{
+                  paddingTop: ub(26),
+                  gap: ub(16),
+                  color: INK,
+                  background: `linear-gradient(180deg, #eeb058 0%, var(--overlay-accent) 48%, #b67925 100%)`,
+                  clipPath: `polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - ${ub(BANNER_NOTCH)}), 0 100%)`,
+                }}
+              >
+                <span className="font-black" style={{ fontSize: ub(56), lineHeight: 0.9 }}>
+                  #1
+                </span>
+
                 {showLogos && (
                   <div
-                    className="flex shrink-0 items-center justify-center"
+                    className="flex items-center justify-center"
                     style={{
-                      width: ub(124),
-                      height: ub(124),
-                      borderRadius: ub(4),
+                      width: ub(100),
+                      height: ub(100),
                       padding: ub(10),
-                      backgroundColor: 'rgba(38, 24, 15, 0.78)',
-                      border: `${ub(1)} solid rgba(229, 169, 60, 0.65)`,
+                      backgroundColor: INK,
                     }}
                   >
                     {winner.logoUrl ? (
                       <img
                         src={winner.logoUrl}
                         alt=""
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          objectFit: 'contain',
-                        }}
+                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                       />
                     ) : (
                       <span
-                        className="font-black uppercase tabular-nums"
-                        style={{
-                          fontSize: ub(28),
-                          color: 'var(--overlay-accent)',
-                        }}
+                        className="font-black"
+                        style={{ fontSize: ub(26), color: 'var(--overlay-accent)' }}
                       >
                         {formatTeamSlot(winner.teamNo)}
                       </span>
@@ -258,251 +324,37 @@ export function WwcdOverlay({
                   </div>
                 )}
 
-                {/* Team Slot, Team Name & Squad Survivor Strip */}
-                <div
-                  className="flex min-w-0 flex-1 flex-col justify-center"
-                  style={{ gap: ub(10) }}
-                >
-                  <div className="flex items-center" style={{ gap: ub(10) }}>
-                    {showTeamNumbers && (
-                      <span
-                        data-testid="wwcd-team-slot"
-                        className="shrink-0 font-extrabold uppercase tabular-nums"
-                        style={{
-                          fontSize: ub(12),
-                          lineHeight: 1,
-                          paddingInline: ub(8),
-                          paddingBlock: ub(4),
-                          borderRadius: ub(2),
-                          backgroundColor: 'rgba(61, 54, 43, 0.9)',
-                          border: `${ub(1)} solid rgba(229, 169, 60, 0.65)`,
-                          color: 'var(--overlay-accent)',
-                          letterSpacing: ub(1),
-                        }}
-                      >
-                        SLOT {formatTeamSlot(winner.teamNo)}
-                      </span>
-                    )}
-                    <span
-                      className="font-bold uppercase"
-                      style={{
-                        fontSize: ub(12),
-                        letterSpacing: ub(1.6),
-                        color: 'var(--overlay-text-muted)',
-                      }}
-                    >
-                      MATCH CHAMPION
-                    </span>
-                  </div>
-
-                  <div
-                    data-testid="wwcd-team-name"
-                    className="truncate font-black uppercase tracking-wide"
-                    style={{
-                      fontSize: ub(38),
-                      lineHeight: 1.08,
-                      color: 'var(--overlay-text)',
-                    }}
+                {showTeamNumbers && (
+                  <span
+                    data-testid="wwcd-team-slot"
+                    className="font-extrabold"
+                    style={{ fontSize: ub(20), lineHeight: 1 }}
                   >
-                    {winner.name}
-                  </div>
-
-                  {/* Squad Roster / Surviving Status Strip */}
-                  {hasRealPlayerNames ? (
-                    <div
-                      data-testid="wwcd-player-list"
-                      className="grid"
-                      style={{
-                        gridTemplateColumns: `repeat(${Math.min(4, winner.players.length)}, minmax(0, 1fr))`,
-                        columnGap: ub(8),
-                        marginTop: ub(4),
-                      }}
-                    >
-                      {winner.players.slice(0, 4).map((player, idx) => {
-                        const isAlive = player.liveState !== 'dead';
-                        return (
-                          <div
-                            key={`${player.name}-${idx}`}
-                            className="flex items-center justify-between overflow-hidden"
-                            style={{
-                              paddingInline: ub(10),
-                              paddingBlock: ub(6),
-                              borderRadius: ub(2),
-                              backgroundColor: isAlive
-                                ? 'rgba(38, 24, 15, 0.9)'
-                                : 'rgba(61, 54, 43, 0.45)',
-                              border: isAlive
-                                ? `${ub(1)} solid rgba(229, 169, 60, 0.55)`
-                                : `${ub(1)} solid rgba(129, 96, 54, 0.3)`,
-                              opacity: isAlive ? 1 : 0.62,
-                            }}
-                          >
-                            <div className="flex min-w-0 items-center" style={{ gap: ub(6) }}>
-                              <span
-                                style={{
-                                  width: ub(6),
-                                  height: ub(6),
-                                  borderRadius: '50%',
-                                  backgroundColor: isAlive
-                                    ? 'var(--overlay-accent)'
-                                    : 'var(--player-dead)',
-                                }}
-                              />
-                              <span
-                                className="truncate font-bold"
-                                style={{
-                                  fontSize: ub(12),
-                                  color: 'var(--overlay-text)',
-                                }}
-                              >
-                                {player.name}
-                              </span>
-                            </div>
-                            <span
-                              className="shrink-0 font-extrabold tabular-nums"
-                              style={{
-                                fontSize: ub(11),
-                                color: 'var(--overlay-accent)',
-                                marginLeft: ub(6),
-                              }}
-                            >
-                              {player.kills}K
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <div
-                      data-testid="wwcd-survivor-bars"
-                      className="flex items-center"
-                      style={{ gap: ub(12), marginTop: ub(4) }}
-                    >
-                      {winner.players.length > 0 && <AlivePlayerBars players={winner.players} />}
-                      <span
-                        className="font-bold uppercase tabular-nums"
-                        style={{
-                          fontSize: ub(12),
-                          letterSpacing: ub(1.2),
-                          color: 'var(--overlay-text-muted)',
-                        }}
-                      >
-                        SURVIVING SQUAD: {winner.aliveCount} / 4 ALIVE
-                      </span>
-                    </div>
-                  )}
-                </div>
+                    {formatTeamSlot(winner.teamNo)}
+                  </span>
+                )}
               </div>
-
-              {/* Right: Tabular Match Stat Callout Columns */}
-              <div
-                className="grid items-stretch tabular-nums"
-                style={{
-                  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-                  minWidth: ub(372),
-                  backgroundColor: 'var(--overlay-header-bg)',
-                  borderLeft: `${ub(1)} solid rgba(129, 96, 54, 0.55)`,
-                }}
-              >
-                {/* Match Eliminations */}
-                <div
-                  className="flex flex-col items-center justify-center"
-                  style={{
-                    paddingInline: ub(18),
-                    borderRight: `${ub(1)} solid rgba(129, 96, 54, 0.35)`,
-                  }}
-                >
-                  <span
-                    className="font-bold uppercase"
-                    style={{
-                      fontSize: ub(10.5),
-                      letterSpacing: ub(1.3),
-                      color: 'var(--overlay-text-muted)',
-                    }}
-                  >
-                    MATCH ELIMS
-                  </span>
-                  <span
-                    data-testid="wwcd-match-elims"
-                    className="font-black tabular-nums"
-                    style={{
-                      fontSize: ub(34),
-                      lineHeight: 1.15,
-                      color: 'var(--overlay-text)',
-                      marginTop: ub(4),
-                    }}
-                  >
-                    {winner.eliminations}
-                  </span>
-                </div>
-
-                {/* Single-Match Points */}
-                <div
-                  className="flex flex-col items-center justify-center"
-                  style={{
-                    paddingInline: ub(18),
-                    borderRight: `${ub(1)} solid rgba(129, 96, 54, 0.35)`,
-                  }}
-                >
-                  <span
-                    className="font-bold uppercase"
-                    style={{
-                      fontSize: ub(10.5),
-                      letterSpacing: ub(1.3),
-                      color: 'var(--overlay-text-muted)',
-                    }}
-                  >
-                    MATCH PTS
-                  </span>
-                  <span
-                    data-testid="wwcd-match-pts"
-                    className="font-black tabular-nums"
-                    style={{
-                      fontSize: ub(34),
-                      lineHeight: 1.15,
-                      color: 'var(--overlay-accent)',
-                      marginTop: ub(4),
-                    }}
-                  >
-                    +{winner.matchPoints}
-                  </span>
-                </div>
-
-                {/* Accumulated Series Points */}
-                <div
-                  className="flex flex-col items-center justify-center"
-                  style={{
-                    paddingInline: ub(18),
-                  }}
-                >
-                  <span
-                    className="font-bold uppercase"
-                    style={{
-                      fontSize: ub(10.5),
-                      letterSpacing: ub(1.3),
-                      color: 'var(--overlay-text-muted)',
-                    }}
-                  >
-                    SERIES PTS
-                  </span>
-                  <span
-                    data-testid="wwcd-series-pts"
-                    className="font-black tabular-nums"
-                    style={{
-                      fontSize: ub(34),
-                      lineHeight: 1.15,
-                      color: 'var(--overlay-text)',
-                      marginTop: ub(4),
-                    }}
-                  >
-                    {winner.seriesPoints}
-                  </span>
-                </div>
-              </div>
-            </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function WwcdStat({ testId, value, label }: { testId: string; value: string; label: string }) {
+  return (
+    <div className="flex flex-col-reverse">
+      <dt style={{ fontSize: ub(15), lineHeight: 1.2, color: 'var(--overlay-text-muted)' }}>
+        {label}
+      </dt>
+      <dd
+        data-testid={testId}
+        className="font-black"
+        style={{ fontSize: ub(40), lineHeight: 1.05, marginBottom: ub(2) }}
+      >
+        {value}
+      </dd>
     </div>
   );
 }

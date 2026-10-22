@@ -1,4 +1,6 @@
+import { ADJUSTMENT_NOTE_MAX_LENGTH } from '@cdf/shared';
 import { useEffect, useRef, type ReactNode } from 'react';
+import { parseAdditionalPoints } from './additional-points';
 
 /**
  * An emptied field or a pasted non-numeric string yields `NaN` from `Number(...)`. The server
@@ -14,6 +16,14 @@ function parsedOr(raw: string, fallback: number): number {
 export interface MapTeamResultValue {
   placement: number;
   eliminations: number;
+  /**
+   * The Additional Points entry exactly as typed. Kept as text, not a number: a numeric input
+   * reports `""` while a leading `-` is being typed, which would make a penalty impossible to enter
+   * and would turn malformed input into a silent 0. Parsed strictly by `parseAdditionalPoints`.
+   */
+  additionalPoints: string;
+  /** Optional reason for the adjustment (Part 8). */
+  adjustmentNote: string;
 }
 
 export interface MapResultDialogProps {
@@ -29,7 +39,7 @@ export interface MapResultDialogProps {
   onChange(teamNo: number, changes: Partial<MapTeamResultValue>): void;
   onCancel(): void;
   onConfirm(): void;
-  /** Extra controls above the team grid: where in the series a hand-added map should go. */
+  /** Extra controls above the team grid: the order switch, and where a hand-added map should go. */
   children?: ReactNode;
 }
 
@@ -56,6 +66,11 @@ export function MapResultDialog({
   onConfirm,
   children,
 }: MapResultDialogProps) {
+  const invalidAdjustments = teamNos.filter(
+    (teamNo) => !parseAdditionalPoints(values[teamNo]?.additionalPoints ?? '').ok,
+  ).length;
+  const gridColumns =
+    'grid-cols-[minmax(0,1fr)_4rem_4rem_5.5rem] sm:grid-cols-[minmax(0,1fr)_5.5rem_5.5rem_8rem]';
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -83,45 +98,109 @@ export function MapResultDialog({
 
           {children}
 
+          <p className="text-muted-foreground text-xs">
+            <strong className="text-foreground font-medium">Adj. pts</strong> is a bonus (+) or
+            penalty (−) added once to the team&rsquo;s calculated match points, from −100 to +100.
+            Placement and elims are not changed, and 0 means no adjustment.
+          </p>
+
           <div className="grid max-h-[60vh] gap-1 overflow-y-auto">
-            <div className="text-muted-foreground grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] gap-2 px-1 text-xs sm:grid-cols-[minmax(0,1fr)_6rem_6rem]">
+            <div className={`text-muted-foreground grid ${gridColumns} gap-2 px-1 text-xs`}>
               <span>Team</span>
               <span>Placement</span>
               <span>Elims</span>
+              <span>Adj. pts</span>
             </div>
-            {teamNos.map((teamNo) => (
-              <div
-                key={teamNo}
-                className="grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem] items-center gap-2 px-1 py-0.5 sm:grid-cols-[minmax(0,1fr)_6rem_6rem]"
-              >
-                <span className="truncate text-sm">{teamName(teamNo)}</span>
-                <input
-                  type="number"
-                  min={1}
-                  aria-label={`${teamName(teamNo)} placement`}
-                  className="border-border bg-background min-h-9 rounded border px-2 py-1 text-sm"
-                  value={values[teamNo]?.placement ?? 1}
-                  onChange={(event) =>
-                    onChange(teamNo, {
-                      placement: parsedOr(event.target.value, values[teamNo]?.placement ?? 1),
-                    })
-                  }
-                />
-                <input
-                  type="number"
-                  min={0}
-                  aria-label={`${teamName(teamNo)} eliminations`}
-                  className="border-border bg-background min-h-9 rounded border px-2 py-1 text-sm"
-                  value={values[teamNo]?.eliminations ?? 0}
-                  onChange={(event) =>
-                    onChange(teamNo, {
-                      eliminations: parsedOr(event.target.value, values[teamNo]?.eliminations ?? 0),
-                    })
-                  }
-                />
-              </div>
-            ))}
+            {teamNos.map((teamNo) => {
+              const value = values[teamNo];
+              const rawAdjustment = value?.additionalPoints ?? '';
+              const adjustment = parseAdditionalPoints(rawAdjustment);
+              const errorId = `adj-error-${teamNo}`;
+              return (
+                <div key={teamNo} className="grid gap-1 px-1 py-0.5">
+                  <div className={`grid ${gridColumns} items-center gap-2`}>
+                    <span className="truncate text-sm">{teamName(teamNo)}</span>
+                    <input
+                      type="number"
+                      min={1}
+                      aria-label={`${teamName(teamNo)} placement`}
+                      className="border-border bg-background min-h-9 rounded border px-2 py-1 text-sm"
+                      value={value?.placement ?? 1}
+                      onChange={(event) =>
+                        onChange(teamNo, {
+                          placement: parsedOr(event.target.value, value?.placement ?? 1),
+                        })
+                      }
+                    />
+                    <input
+                      type="number"
+                      min={0}
+                      aria-label={`${teamName(teamNo)} eliminations`}
+                      className="border-border bg-background min-h-9 rounded border px-2 py-1 text-sm"
+                      value={value?.eliminations ?? 0}
+                      onChange={(event) =>
+                        onChange(teamNo, {
+                          eliminations: parsedOr(event.target.value, value?.eliminations ?? 0),
+                        })
+                      }
+                    />
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        aria-label={`${teamName(teamNo)} additional points`}
+                        aria-invalid={!adjustment.ok}
+                        aria-describedby={adjustment.ok ? undefined : errorId}
+                        className={`bg-background min-h-9 w-full min-w-0 rounded border px-2 py-1 text-sm tabular-nums ${
+                          adjustment.ok ? 'border-border' : 'border-destructive'
+                        }`}
+                        value={rawAdjustment}
+                        onChange={(event) =>
+                          onChange(teamNo, { additionalPoints: event.target.value })
+                        }
+                      />
+                      {rawAdjustment.trim() !== '0' && (
+                        <button
+                          type="button"
+                          title="Reset to 0 (no adjustment)"
+                          aria-label={`Reset ${teamName(teamNo)} additional points to 0`}
+                          className="border-border hover:bg-secondary text-muted-foreground min-h-9 shrink-0 rounded border px-1.5 text-xs"
+                          onClick={() =>
+                            onChange(teamNo, { additionalPoints: '0', adjustmentNote: '' })
+                          }
+                        >
+                          0
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {!adjustment.ok && (
+                    <p id={errorId} className="text-destructive text-right text-xs">
+                      {adjustment.error}
+                    </p>
+                  )}
+                  {adjustment.ok && adjustment.value !== 0 && (
+                    <input
+                      type="text"
+                      maxLength={ADJUSTMENT_NOTE_MAX_LENGTH}
+                      placeholder="Reason (optional), e.g. Warning — late to lobby"
+                      aria-label={`${teamName(teamNo)} adjustment reason`}
+                      className="border-border bg-background min-h-8 rounded border px-2 py-1 text-xs"
+                      value={value?.adjustmentNote ?? ''}
+                      onChange={(event) => onChange(teamNo, { adjustmentNote: event.target.value })}
+                    />
+                  )}
+                </div>
+              );
+            })}
           </div>
+
+          {invalidAdjustments > 0 && (
+            <p className="text-destructive text-right text-xs" role="alert">
+              Fix {invalidAdjustments} invalid additional-points{' '}
+              {invalidAdjustments === 1 ? 'entry' : 'entries'} before saving.
+            </p>
+          )}
 
           <div className="mt-2 flex flex-wrap justify-end gap-2">
             <button
@@ -134,7 +213,8 @@ export function MapResultDialog({
             <button
               type="button"
               onClick={onConfirm}
-              className="bg-primary text-primary-foreground min-h-9 rounded px-3 py-1.5 text-sm font-medium"
+              disabled={invalidAdjustments > 0}
+              className="bg-primary text-primary-foreground min-h-9 rounded px-3 py-1.5 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50"
             >
               {confirmLabel}
             </button>

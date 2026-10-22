@@ -422,3 +422,27 @@ Chronological record of phases, tasks, files changed, and verification results.
   - `npm run format:check`: Passed (`All matched files use Prettier code style!`).
   - `npm run build`: Full production build of `@cdf/shared`, `@cdf/backend`, and `@cdf/frontend` succeeded with exit code 0.
 - **Next Steps:** All Part 7 workstreams complete and verified. Ready for demonstration and broadcast production.
+
+## Entry 8 — 2026-10-22 — Part 8: Configurable Team Names, Extended Marquee, Series Ordering & Additional Points (`WS-8.1`–`WS-8.8`)
+
+- **Phase:** Part 8 audit/proposal (approved with Q1–Q12 answers), implementation and verification
+- **Status:** `COMPLETED`
+- **Files Affected:**
+  - `shared/src/config/overlay-instance.ts`, `shared/src/domain/series.ts`, `shared/src/domain/team.ts`, `shared/src/versions.ts`, `shared/src/index.ts`
+  - `backend/src/state/series-store.ts`, `backend/src/routes/series.ts`, `backend/src/routes/config.ts`, `backend/src/routes/excel.ts`, `backend/src/excel/import.ts`, `backend/src/scoring/standings.ts` (comment only)
+  - Backend tests: `state/series-store.test.ts`, `routes/series.test.ts`, `routes/config.test.ts`, `excel/excel.test.ts`, `backup/backup.test.ts`
+  - `frontend/src/components/overlay/`: `team-name-fit.ts`, `useTeamNameLayout.ts`, `TeamNameMarquee.tsx`, `team-row-styles.ts` (new); `TeamRow.tsx`, `LeaderboardOverlay.tsx`, `overlay-scale.ts`, `appearance.ts`, `broadcast-state.ts`, `PostGameOverlay.tsx`, `PostGameSeriesOverlay.tsx`
+  - `frontend/src/features/admin/`: `series-order.ts`, `additional-points.ts`, `TeamNameSettings.tsx` (new); `SeriesControl.tsx`, `MapResultDialog.tsx`, `AppearanceEditor.tsx`, `InstanceToolbar.tsx`, `ImportExport.tsx`
+  - `frontend/src/pages/AdminPage.tsx`, `frontend/src/pages/OverlayPage.tsx`, `frontend/src/lib/api.ts`, `frontend/src/lib/points.ts` (new)
+  - Frontend tests (new): `team-name-fit.test.ts`, `adjustments.test.ts`, `part8-overlays.test.tsx`, `series-order.test.ts`, `additional-points.test.ts`
+  - `docs/part8-audit-and-proposal.md`, `docs/adr/0018-additional-points-as-a-closed-map-input.md`, `docs/adr/README.md`, `docs/checkpoint.md`, `docs/progress.md`, `CHANGELOG.md`
+- **Changes Made:** see `docs/part8-audit-and-proposal.md` §15.1 (per workstream) and §15.2 (deviations: optional adjustment fields, stale-client guards, left-anchor extension applied to the positioned wrapper because of the wipe clip).
+- **Safeguards honoured:**
+  - The user's uncommitted `WwcdOverlay.tsx`, `overlays.test.tsx` and `CHANGELOG.md` content is unchanged (SHA-256 checked before and after; the CHANGELOG entry is kept verbatim and the Part 8 entries are added around it).
+  - No destructive git commands were used.
+  - Production `backend/data` was only read; all runtime checks used temp copies.
+- **Verification Results:**
+  - `npm test`: **461 passed** (backend 26 files / 322; frontend 12 files / 139).
+  - `npm run typecheck`: 0 errors. `npm run lint`: 0 diagnostics. `npm run format:check`: clean. `npm run build`: OK (pre-existing chunk-size warning).
+  - Browser verification at 1920×1080 (headless Chromium, temp data copy): normal and extended layout, marquee loop continuity, toggle reversion, left anchor, admin dialog and validation, postgame ADJ columns, and the v10 → v11 protocol-mismatch flow. Details in proposal §15.5.
+- **Next Steps:** deploy and refresh browser sources (proposal §15.4).

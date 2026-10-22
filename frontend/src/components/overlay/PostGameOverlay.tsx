@@ -6,6 +6,7 @@ import {
 import { motion } from 'motion/react';
 import { appearanceToCssVariables } from './appearance';
 import type { PostGameBoardData, PostGameTeamRow } from './broadcast-state';
+import { formatSignedPoints } from '@/lib/points';
 import { formatTeamSlot, ub } from './overlay-scale';
 
 export interface PostGameOverlayProps {
@@ -52,6 +53,9 @@ export function PostGameOverlay({
   const midpoint = isTwoColumnTable ? Math.ceil(rows.length / 2) : rows.length;
   const leftTableRows = rows.slice(0, midpoint);
   const rightTableRows = isTwoColumnTable ? rows.slice(midpoint) : [];
+  // The ADJ column appears only when this match actually carries an operator adjustment, so the
+  // on-air arithmetic (P.PTS + E.PTS + ADJ = MATCH) stays checkable and unadjusted maps look as before.
+  const showAdjustment = rows.some((row) => row.additionalPoints !== 0);
 
   const displayMapNumber = board?.mapNumber ?? matchInfo.matchNumber;
   const displayMapName = (board?.mapName ?? matchInfo.mapName).trim();
@@ -491,7 +495,10 @@ export function PostGameOverlay({
                       }}
                     >
                       SINGLE-MATCH SCORE ({board.winner.placementPoints}P +{' '}
-                      {board.winner.killPoints}E)
+                      {board.winner.killPoints}E
+                      {board.winner.additionalPoints !== 0 &&
+                        ` ${board.winner.additionalPoints > 0 ? '+' : '\u2212'} ${Math.abs(board.winner.additionalPoints)}A`}
+                      )
                     </span>
                   </div>
                   <span
@@ -527,6 +534,7 @@ export function PostGameOverlay({
                 rows={leftTableRows}
                 showLogos={showLogos}
                 showTeamNumbers={showTeamNumbers}
+                showAdjustment={showAdjustment}
                 compact={isTwoColumnTable}
               />
               {isTwoColumnTable && (
@@ -534,6 +542,7 @@ export function PostGameOverlay({
                   rows={rightTableRows}
                   showLogos={showLogos}
                   showTeamNumbers={showTeamNumbers}
+                  showAdjustment={showAdjustment}
                   compact
                 />
               )}
@@ -587,12 +596,15 @@ interface StandingsColumnTableProps {
   showLogos: boolean;
   showTeamNumbers: boolean;
   compact: boolean;
+  /** Adds the ADJ column (operator bonus/penalty); only when some row has one. */
+  showAdjustment: boolean;
 }
 
 function StandingsColumnTable({
   rows,
   showLogos,
   showTeamNumbers,
+  showAdjustment,
   compact,
 }: StandingsColumnTableProps) {
   const rankW = compact ? 34 : 42;
@@ -601,11 +613,20 @@ function StandingsColumnTable({
   const elimsW = compact ? 48 : 64;
   const pPtsW = compact ? 52 : 70;
   const kPtsW = compact ? 52 : 70;
+  const adjW = compact ? 46 : 62;
   const totW = compact ? 58 : 78;
 
-  const gridCols = showLogos
-    ? `${ub(rankW)} ${ub(logoW)} minmax(0, 1fr) ${ub(placeW)} ${ub(elimsW)} ${ub(pPtsW)} ${ub(kPtsW)} ${ub(totW)}`
-    : `${ub(rankW)} minmax(0, 1fr) ${ub(placeW)} ${ub(elimsW)} ${ub(pPtsW)} ${ub(kPtsW)} ${ub(totW)}`;
+  const gridCols = [
+    ub(rankW),
+    ...(showLogos ? [ub(logoW)] : []),
+    'minmax(0, 1fr)',
+    ub(placeW),
+    ub(elimsW),
+    ub(pPtsW),
+    ub(kPtsW),
+    ...(showAdjustment ? [ub(adjW)] : []),
+    ub(totW),
+  ].join(' ');
 
   return (
     <div
@@ -639,6 +660,11 @@ function StandingsColumnTable({
         <span className="text-center">ELIMS</span>
         <span className="text-center">P.PTS</span>
         <span className="text-center">E.PTS</span>
+        {showAdjustment && (
+          <span className="text-center" data-testid="postgame-adj-header">
+            ADJ
+          </span>
+        )}
         <span className="text-center" style={{ color: 'var(--overlay-accent)' }}>
           MATCH
         </span>
@@ -788,6 +814,24 @@ function StandingsColumnTable({
                 {row.killPoints}
               </span>
 
+              {/* Operator adjustment */}
+              {showAdjustment && (
+                <span
+                  data-testid={`postgame-adj-${row.teamNo}`}
+                  className="text-center font-semibold tabular-nums"
+                  style={{
+                    fontSize: ub(compact ? 13 : 14.5),
+                    color:
+                      row.additionalPoints > 0
+                        ? 'var(--overlay-accent)'
+                        : row.additionalPoints < 0
+                          ? 'var(--player-knocked)'
+                          : 'var(--overlay-text-muted)',
+                  }}
+                >
+                  {row.additionalPoints === 0 ? '—' : formatSignedPoints(row.additionalPoints)}
+                </span>
+              )}
               {/* Total Match Points */}
               <span
                 data-testid={`postgame-match-pts-${row.teamNo}`}

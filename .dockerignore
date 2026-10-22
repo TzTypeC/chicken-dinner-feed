@@ -1,0 +1,10 @@
+node_modules
+.git
+.github
+dist
+build
+logs
+*.log
+specs
+tools
+assets

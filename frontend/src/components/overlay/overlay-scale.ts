@@ -32,6 +32,10 @@ export function formatTeamSlot(teamNo: number): string {
 /** Layout constants for the leaderboard, in design-canvas pixels. Mirrors `specs/example.png`. */
 export const LEADERBOARD_METRICS = {
   panelWidth: 340,
+  /** The panel's own outline, each side. */
+  panelBorder: 1,
+  /** The left stripe every row reserves for the leader highlight. */
+  rowLeaderStripe: 2,
   paddingX: 10,
   /** The accent strip along the top of the panel — the overlay's branding colour. */
   accentBarHeight: 3,
@@ -41,9 +45,14 @@ export const LEADERBOARD_METRICS = {
 
   rankColumn: 26,
   logoColumn: 28,
-  aliveColumn: 62,
+  /**
+   * Part 8 reclaimed slack here for the TEAM column without touching the frame: the four bars need
+   * 48 (was 62), the ELIMS header ≈ 40 (was 50), and gaps dropped from 6 to 4.
+   */
+  aliveColumn: 50,
   pointsColumn: 42,
-  elimsColumn: 50,
+  elimsColumn: 44,
+  columnGap: 4,
 
   barWidth: 9,
   barGap: 4,
@@ -51,3 +60,14 @@ export const LEADERBOARD_METRICS = {
   /** A dead player still shows a stub, so the slot stays legible instead of vanishing. */
   deadBarHeight: 5,
 } as const;
+
+/**
+ * The leaderboard's grid template, shared by the header and every row so they can never drift out
+ * of alignment. TEAM is the only flexible column: an extended-mode panel's extra width goes there.
+ */
+export function leaderboardColumns(showLogos: boolean): string {
+  const M = LEADERBOARD_METRICS;
+  return showLogos
+    ? `${u(M.rankColumn)} ${u(M.logoColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`
+    : `${u(M.rankColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`;
+}

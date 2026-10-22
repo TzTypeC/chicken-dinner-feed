@@ -177,10 +177,10 @@ export function computeStandings(input: StandingsInput): Team[] {
     // Each half is netted against its own kind and clamped on its own. Clamping the sum instead
     // lets a banked final placement eat real eliminations: a leader banked at 1st place, then back
     // to a guaranteed minimum on the next live projection, went nine further kills before the
-    // column moved. The clamp itself is load-bearing too — `Team.totalPoints` is schema-typed
-    // non-negative and a client silently drops a snapshot that fails validation, freezing the
-    // overlay on its last good frame with no visible error (the failure mode ADR-0006 exists to
-    // prevent). A stalled number beats a dead overlay.
+    // column moved. These clamps only ever apply to this match's *official* kill/placement points
+    // (which the schema keeps non-negative); `seriesPoints` is added unclamped because a closed
+    // map's total is signed — an operator penalty (`additionalPoints`, ADR-0018) can legitimately
+    // take a team below zero, and `Team.totalPoints` is signed to carry exactly that.
     const earnedKillPoints = Math.max(0, killPoints - (banked?.killPoints ?? 0));
     const earnedPlacementPoints = Math.max(0, placementPoints - (banked?.placementPoints ?? 0));
 

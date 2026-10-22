@@ -1,6 +1,7 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { DEFAULT_OVERLAY_INSTANCES, type OverlayInstance } from '@cdf/shared';
 import Fastify, { type FastifyInstance } from 'fastify';
 import {
   serializerCompiler,
@@ -210,5 +211,121 @@ describe('config routes - Part 6 enhancements', () => {
       },
     });
     expect(invalidRes.statusCode).toBe(400);
+  });
+});
+
+describe('config routes - Part 8 team-name display settings', () => {
+  let dir: string;
+  let app: FastifyInstance;
+  let configStore: ConfigStore;
+
+  const mainInstance = (): OverlayInstance => configStore.findInstance('main')!;
+
+  const putMain = (appearance: Record<string, unknown>) =>
+    app.inject({
+      method: 'PUT',
+      url: '/api/config/overlays/main',
+      payload: { ...mainInstance(), appearance },
+    });
+
+  beforeEach(async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'cdf-config-part8-'));
+  });
+
+  afterEach(async () => {
+    await app?.close();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  async function start(): Promise<void> {
+    configStore = new ConfigStore({ dataDir: dir });
+    await configStore.load();
+    app = Fastify();
+    app.setValidatorCompiler(validatorCompiler);
+    app.setSerializerCompiler(serializerCompiler);
+    await app.register(configRoutes, { prefix: '/api', store: configStore });
+    await app.ready();
+  }
+
+  it('loads a pre-Part-8 overlay-instances.json with the safe defaults (14 / off / 200)', async () => {
+    const legacy = structuredClone(DEFAULT_OVERLAY_INSTANCES) as unknown as {
+      instances: { appearance: Record<string, unknown> }[];
+    };
+    for (const instance of legacy.instances) {
+      delete instance.appearance.teamNameMaxChars;
+      delete instance.appearance.teamNameExtendedMode;
+      delete instance.appearance.teamNameMaxExtension;
+    }
+    await writeFile(path.join(dir, 'overlay-instances.json'), JSON.stringify(legacy));
+
+    await start();
+
+    expect(mainInstance().appearance).toMatchObject({
+      teamNameMaxChars: 14,
+      teamNameExtendedMode: false,
+      teamNameMaxExtension: 200,
+    });
+  });
+
+  it('persists valid values and rejects out-of-range or non-integer ones without saving', async () => {
+    await start();
+    const base = mainInstance().appearance;
+
+    const ok = await putMain({
+      ...base,
+      teamNameMaxChars: 20,
+      teamNameExtendedMode: true,
+      teamNameMaxExtension: 480,
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(mainInstance().appearance).toMatchObject({
+      teamNameMaxChars: 20,
+      teamNameExtendedMode: true,
+      teamNameMaxExtension: 480,
+    });
+
+    for (const bad of [
+      { teamNameMaxChars: 5 },
+      { teamNameMaxChars: 33 },
+      { teamNameMaxChars: 14.5 },
+      { teamNameMaxChars: '14' },
+      { teamNameMaxExtension: -1 },
+      { teamNameMaxExtension: 481 },
+      { teamNameExtendedMode: 'yes' },
+    ]) {
+      const res = await putMain({ ...mainInstance().appearance, ...bad });
+      expect(res.statusCode, JSON.stringify(bad)).toBe(400);
+    }
+    expect(mainInstance().appearance).toMatchObject({
+      teamNameMaxChars: 20,
+      teamNameExtendedMode: true,
+      teamNameMaxExtension: 480,
+    });
+  });
+
+  it('keeps the stored settings when a client that predates them saves the instance', async () => {
+    await start();
+    await putMain({
+      ...mainInstance().appearance,
+      teamNameMaxChars: 10,
+      teamNameExtendedMode: true,
+      teamNameMaxExtension: 120,
+    });
+
+    const {
+      teamNameMaxChars: _a,
+      teamNameExtendedMode: _b,
+      teamNameMaxExtension: _c,
+      ...staleAppearance
+    } = mainInstance().appearance;
+    const res = await putMain({ ...staleAppearance, scale: 1.2 });
+
+    expect(res.statusCode).toBe(200);
+    expect(mainInstance().appearance).toMatchObject({
+      scale: 1.2,
+      teamNameMaxChars: 10,
+      teamNameExtendedMode: true,
+      teamNameMaxExtension: 120,
+    });
   });
 });

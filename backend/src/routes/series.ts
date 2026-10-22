@@ -1,4 +1,14 @@
-import { seriesDocumentSchema, seriesMatchInfoPatchSchema, teamSchema } from '@cdf/shared';
+import {
+  additionalPointsOf,
+  ADDITIONAL_POINTS_MAX,
+  ADDITIONAL_POINTS_MIN,
+  ADJUSTMENT_NOTE_MAX_LENGTH,
+  seriesDocumentSchema,
+  seriesMatchInfoPatchSchema,
+  teamSchema,
+  type ClosedMapResult,
+} from '@cdf/shared';
+import type { FastifyBaseLogger } from 'fastify';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import type { MatchStore } from '../state/match-store.js';
@@ -15,12 +25,24 @@ export interface SeriesRoutesOptions {
 
 const errorSchema = z.object({ error: z.string() });
 
+/**
+ * `additionalPoints`/`adjustmentNote` are optional on purpose (ADR-0018): on a correction, omitting
+ * them keeps the stored adjustment, so a client that predates the field cannot wipe a penalty. zod's
+ * `int()` already refuses NaN, Infinity, fractions and numeric strings.
+ */
 const teamResultsSchema = z
   .array(
     z.object({
       teamNo: z.number().int().min(1).max(25),
       placement: z.number().int().min(1),
       eliminations: z.number().int().min(0),
+      additionalPoints: z
+        .number()
+        .int()
+        .min(ADDITIONAL_POINTS_MIN)
+        .max(ADDITIONAL_POINTS_MAX)
+        .optional(),
+      adjustmentNote: z.string().trim().max(ADJUSTMENT_NOTE_MAX_LENGTH).optional(),
     }),
   )
   .min(1);
@@ -32,6 +54,41 @@ const addMapSchema = z.object({
   position: z.number().int().min(1),
   teams: teamResultsSchema,
 });
+
+/**
+ * The lightweight audit trail for operator adjustments: one log line per team whose bonus/penalty
+ * or reason changed between `before` (absent for a new map) and `after`. The admin has no
+ * authentication (ADR-0008), so there is no operator identity to record — the map, team, old and
+ * new values, reason and time are what an operator needs to reconstruct who was adjusted and why.
+ */
+function logAdjustmentChanges(
+  log: FastifyBaseLogger,
+  before: ClosedMapResult | undefined,
+  after: ClosedMapResult | undefined,
+): void {
+  if (!after) return;
+  for (const team of after.teams) {
+    const previous = before?.teams.find((entry) => entry.teamNo === team.teamNo);
+    const from = previous ? additionalPointsOf(previous) : 0;
+    const to = additionalPointsOf(team);
+    const noteChanged = (previous?.adjustmentNote ?? '') !== (team.adjustmentNote ?? '');
+    if (from === to && !noteChanged) continue;
+    log.info(
+      {
+        event: 'series.additionalPoints',
+        mapId: after.id,
+        mapNumber: after.mapNumber,
+        teamNo: team.teamNo,
+        teamName: team.name ?? null,
+        from,
+        to,
+        note: team.adjustmentNote ?? null,
+        adjustedAt: team.adjustedAt ?? null,
+      },
+      'Additional points changed',
+    );
+  }
+}
 
 /**
  * Multi-map series scoring (specs/SCORING-LOGIC-UPDATE.md): current standings plus the closed-map
@@ -114,11 +171,12 @@ export const seriesRoutes: FastifyPluginAsyncZod<SeriesRoutesOptions> = async (a
     },
     async (request, reply) => {
       try {
-        await series.insertManualMap(
+        const added = await series.insertManualMap(
           request.body.position,
           request.body.teams,
           config.scoring.current,
         );
+        logAdjustmentChanges(request.log, undefined, added);
         onSeriesChanged();
         return series.getState();
       } catch (error) {
@@ -147,7 +205,7 @@ export const seriesRoutes: FastifyPluginAsyncZod<SeriesRoutesOptions> = async (a
     '/series/maps/:mapId',
     {
       schema: {
-        summary: "Correct a closed map's placements/eliminations",
+        summary: "Correct a closed map's placements, eliminations and additional points",
         tags: ['series'],
         params: z.object({ mapId: z.string().min(1) }),
         body: editSchema,
@@ -156,11 +214,17 @@ export const seriesRoutes: FastifyPluginAsyncZod<SeriesRoutesOptions> = async (a
     },
     async (request, reply) => {
       const edits: ClosedMapTeamEdit[] = request.body.teams;
+      const before = series.getState().closedMaps.find((map) => map.id === request.params.mapId);
       try {
         const result = await series.editClosedMap(
           request.params.mapId,
           edits,
           config.scoring.current,
+        );
+        logAdjustmentChanges(
+          request.log,
+          before,
+          result.closedMaps.find((map) => map.id === request.params.mapId),
         );
         onSeriesChanged();
         return result;

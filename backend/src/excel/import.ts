@@ -4,6 +4,7 @@ import { copyFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import ExcelJS from 'exceljs';
 import {
+  listRecordedAdjustments,
   type ClosedMapResult,
   type ClosedMapTeamResult,
   type ExcelImportMode,
@@ -31,6 +32,25 @@ export interface ValidatedExcelRoundTeam {
   teamNo: number;
   placement: number;
   eliminations: number;
+}
+
+/**
+ * The official scoring sheet has no column for operator adjustments (Part 8, Q12), and importing
+ * match history replaces every recorded map — so any adjustment in the current history is lost.
+ * Returns the warning to show, or null when nothing would be lost.
+ */
+export function describeAdjustmentsLostOnImport(
+  existingClosedMaps: readonly ClosedMapResult[],
+): string | null {
+  const adjustments = listRecordedAdjustments(existingClosedMaps);
+  if (adjustments.length === 0) return null;
+  const items = adjustments.map((adjustment) => {
+    const sign = adjustment.additionalPoints > 0 ? '+' : '';
+    const team = `T${String(adjustment.teamNo).padStart(2, '0')}${adjustment.teamName ? ` ${adjustment.teamName}` : ''}`;
+    const note = adjustment.adjustmentNote ? ` (${adjustment.adjustmentNote})` : '';
+    return `Map ${adjustment.mapNumber} · ${team}: ${sign}${adjustment.additionalPoints}${note}`;
+  });
+  return `The Excel sheet has no additional-points column, so importing its match history resets ${adjustments.length} recorded adjustment${adjustments.length === 1 ? '' : 's'} to 0: ${items.join('; ')}.`;
 }
 
 export interface ValidatedExcelRound {
@@ -90,7 +110,7 @@ function extractCellString(cell: ExcelJS.Cell | undefined | null): string {
 export async function validateExcelImport(
   buffer: Buffer,
   mode: ExcelImportMode = 'full',
-  _options?: {
+  options?: {
     roster?: readonly TeamRosterEntry[];
     existingClosedMaps?: readonly ClosedMapResult[];
     ruleset?: ScoringRuleset;
@@ -248,6 +268,11 @@ export async function validateExcelImport(
         'No completed match scoring rounds (placements/kills) were found. The 25 teams will be imported into the roster, but no match history will be recorded.',
     });
   }
+
+  if ((mode === 'matches' || mode === 'full') && rounds.length > 0) {
+    const lostAdjustments = describeAdjustmentsLostOnImport(options?.existingClosedMaps ?? []);
+    if (lostAdjustments) warnings.push({ message: lostAdjustments });
+  }
   const valid = errors.length === 0;
 
   const preview: ExcelImportPreview = {
@@ -373,6 +398,8 @@ export async function applyExcelImport(
 
     if (closedMaps.length > 0) {
       const seriesState = deps.series.getState();
+      const lostAdjustments = describeAdjustmentsLostOnImport(seriesState.closedMaps);
+      if (lostAdjustments) warnings.push(lostAdjustments);
       const updatedSeries: SeriesDocument = {
         ...seriesState,
         closedMaps,

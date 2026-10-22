@@ -199,6 +199,28 @@ describe('backup export/import', () => {
     expect(target.manual.getState().teams.find((t) => t.teamNo === 1)?.eliminations).toBe(7);
   });
 
+  it('round-trips a series adjustment and its effect on the total (Part 8)', async () => {
+    const source = await makeDeps(sourceDir);
+    await source.series.insertManualMap(
+      1,
+      [{ teamNo: 1, placement: 1, eliminations: 2, additionalPoints: -7, adjustmentNote: 'Late' }],
+      source.config.scoring.current,
+    );
+
+    const validated = validateImportZip(await buildExportZip(source));
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) return;
+    const target = await makeDeps(targetDir);
+    await applyImport(validated.value, target);
+
+    expect(target.series.getState().closedMaps[0]?.teams[0]).toMatchObject({
+      additionalPoints: -7,
+      adjustmentNote: 'Late',
+      totalPoints: 10 + 2 - 7,
+    });
+    expect(target.series.getSeriesTotals().get(1)).toBe(5);
+  });
+
   it('imports legacy backup format v1 cleanly without manualMatch and checksums', async () => {
     const source = await makeDeps(sourceDir);
     const v2Zip = await buildExportZip(source);

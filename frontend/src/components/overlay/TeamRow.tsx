@@ -1,13 +1,21 @@
 import type { Team } from '@cdf/shared';
 import { motion } from 'motion/react';
 import { AlivePlayerBars } from './AlivePlayerBars';
-import { formatTeamSlot, LEADERBOARD_METRICS as M, u } from './overlay-scale';
+import { formatTeamSlot, LEADERBOARD_METRICS as M, leaderboardColumns, u } from './overlay-scale';
+import { BADGE_GAP, NAME_FONT_MAX } from './team-name-fit';
+import { SLOT_BADGE_CLASS, SLOT_BADGE_STYLE, TEAM_NAME_CLASS } from './team-row-styles';
+import { TeamNameMarquee } from './TeamNameMarquee';
+import type { TeamNamePlan } from './useTeamNameLayout';
 
 export interface TeamRowProps {
   team: Team;
   isAlternate: boolean;
   showLogo?: boolean;
   showTeamNumber?: boolean;
+  /** How this row prints its name (Part 8). Defaults to the raw name, clipped by CSS. */
+  namePlan?: TeamNamePlan;
+  /** The uniform name font size shared by every row, in design px. */
+  nameFontSize?: number;
 }
 
 /** A number that draws attention to itself when it changes, without moving the layout. */
@@ -30,26 +38,28 @@ export function TeamRow({
   isAlternate,
   showLogo = true,
   showTeamNumber = true,
+  namePlan,
+  nameFontSize = NAME_FONT_MAX,
 }: TeamRowProps) {
   const isLeader = team.rank === 1 && !team.isEliminated;
   const textColor = team.isEliminated ? 'var(--overlay-text-muted)' : 'var(--overlay-text)';
   const rankColor = isLeader ? 'var(--overlay-accent)' : textColor;
-  const columns = showLogo
-    ? `${u(M.rankColumn)} ${u(M.logoColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`
-    : `${u(M.rankColumn)} 1fr ${u(M.aliveColumn)} ${u(M.pointsColumn)} ${u(M.elimsColumn)}`;
+  const columns = leaderboardColumns(showLogo);
+  const plan: TeamNamePlan = namePlan ?? { mode: 'static', text: team.name };
 
   return (
     <motion.div
       // `layout` is what animates a team physically sliding past another as the standings change.
-      // It is the single most visible piece of motion in the overlay.
-      layout
+      // It is the single most visible piece of motion in the overlay. `position` only: a width
+      // change (extended mode on/off) must snap, not scale-stretch the row's text (Part 8).
+      layout="position"
       transition={{ layout: { duration: 0.55, ease: [0.22, 1, 0.36, 1] } }}
       className="grid items-center"
       style={{
         height: u(M.rowHeight),
         paddingInline: u(M.paddingX),
         gridTemplateColumns: columns,
-        columnGap: u(6),
+        columnGap: u(M.columnGap),
         backgroundColor: isLeader
           ? 'rgba(229, 169, 60, 0.11)'
           : isAlternate
@@ -95,32 +105,35 @@ export function TeamRow({
         </div>
       )}
 
-      <div className="flex min-w-0 items-center" style={{ gap: u(5) }}>
+      <div className="flex min-w-0 items-center" style={{ gap: u(BADGE_GAP) }}>
         {showTeamNumber && (
           <span
             data-testid={`team-slot-${team.teamNo}`}
-            className="shrink-0 font-bold uppercase tabular-nums"
-            style={{
-              fontSize: u(9.5),
-              lineHeight: 1,
-              paddingInline: u(4),
-              paddingBlock: u(2.5),
-              borderRadius: u(2),
-              backgroundColor: 'rgba(61, 54, 43, 0.78)',
-              border: `${u(1)} solid rgba(129, 96, 54, 0.55)`,
-              color: 'var(--overlay-text-muted)',
-              letterSpacing: u(0.35),
-            }}
+            className={SLOT_BADGE_CLASS}
+            style={SLOT_BADGE_STYLE}
           >
             {formatTeamSlot(team.teamNo)}
           </span>
         )}
-        <span
-          className="truncate font-bold uppercase tracking-wide"
-          style={{ fontSize: u(15), color: textColor }}
-        >
-          {team.name}
-        </span>
+        {plan.mode === 'marquee' ? (
+          <TeamNameMarquee
+            text={plan.text}
+            fontSize={nameFontSize}
+            distance={plan.distance}
+            color={textColor}
+          />
+        ) : (
+          <span
+            data-testid={`team-name-${team.teamNo}`}
+            // The text is already limited; `truncate` is only the last guard against painting into
+            // the ALIVE column (e.g. before a web font finishes loading).
+            className={`truncate ${TEAM_NAME_CLASS}`}
+            style={{ fontSize: u(nameFontSize), color: textColor }}
+            title={team.name}
+          >
+            {plan.text}
+          </span>
+        )}
       </div>
 
       <div className="flex justify-center">

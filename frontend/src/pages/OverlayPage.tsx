@@ -176,6 +176,8 @@ export function OverlayPage({
     elimination: true,
     viewMode: 'auto',
   });
+  /** Extended-mode leftward widening reported by the tower (Part 8), in design px. */
+  const [towerExtension, setTowerExtension] = useState(0);
 
   const storeSnapshot = useLiveStore((state) => state.snapshot);
   const storeInstances = useLiveStore((state) => state.instances);
@@ -546,7 +548,7 @@ export function OverlayPage({
       {(!isPreview || previewLayers.leaderboard) && (
         <AnimatePresence mode="wait" initial={false}>
           {isOperatorVisible && activeLayoutMode === 'tower' && (
-            <div key="layout-tower" style={appearanceToPosition(appearance)}>
+            <div key="layout-tower" style={appearanceToPosition(appearance, towerExtension)}>
               <motion.div
                 key="panel"
                 variants={animation.variants}
@@ -559,6 +561,7 @@ export function OverlayPage({
                   appearance={appearance}
                   source={snapshot.ingest.source}
                   animateRows={animation.rowsEnabled}
+                  onExtensionChange={setTowerExtension}
                 />
               </motion.div>
             </div>

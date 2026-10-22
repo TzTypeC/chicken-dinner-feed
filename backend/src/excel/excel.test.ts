@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   DEFAULT_PMCC_2026_ROSTER,
   DEFAULT_SCORING_RULESET,
+  additionalPointsOf,
   createDefaultSeriesDocument,
   type ClosedMapResult,
 } from '@cdf/shared';
@@ -336,5 +337,82 @@ describe('Excel Integration (WS-7.3 & WS-7.4)', () => {
     // Slots 1 to 25 must be contiguous integers
     const slots = res.value.teams.map((t) => t.teamNo);
     expect(slots).toEqual(Array.from({ length: 25 }, (_, i) => i + 1));
+  });
+
+  it('keeps the sheet official-only and warns about adjustments it cannot carry (Part 8, Q12)', async () => {
+    const adjustedMap: ClosedMapResult = {
+      id: 'map-adj',
+      mapNumber: 1,
+      mapName: 'Erangel',
+      matchId: null,
+      startedAt: null,
+      endedAt: null,
+      teams: [
+        {
+          teamNo: 1,
+          placement: 1,
+          eliminations: 10,
+          placementPoints: 10,
+          killPoints: 10,
+          additionalPoints: -5,
+          adjustmentNote: 'Warning',
+          totalPoints: 15,
+          name: 'SUKA SUKA SQUAD',
+        },
+        {
+          teamNo: 2,
+          placement: 2,
+          eliminations: 5,
+          placementPoints: 6,
+          killPoints: 5,
+          totalPoints: 11,
+        },
+      ],
+    };
+    const seriesDoc = {
+      ...createDefaultSeriesDocument('excel-adjustments'),
+      closedMaps: [adjustedMap],
+    };
+
+    // Export: the official placement + kill formulas and totals, exactly as without the adjustment.
+    const buffer = await buildExcelExport({
+      roster: DEFAULT_PMCC_2026_ROSTER.teams,
+      ruleset: DEFAULT_SCORING_RULESET,
+      series: seriesDoc,
+    });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const ws = wb.getWorksheet('10. Offline Scoring Sheets')!;
+    expect(ws.getCell('V6').formula).toContain('IF(L6=1,10');
+    expect(ws.getCell('V6').result).toBe(20);
+    expect(ws.getCell('AC6').formula).toBe('SUM(AA6:AB6)');
+    expect(ws.getCell('AC6').result).toBe(20);
+
+    // Import preview: matches mode would replace the adjusted map, so it says so, naming the team.
+    await series.replaceState(seriesDoc);
+    const validated = await validateExcelImport(buffer, 'matches', {
+      existingClosedMaps: series.getState().closedMaps,
+    });
+    expect(validated.ok).toBe(true);
+    if (!validated.ok) return;
+    const previewWarning = validated.value.preview.warnings.find((warning) =>
+      warning.message.includes('additional-points'),
+    );
+    expect(previewWarning?.message).toContain('Map 1 · T01 SUKA SUKA SQUAD: -5 (Warning)');
+
+    // Roster-only imports never touch match history, so they carry no such warning.
+    const rosterOnly = await validateExcelImport(buffer, 'roster', {
+      existingClosedMaps: series.getState().closedMaps,
+    });
+    expect(rosterOnly.ok && rosterOnly.value.preview.warnings).toEqual([]);
+
+    // Apply: the replaced history has no adjustments left, and the result repeats the warning.
+    const result = await applyExcelImport(validated.value, { config, series });
+    expect(
+      result.warnings.some((warning) => warning.includes('resets 1 recorded adjustment')),
+    ).toBe(true);
+    const imported = series.getState().closedMaps[0]!;
+    expect(imported.teams.every((team) => additionalPointsOf(team) === 0)).toBe(true);
+    expect(imported.teams.find((team) => team.teamNo === 1)?.totalPoints).toBe(20);
   });
 });

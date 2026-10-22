@@ -4,6 +4,7 @@ import {
   excelImportModeSchema,
   excelImportPreviewSchema,
   excelImportResultSchema,
+  listRecordedAdjustments,
 } from '@cdf/shared';
 import type { ConfigStore } from '../persistence/config-store.js';
 import type { SeriesStore } from '../state/series-store.js';
@@ -42,15 +43,22 @@ export const excelRoutes: FastifyPluginAsyncZod<ExcelRoutesOptions> = async (app
       },
     },
     async (_request, reply) => {
+      const seriesState = series.getState();
       const buffer = await buildExcelExport({
         roster: config.teams.current.teams,
         ruleset: config.scoring.current,
-        series: series.getState(),
+        series: seriesState,
       });
       const stamp = new Date().toISOString().slice(0, 10);
       reply.header(
         'content-disposition',
         `attachment; filename="PMCC-2026-Scoring-Sheet-${stamp}.xlsx"`,
+      );
+      // The official sheet carries placement + kill points only (Part 8, Q12). Tell the caller how
+      // many operator adjustments it leaves out; the admin lists them before offering the download.
+      reply.header(
+        'x-cdf-omitted-adjustments',
+        String(listRecordedAdjustments(seriesState.closedMaps).length),
       );
       return reply
         .type('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')

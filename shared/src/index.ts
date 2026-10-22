@@ -74,6 +74,7 @@ export {
   DEFAULT_INSTANCE_ID_BY_TYPE,
   defaultAppearanceForType,
   DEFAULT_OVERLAY_INSTANCES,
+  TEAM_NAME_DISPLAY_LIMITS,
 } from './config/overlay-instance.js';
 export type {
   OverlayColors,
@@ -109,6 +110,11 @@ export type { TeamRosterEntry, TeamRosterDocument } from './config/team-roster.j
 
 export {
   PUBG_MAP_PRESETS,
+  ADDITIONAL_POINTS_MIN,
+  ADDITIONAL_POINTS_MAX,
+  ADJUSTMENT_NOTE_MAX_LENGTH,
+  additionalPointsOf,
+  listRecordedAdjustments,
   closedMapTeamResultSchema,
   closedMapResultSchema,
   seriesMatchInfoPatchSchema,
@@ -119,6 +125,7 @@ export {
 export type {
   ClosedMapTeamResult,
   ClosedMapResult,
+  RecordedAdjustment,
   SeriesMatchInfoPatch,
   SeriesDocument,
 } from './domain/series.js';

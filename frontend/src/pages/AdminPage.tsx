@@ -181,6 +181,8 @@ export function AdminPage() {
 
   const savedSelected = savedOverlays.find((instance) => instance.id === selectedId) ?? null;
   const isDirty = selected !== null && !isDeepEqual(selected, savedSelected);
+  /** An invalid entry in the appearance editor (Part 8 team-name fields); blocks Save while set. */
+  const [appearanceInvalid, setAppearanceInvalid] = useState<string | null>(null);
 
   const patchSelected = (changes: Partial<OverlayInstance>) => {
     if (!overlays || !selected) return;
@@ -913,6 +915,7 @@ export function AdminPage() {
               <>
                 <section className="order-2 grid min-w-0 content-start gap-5 md:order-1">
                   <AppearanceEditor
+                    key={selected.id}
                     appearance={selected.appearance}
                     instanceType={selected.type}
                     closedMaps={closedMaps}
@@ -920,6 +923,7 @@ export function AdminPage() {
                     onChange={(appearance) => patchSelected({ appearance })}
                     onUploadBackground={(file) => uploadBackground(selected, file)}
                     onRemoveBackground={() => removeBackground(selected)}
+                    onValidityChange={setAppearanceInvalid}
                   />
                 </section>
 
@@ -935,6 +939,7 @@ export function AdminPage() {
                     instance={selected}
                     visible={selectedVisible}
                     isDirty={isDirty}
+                    invalidReason={appearanceInvalid}
                     onRename={(name) => patchSelected({ name })}
                     onSave={() => void saveInstance(selected)}
                     onToggleVisibility={() => void toggleVisibility(selected)}

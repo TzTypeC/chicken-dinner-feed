@@ -1,9 +1,9 @@
 # Project Checkpoint
 
-- **Last Updated:** 2026-10-21
-- **Current Task:** Part 7 — Application Backup & Restore, Excel Integration, Default Team Roster & Postgame Ranking Correction
+- **Last Updated:** 2026-10-22
+- **Current Task:** Part 8 — Configurable Leaderboard Team Names, Extended Marquee Mode, Series Team Ordering & Additional Match Points
 - **Current Phase:** Implementation & Quality Gate Verification Complete (`COMPLETED`)
-- **Last Completed Checkpoint:** WS-7.1 through WS-7.8 & Excel Import Crash Fix Implemented and Verified (398/398 tests pass across 33 test files, 0 typecheck errors, 0 lint warnings/errors, 100% Prettier compliance, clean build)
+- **Last Completed Checkpoint:** WS-8.1 through WS-8.8 implemented and verified. 461/461 tests pass (backend 322 / 26 files, frontend 139 / 12 files), 0 typecheck errors, 0 lint diagnostics, Prettier clean, build OK (pre-existing Vite chunk-size warning only). Browser-verified at 1920×1080 against an isolated data copy. See [`docs/part8-audit-and-proposal.md`](part8-audit-and-proposal.md) §15.
 
 ---
 
@@ -55,19 +55,28 @@
 - **Feature E (Admin UX Enhancements & Excel Import Crash Fix):** Rebuilt `ImportExport.tsx` with dedicated cards for Backup & Restore (`.zip`) and PMCC 2026 Excel Scoring Sheets (`.xlsx`), scope selectors (`Full Sync`, `Roster Only`, `Matches Only`), and safety snapshot callouts. Resolved React Error #31 by properly normalizing structured `{ location, message }` validation errors into accessible location badges and messages, and fixed ExcelJS formula object extraction for slots (`I6+1`) and team names.
 - **Full Quality Gates:** **398/398 unit and integration tests passed** across 33 test files, 0 TypeScript errors, 0 ESLint/Oxlint warnings or errors, 100% Prettier compliance, clean production build.
 
+### Part 8 — Configurable Team Names, Extended Marquee, Series Ordering & Additional Points (Completed)
+
+- **Feature A (team-name limit):** `teamNameMaxChars` (6–32, default 14), counted in graphemes; `...` counts toward the limit. One uniform font size derived from the limit (10–15 px; 10.67 px for production `main`). Inner columns rebalanced (ALIVE 50, ELIMS 44, gaps 4) inside the unchanged 340 px frame and right edge.
+- **Feature B (extended mode):** `teamNameExtendedMode` + `teamNameMaxExtension` (0–480, default 200). The panel widens left only as far as needed; a name that still does not fit scrolls (WAAPI seamless loop, 40 px/s, 1.5 s hold). Left-anchored panels are clamped on-canvas through the positioned wrapper. Switching off reverts immediately.
+- **Feature C (ordering):** Current standings / Team order switch (`cdf.admin.series.teamOrder`) for the standings table, both map dialogs and the finished-map cards. Dialog order is frozen while open; corrections show the map's snapshot name; one shared `compareMatchResults`.
+- **Feature D (Additional Points):** independent per-team, per-map input (−100…+100, optional reason, `adjustedAt`), applied exactly once in `totalPoints`. Signed totals end to end. `PROTOCOL_VERSION` 11. Conditional ADJ columns on postgame screens. Excel stays official-only, with export and import warnings. ADR-0018.
+- **Compatibility:** no persisted-data migration. Stale clients cannot wipe new settings or adjustments; the v10 → v11 mismatch flow was verified live.
+
 ---
 
-## 2. Review Gate Status
+## 2. Review Gate Status (Part 8)
 
-- [x] **Phase 1:** Repository Audit & Baseline Verification — **COMPLETED**
-- [x] **Phase 2:** Visual & Structural Diagnosis — **COMPLETED**
-- [x] **Phase 3:** Research & Proposal Formulation (`docs/part6-audit-and-proposal.md`) — **COMPLETED**
-- [x] **Phase 4:** User Approval Gate — **COMPLETED (All 3 Design Decisions Approved)**
-- [x] **Phase 5:** Implementation (`WS-6.1` – `WS-6.7`) — **COMPLETED**
-- [x] **Phase 6:** Testing & Final Verification (`WS-6.8`) — **COMPLETED**
+- [x] **Phase 1:** Repository Audit & Baseline Quality Gates — **COMPLETED**
+- [x] **Phase 2:** Online Research & Design References — **COMPLETED**
+- [x] **Phases 3–6:** Feature A–D investigation & design — **COMPLETED** (see proposal §5–§9)
+- [x] **Phase 7:** Clarification & Approval Gate — **COMPLETED** (12/12 answered, approved 2026-10-22)
+- [x] **Phase 8:** Implementation (`WS-8.1` – `WS-8.8`) — **COMPLETED**
+- [x] **Phase 9:** Testing & Acceptance — **COMPLETED** (unit/integration + browser verification, proposal §15.5)
+- [x] **Phase 10:** Final Delivery Report — **COMPLETED** (proposal §15)
 
 ---
 
 ## 3. Exact Next Action
 
-All Part 7 requirements have been implemented, tested, and verified. Ready for production broadcast operation.
+Deploy per proposal §15.4. After restarting the server, refresh every OBS browser source and reload any open admin tab (protocol v11). Then follow the operator verification steps in the Part 8 delivery report. No open Part 8 work remains.

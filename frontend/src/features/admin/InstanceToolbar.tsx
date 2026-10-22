@@ -11,6 +11,8 @@ export interface InstanceToolbarProps {
   visible: boolean | undefined;
   /** False when the draft matches what was last saved. */
   isDirty: boolean;
+  /** Set while the editor holds an invalid entry: Save is refused and this reason is shown. */
+  invalidReason?: string | null;
   onRename(name: string): void;
   onSave(): void;
   onToggleVisibility(): void;
@@ -28,6 +30,7 @@ export function InstanceToolbar({
   instance,
   visible,
   isDirty,
+  invalidReason = null,
   onRename,
   onSave,
   onToggleVisibility,
@@ -69,11 +72,20 @@ export function InstanceToolbar({
         <button
           type="button"
           onClick={onSave}
-          disabled={!isDirty}
-          aria-label={isDirty ? 'Save — there are unsaved changes' : 'Save — nothing has changed'}
-          title={isDirty ? 'There are unsaved changes' : 'Nothing has changed since the last save'}
+          disabled={!isDirty || invalidReason !== null}
+          aria-label={
+            invalidReason
+              ? `Save — blocked: ${invalidReason}`
+              : isDirty
+                ? 'Save — there are unsaved changes'
+                : 'Save — nothing has changed'
+          }
+          title={
+            invalidReason ??
+            (isDirty ? 'There are unsaved changes' : 'Nothing has changed since the last save')
+          }
           className={`min-h-9 rounded px-3.5 py-1.5 text-sm font-medium transition-opacity ${
-            isDirty
+            isDirty && invalidReason === null
               ? 'bg-primary text-primary-foreground cdf-attention'
               : 'bg-secondary text-muted-foreground cursor-not-allowed'
           }`}

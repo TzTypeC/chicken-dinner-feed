@@ -19,6 +19,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { isPinnedPostGameMatchUnavailable } from '@/components/overlay/broadcast-state';
 import { ColorField } from './ColorField';
+import { TeamNameSettings } from './TeamNameSettings';
 
 /**
  * Each of the first three is one concrete weight, loaded live from Google Fonts (index.html) — not
@@ -47,7 +48,11 @@ export interface AppearanceEditorProps {
   onChange(appearance: OverlayAppearance): void;
   onUploadBackground?(file: File): Promise<void>;
   onRemoveBackground?(): Promise<void>;
+  /** Reports an invalid entry (or null) so the toolbar can refuse to save it. */
+  onValidityChange?(error: string | null): void;
 }
+
+const ignoreValidity = () => {};
 
 export function AppearanceEditor({
   appearance,
@@ -57,6 +62,7 @@ export function AppearanceEditor({
   onChange,
   onUploadBackground,
   onRemoveBackground,
+  onValidityChange = ignoreValidity,
 }: AppearanceEditorProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingBg, setUploadingBg] = useState(false);
@@ -468,6 +474,14 @@ export function AppearanceEditor({
           )}
         </div>
       </section>
+
+      {instanceType === 'leaderboard' && (
+        <TeamNameSettings
+          appearance={appearance}
+          patch={patch}
+          onValidityChange={onValidityChange}
+        />
+      )}
 
       <section className="grid gap-3">
         <div className="flex flex-wrap items-center justify-between gap-2">

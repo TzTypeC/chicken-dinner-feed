@@ -1,7 +1,13 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { ScoringRuleset, TeamRosterEntry } from '@cdf/shared';
+import {
+  additionalPointsOf,
+  CONFIG_SCHEMA_VERSION,
+  teamSchema,
+  type ScoringRuleset,
+  type TeamRosterEntry,
+} from '@cdf/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { IngestPlayer, IngestUpdate } from '../ingest/source.js';
 import { MatchStore } from './match-store.js';
@@ -708,6 +714,245 @@ describe('SeriesStore', () => {
       expect(closed.mapName).toBe('Miramar');
       // Overridden match number advances automatically to 5 after closing the map.
       expect(store.getState().activeMatchNumber).toBe(5);
+    });
+  });
+
+  describe('additionalPoints (Part 8, ADR-0018)', () => {
+    /** Map 1, by hand: T1 1st with 4 elims (10 + 4 = 14), T2 2nd with 1 elim (6 + 1 = 7). */
+    async function seededMap(): Promise<{ store: SeriesStore; mapId: string }> {
+      const store = makeStore();
+      await store.load();
+      const added = await store.insertManualMap(
+        1,
+        [
+          { teamNo: 1, placement: 1, eliminations: 4 },
+          { teamNo: 2, placement: 2, eliminations: 1 },
+        ],
+        ruleset,
+      );
+      return { store, mapId: added.id };
+    }
+
+    const penaltyEdit = [
+      { teamNo: 1, placement: 1, eliminations: 4, additionalPoints: 5, adjustmentNote: 'Bonus' },
+      {
+        teamNo: 2,
+        placement: 2,
+        eliminations: 1,
+        additionalPoints: -10,
+        adjustmentNote: 'Warning',
+      },
+    ];
+
+    it('adds the adjustment to the total once, leaving official points and inputs untouched', async () => {
+      const { store, mapId } = await seededMap();
+
+      await store.editClosedMap(mapId, penaltyEdit, ruleset);
+
+      const [t1, t2] = store.getState().closedMaps[0]!.teams;
+      expect(t1).toMatchObject({
+        placement: 1,
+        eliminations: 4,
+        placementPoints: 10,
+        killPoints: 4,
+        additionalPoints: 5,
+        totalPoints: 19,
+        adjustmentNote: 'Bonus',
+      });
+      // A penalty larger than the official points takes the map total below zero, unclamped.
+      expect(t2).toMatchObject({
+        placementPoints: 6,
+        killPoints: 1,
+        additionalPoints: -10,
+        totalPoints: -3,
+      });
+      expect(store.getSeriesTotals().get(1)).toBe(19);
+      expect(store.getSeriesTotals().get(2)).toBe(-3);
+    });
+
+    it('saving the same correction again never compounds the adjustment', async () => {
+      const { store, mapId } = await seededMap();
+
+      await store.editClosedMap(mapId, penaltyEdit, ruleset);
+      const once = structuredClone(store.getState().closedMaps);
+      await store.editClosedMap(mapId, penaltyEdit, ruleset);
+      await store.editClosedMap(mapId, penaltyEdit, ruleset);
+
+      expect(store.getState().closedMaps).toEqual(once);
+      expect(store.getSeriesTotals().get(1)).toBe(19);
+    });
+
+    it('keeps a stored adjustment when an edit omits it, and clears it on an explicit 0', async () => {
+      const { store, mapId } = await seededMap();
+      await store.editClosedMap(mapId, penaltyEdit, ruleset);
+      const adjustedAt = store.getState().closedMaps[0]!.teams[1]!.adjustedAt;
+      expect(adjustedAt).toEqual(expect.any(Number));
+
+      // A client that predates the field corrects T2's elims only.
+      await store.editClosedMap(
+        mapId,
+        [
+          { teamNo: 1, placement: 1, eliminations: 4 },
+          { teamNo: 2, placement: 2, eliminations: 3 },
+        ],
+        ruleset,
+      );
+      const kept = store.getState().closedMaps[0]!.teams[1]!;
+      expect(kept).toMatchObject({
+        eliminations: 3,
+        additionalPoints: -10,
+        adjustmentNote: 'Warning',
+        totalPoints: 6 + 3 - 10,
+        adjustedAt,
+      });
+
+      await store.editClosedMap(
+        mapId,
+        [
+          { teamNo: 1, placement: 1, eliminations: 4 },
+          { teamNo: 2, placement: 2, eliminations: 3, additionalPoints: 0, adjustmentNote: '' },
+        ],
+        ruleset,
+      );
+      const cleared = store.getState().closedMaps[0]!.teams[1]!;
+      expect(cleared.additionalPoints).toBe(0);
+      expect(cleared.adjustmentNote).toBeUndefined();
+      expect(cleared.totalPoints).toBe(9);
+      expect(cleared.adjustedAt).toBeGreaterThanOrEqual(adjustedAt!);
+    });
+
+    it('survives a restart and keeps the historical name snapshot', async () => {
+      const store = makeStore();
+      await store.load();
+      const match = new MatchStore({ source: 'pcob', roster: roster(1, 2) });
+      match.applyUpdate(
+        update({
+          players: [
+            player({ teamNo: 1, slot: 1, kills: 2, liveState: 'alive' }),
+            player({ teamNo: 2, slot: 1, liveState: 'dead' }),
+          ],
+        }),
+      );
+      const closed = await store.closeMapNow(match.projectAsEnded(), 1_000);
+      // A live close never invents an adjustment.
+      expect(closed.teams.every((team) => additionalPointsOf(team) === 0)).toBe(true);
+
+      await store.editClosedMap(
+        closed.id,
+        [
+          {
+            teamNo: 1,
+            placement: 1,
+            eliminations: 2,
+            additionalPoints: -2,
+            adjustmentNote: 'Late',
+          },
+          { teamNo: 2, placement: 2, eliminations: 0 },
+        ],
+        ruleset,
+      );
+
+      const reloaded = makeStore();
+      await reloaded.load();
+      const team1 = reloaded.getState().closedMaps[0]!.teams.find((team) => team.teamNo === 1)!;
+      expect(team1).toMatchObject({
+        name: 'T1',
+        additionalPoints: -2,
+        adjustmentNote: 'Late',
+        totalPoints: 10,
+      });
+      expect(reloaded.getSeriesTotals().get(1)).toBe(10);
+    });
+
+    it('reads a pre-Part-8 series.json as unadjusted, with its stored totals unchanged', async () => {
+      await writeFile(
+        path.join(dir, 'series.json'),
+        JSON.stringify({
+          schemaVersion: CONFIG_SCHEMA_VERSION,
+          seriesId: 'legacy',
+          closedMaps: [
+            {
+              id: 'legacy-1',
+              mapNumber: 1,
+              mapName: 'Erangel',
+              matchId: 'm-old',
+              startedAt: null,
+              endedAt: 1,
+              teams: [
+                {
+                  teamNo: 3,
+                  placement: 1,
+                  eliminations: 7,
+                  killPoints: 7,
+                  placementPoints: 10,
+                  totalPoints: 17,
+                  name: 'Old Name',
+                  logoUrl: null,
+                },
+              ],
+            },
+          ],
+        }),
+      );
+      const store = makeStore();
+      await store.load();
+
+      const team = store.getState().closedMaps[0]!.teams[0]!;
+      expect(additionalPointsOf(team)).toBe(0);
+      expect(team.totalPoints).toBe(17);
+      expect(store.getSeriesTotals().get(3)).toBe(17);
+
+      // Correcting it later without mentioning adjustments keeps it unadjusted.
+      await store.editClosedMap(
+        'legacy-1',
+        [{ teamNo: 3, placement: 1, eliminations: 8 }],
+        ruleset,
+      );
+      expect(store.getState().closedMaps[0]!.teams[0]).toMatchObject({
+        additionalPoints: 0,
+        totalPoints: 18,
+        name: 'Old Name',
+      });
+    });
+
+    it('reaches live PTS exactly once, including below zero, without double-counting a closed match', async () => {
+      const store = makeStore();
+      await store.load();
+      const match = new MatchStore({ source: 'pcob', roster: roster(1, 2) });
+      match.applyUpdate(
+        update({
+          matchId: 'm1',
+          players: [
+            player({ teamNo: 1, slot: 1, kills: 2, liveState: 'alive' }),
+            player({ teamNo: 2, slot: 1, liveState: 'dead' }),
+          ],
+        }),
+      );
+      const closed = await store.closeMapNow(match.projectAsEnded(), 1_000);
+      await store.editClosedMap(
+        closed.id,
+        [
+          { teamNo: 1, placement: 1, eliminations: 2, additionalPoints: -20 },
+          { teamNo: 2, placement: 2, eliminations: 0 },
+        ],
+        ruleset,
+      );
+
+      // The match is still on screen after closing: its own points are banked, the adjustment is not.
+      match.setSeriesContext(
+        store.getSeriesTotals(),
+        store.getSeriesHasAppeared(),
+        store.getBankedPointsForMatch('m1'),
+      );
+      const teams = match.project().match.teams;
+      const team1 = teams.find((team) => team.teamNo === 1)!;
+      const team2 = teams.find((team) => team.teamNo === 2)!;
+
+      expect(team1.totalPoints).toBe(12 - 20);
+      expect(team2.totalPoints).toBe(6);
+      expect(team2.rank).toBeLessThan(team1.rank);
+      // The signed total is a valid wire value, so overlays keep rendering instead of freezing.
+      expect(teamSchema.safeParse(team1).success).toBe(true);
     });
   });
 });

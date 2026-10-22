@@ -2,12 +2,15 @@ import {
   autoWwcdVariantSchema,
   defaultAppearanceForType,
   DEFAULT_PMCC_2026_ROSTER,
+  overlayAppearanceSchema,
   overlayInstanceIdSchema,
   overlayInstanceSchema,
   overlayInstancesDocumentSchema,
   overlayTypeSchema,
   scoringRulesetSchema,
+  TEAM_NAME_DISPLAY_LIMITS,
   teamRosterDocumentSchema,
+  type OverlayInstance,
 } from '@cdf/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -35,6 +38,32 @@ const createInstanceSchema = z.object({
 
 const updateAutoWwcdSchema = z.object({
   autoWwcdVariant: autoWwcdVariantSchema,
+});
+
+/**
+ * The replace body for an overlay instance. Identical to `overlayInstanceSchema`, except the Part 8
+ * team-name settings are optional instead of defaulted: an admin tab loaded before Part 8 (its
+ * bundle strips fields it does not know) sends an appearance without them, and a schema default
+ * would then silently reset the operator's saved limit/extended mode on every unrelated save. An
+ * omitted field keeps the stored value instead (see the handler); a present one is validated with
+ * the same bounds.
+ */
+const updateInstanceSchema = overlayInstanceSchema.extend({
+  appearance: overlayAppearanceSchema.extend({
+    teamNameMaxChars: z
+      .number()
+      .int()
+      .min(TEAM_NAME_DISPLAY_LIMITS.maxChars.min)
+      .max(TEAM_NAME_DISPLAY_LIMITS.maxChars.max)
+      .optional(),
+    teamNameExtendedMode: z.boolean().optional(),
+    teamNameMaxExtension: z
+      .number()
+      .int()
+      .min(TEAM_NAME_DISPLAY_LIMITS.maxExtension.min)
+      .max(TEAM_NAME_DISPLAY_LIMITS.maxExtension.max)
+      .optional(),
+  }),
 });
 
 /**
@@ -111,24 +140,39 @@ export const configRoutes: FastifyPluginAsyncZod<ConfigRoutesOptions> = async (a
         summary: 'Replace an overlay instance',
         tags: ['config'],
         params: z.object({ instanceId: overlayInstanceIdSchema }),
-        body: overlayInstanceSchema,
+        body: updateInstanceSchema,
         response: { 200: overlayInstanceSchema, 400: errorSchema, 404: errorSchema },
       },
     },
     async (request, reply) => {
       const { instanceId } = request.params;
-      const updated = request.body;
+      const body = request.body;
 
-      if (updated.id !== instanceId) {
+      if (body.id !== instanceId) {
         // Renaming an id would silently break every browser source and Companion button already
         // pointing at it. Delete and recreate is the honest path.
         return reply
           .code(400)
           .send({ error: 'An overlay id cannot be changed. Create a new overlay instead.' });
       }
-      if (!store.findInstance(instanceId)) {
+      const existing = store.findInstance(instanceId);
+      if (!existing) {
         return reply.code(404).send({ error: `No overlay with the id "${instanceId}".` });
       }
+
+      // `existing` was parsed through `overlayInstanceSchema`, so its values are always present.
+      const updated: OverlayInstance = {
+        ...body,
+        appearance: {
+          ...body.appearance,
+          teamNameMaxChars:
+            body.appearance.teamNameMaxChars ?? existing.appearance.teamNameMaxChars,
+          teamNameExtendedMode:
+            body.appearance.teamNameExtendedMode ?? existing.appearance.teamNameExtendedMode,
+          teamNameMaxExtension:
+            body.appearance.teamNameMaxExtension ?? existing.appearance.teamNameMaxExtension,
+        },
+      };
 
       await store.saveInstances(
         store.instances.current.instances.map((instance) =>

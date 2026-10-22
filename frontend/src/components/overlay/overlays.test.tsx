@@ -411,9 +411,9 @@ describe('WwcdOverlay rendering in PCOB vs Manual mode', () => {
     );
     expect(html).toContain('WINNER WINNER CHICKEN DINNER');
     expect(html).toContain('GARUDA CHAMPIONS');
-    expect(html).toContain('SLOT T08');
-    expect(html).toContain('MATCH 5');
-    expect(html).toContain('Sanhok');
+    expect(html).toContain('data-testid="wwcd-team-slot"');
+    expect(html).toContain('T08');
+    expect(html).toContain('Match 5, Sanhok');
     expect(html).toContain('+24');
     expect(html).toContain('>62<');
     expect(html).toContain('Ace');
@@ -483,7 +483,7 @@ describe('WwcdOverlay rendering in PCOB vs Manual mode', () => {
         source="manual"
       />,
     );
-    expect(html).toContain('SURVIVING SQUAD: 3 / 4 ALIVE');
+    expect(html).toContain('3 of 4 still standing');
     expect(html).not.toContain('Slot 1');
     expect(html).toContain('data-testid="wwcd-survivor-bars"');
   });

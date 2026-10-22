@@ -11,6 +11,52 @@ release time — add to `[Unreleased]` in the same change that makes the change.
 
 ## [Unreleased]
 
+### Added
+
+- **Team-name length limit on the main leaderboard.** Under Overlays → your leaderboard → Team
+  names, set how many characters a team name may show (6–32, default 14). A longer name ends in
+  `...`, and the dots count toward the limit, so `Lanang nak chicken main pubg` reads
+  `Lanang nak ...`. Emoji and accented letters count as one character and are never cut in half.
+  Every row uses the same font size, set by the limit. The panel keeps its width and right edge;
+  the ALIVE and ELIMS columns and the gaps between columns were narrowed slightly to give names more
+  room. Stored team names are never changed.
+- **Extended mode for full team names.** Turn it on next to the limit: names show in full with no
+  `...`, and the leaderboard widens to the left (never past its right edge) by as much as the
+  longest name needs, up to a maximum you choose (0–480 px, default 200). A name that still does not
+  fit scrolls smoothly right to left, pausing on its first letter each time round. Turning it off
+  returns to the normal width and `...` straight away. A left-anchored panel never widens past the
+  left edge of the screen; the admin shows the effective limit.
+- **Current standings / Team order switch** on the Series control page. It orders the standings
+  table, the Correct this map and Add map by hand forms, and the finished-map cards either by the
+  live standings or by slot (T01→T25). It is remembered per browser and never changes the roster,
+  the history or any score.
+- **Additional points (bonus or penalty) in Correct this map.** A new Adj. pts column takes a whole
+  number from −100 to +100, plus an optional reason. It is added exactly once to that team's match
+  points for that map and leaves placement, elims and the official placement and kill points alone,
+  so tie-breakers are unchanged. Saving the same correction again never adds it twice. Totals can
+  now go below zero. The finished-map cards show each adjustment with its reason and time, the
+  backend log records every change, and the postgame match and series screens get an ADJ column
+  whenever one exists.
+
+### Changed
+
+- **Redesigned WWCD card.** The winning squad's gold banner, carrying `#1`, the team logo and slot,
+  now unfurls from a bronze rod at the top of the card, borrowed from the hanging banners in the
+  PMCC 2026 key visual. The team name is the headline and sizes itself to fit long names on one
+  line. Player kills, eliminations and points read in plain language ("Points this match",
+  "3 of 4 still standing"). With reduced motion turned on in the system, the card appears without
+  the unfurl. The fullscreen WWCD screen is unchanged.
+- **Correct this map shows the name recorded for that map**, not whoever holds the slot today, so
+  a correction made after renumbering teams is labelled with the team that actually played. Rows no
+  longer reorder while the form is open.
+- **Excel export and import warn about additional points.** The official workbook has no column for
+  them: the export keeps the official placement and kill points and lists the adjustments it leaves
+  out, and a match-history import warns which recorded adjustments it will reset to 0.
+- **Upgrade note:** the overlay protocol is now v11. Browser sources and admin tabs left open from
+  the previous version show "out of date — reload" until they are refreshed. Refresh every browser
+  source in OBS (right-click → Refresh, or "Refresh cache of current page") and reload the admin
+  after upgrading.
+
 ## [1.2.0] - 2026-08-30
 
 ### Added

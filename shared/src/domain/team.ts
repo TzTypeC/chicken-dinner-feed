@@ -29,8 +29,14 @@ export const teamSchema = z.object({
    * placed yet. Modelling this as 0 while alive is correct here, unlike the after-match API fields.
    */
   placementPoints: z.number().int().min(0),
-  /** The PTS column. */
-  totalPoints: z.number().int().min(0),
+  /**
+   * The PTS column: this match's earned points plus every closed map's `totalPoints`.
+   *
+   * Signed (Part 8): a closed map's total includes the operator's `additionalPoints`, and a penalty
+   * can legitimately take a team below zero. The official `killPoints`/`placementPoints` above stay
+   * non-negative.
+   */
+  totalPoints: z.number().int(),
 
   /** 1-based position in the current standings, the # column. */
   rank: z.number().int().min(1),

@@ -7,7 +7,7 @@ import type {
   SeriesDocument,
   SeriesMatchInfoPatch,
 } from '@cdf/shared';
-import { createDefaultSeriesDocument, seriesDocumentSchema } from '@cdf/shared';
+import { additionalPointsOf, createDefaultSeriesDocument, seriesDocumentSchema } from '@cdf/shared';
 import type { Projection } from './match-store.js';
 import type { BankedPoints } from '../scoring/standings.js';
 import { JsonDocument } from '../persistence/json-document.js';
@@ -28,11 +28,20 @@ export interface SeriesStoreOptions {
 
 const DEFAULT_STABILITY_TICKS = 2;
 
-/** A team result accepted for a closed map: the raw inputs, never a direct points override. */
+/**
+ * A team result accepted for a closed map: the raw inputs, never a direct points override.
+ *
+ * `additionalPoints` is an input too (ADR-0018) — the operator's bonus/penalty, stored on its own
+ * and added to the derived total exactly once. On an edit, an omitted `additionalPoints` or
+ * `adjustmentNote` keeps the stored value, so a client that does not know the field (an admin tab
+ * opened before the upgrade) cannot silently erase a penalty; an explicit `0` / `''` clears it.
+ */
 export interface ClosedMapTeamEdit {
   teamNo: number;
   placement: number;
   eliminations: number;
+  additionalPoints?: number;
+  adjustmentNote?: string;
   name?: string;
   logoUrl?: string | null;
 }
@@ -41,11 +50,16 @@ export interface ClosedMapTeamEdit {
  * Points are always re-derived from the ruleset, never accepted as an override — the same rule that
  * governs live scoring. Shared by correcting an existing map and adding one by hand, so the two can
  * never drift into scoring the same inputs differently.
+ *
+ * `totalPoints` is rebuilt from the inputs on every call (`kill + placement + additionalPoints`),
+ * never incremented from a previous total, so saving the same correction any number of times
+ * produces the same result and an adjustment can never compound.
  */
 function resultsFromEdits(
   edits: readonly ClosedMapTeamEdit[],
   ruleset: ScoringRuleset,
   existingTeams?: readonly ClosedMapTeamResult[],
+  now: number = Date.now(),
 ): ClosedMapTeamResult[] {
   // Distinct, not necessarily a contiguous 1..N run: a real closed map's own placements can
   // legitimately skip numbers — `resolvePlacements`'s slot pool is sized by every team ever seen in
@@ -68,13 +82,24 @@ function resultsFromEdits(
     const placementPoints = ruleset.placementPoints[edit.placement - 1] ?? 0;
     const name = edit.name ?? existing?.name;
     const logoUrl = edit.logoUrl !== undefined ? edit.logoUrl : existing?.logoUrl;
+
+    const previousAdjustment = existing ? additionalPointsOf(existing) : 0;
+    const previousNote = existing?.adjustmentNote ?? '';
+    const additionalPoints = edit.additionalPoints ?? previousAdjustment;
+    const note = edit.adjustmentNote !== undefined ? edit.adjustmentNote.trim() : previousNote;
+    const adjustmentChanged = additionalPoints !== previousAdjustment || note !== previousNote;
+    const adjustedAt = adjustmentChanged ? now : (existing?.adjustedAt ?? null);
+
     return {
       teamNo: edit.teamNo,
       placement: edit.placement,
       eliminations: edit.eliminations,
       killPoints,
       placementPoints,
-      totalPoints: killPoints + placementPoints,
+      totalPoints: killPoints + placementPoints + additionalPoints,
+      additionalPoints,
+      ...(note.length > 0 ? { adjustmentNote: note } : {}),
+      adjustedAt,
       ...(name !== undefined ? { name } : {}),
       ...(logoUrl !== undefined ? { logoUrl } : {}),
     };
@@ -391,10 +416,11 @@ export class SeriesStore {
   }
 
   /**
-   * Replaces one closed map's per-team results. `placement`/`eliminations` are the only inputs
-   * accepted — points are always re-derived from the ruleset, never taken as a direct override, and
-   * the edited team set must exactly match the map's original teams (this corrects a wrong result,
-   * it does not redefine who played).
+   * Replaces one closed map's per-team results. `placement`/`eliminations`/`additionalPoints` are
+   * the only inputs accepted — points are always re-derived from the ruleset plus the adjustment,
+   * never taken as a direct override, and the edited team set must exactly match the map's original
+   * teams (this corrects a wrong result, it does not redefine who played). The `name`/`logoUrl`
+   * identity snapshot is carried over untouched.
    */
   editClosedMap(
     mapId: string,
@@ -486,6 +512,9 @@ export class SeriesStore {
         // in via `MatchStore.setSeriesContext`, and persisting that would double-count them into
         // every future series total the moment this map closes.
         totalPoints: team.killPoints + team.placementPoints,
+        // Adjustments are only ever entered by an operator through a correction or a hand-added map.
+        additionalPoints: 0,
+        adjustedAt: null,
         name: team.name,
         logoUrl: team.logoUrl ?? null,
       }));

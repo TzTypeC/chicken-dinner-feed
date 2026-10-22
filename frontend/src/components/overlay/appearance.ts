@@ -38,9 +38,21 @@ export function appearanceToCssVariables(appearance: OverlayAppearance): CSSProp
  * Offsets use the **base** unit, not the scaled one: "24 pixels from the left edge" should mean the
  * same distance whether the operator has the panel at 80% or 150%. Tying the margin to the panel's
  * size would move it every time they touched the size slider.
+ *
+ * `leftExtension` (Part 8 extended mode, in scaled design px) widens the panel to the left while its
+ * right edge stays put. A right-anchored panel does that by itself; a left-anchored one has its left
+ * offset reduced by the same amount. It is applied here, on the positioned wrapper, rather than as a
+ * negative margin on the panel, so the show/hide animation's own box (a wipe's `inset()` clip)
+ * still covers the whole panel.
  */
-export function appearanceToPosition(appearance: OverlayAppearance): CSSProperties {
-  const offsetX = `calc(${appearance.offsetX} * var(--overlay-base-unit))`;
+export function appearanceToPosition(
+  appearance: OverlayAppearance,
+  leftExtension = 0,
+): CSSProperties {
+  const offsetX =
+    appearance.anchor === 'left' && leftExtension > 0
+      ? `calc(${appearance.offsetX - leftExtension * appearance.scale} * var(--overlay-base-unit))`
+      : `calc(${appearance.offsetX} * var(--overlay-base-unit))`;
 
   const vertical: CSSProperties =
     appearance.offsetY === null

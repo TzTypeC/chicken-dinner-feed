@@ -1,11 +1,25 @@
 import { useEffect, useState } from 'react';
-import type { ClosedMapResult, SeriesDocument, Team } from '@cdf/shared';
+import {
+  additionalPointsOf,
+  type ClosedMapResult,
+  type SeriesDocument,
+  type Team,
+} from '@cdf/shared';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { compareMatchResults } from '@/components/overlay/broadcast-state';
 import { api, ApiError } from '@/lib/api';
 import { useLiveStore } from '@/stores/live-store';
+import { formatSignedPoints } from '@/lib/points';
 import { toast } from '@/stores/toast-store';
+import { parseAdditionalPoints } from './additional-points';
 import { MapResultDialog, type MapTeamResultValue } from './MapResultDialog';
 import { MatchConfigBar } from './MatchConfigBar';
+import {
+  loadSeriesOrderMode,
+  orderTeamNos,
+  SERIES_ORDER_STORAGE_KEY,
+  type SeriesOrderMode,
+} from './series-order';
 
 function describe(error: unknown): string {
   if (error instanceof ApiError) return error.message;
@@ -31,11 +45,57 @@ function formatWhen(map: ClosedMapResult): string {
   return `${new Date(map.startedAt).toLocaleString()} → ${ended} (${formatDuration(map.endedAt - map.startedAt)})`;
 }
 
+const ORDER_OPTIONS = [
+  ['standings', 'Current standings'],
+  ['teamNo', 'Team order (T01→T25)'],
+] as const satisfies readonly (readonly [SeriesOrderMode, string])[];
+
+/** The Current standings / Team order switch, shown above the standings and inside the map form. */
+function SeriesOrderToggle({
+  value,
+  onChange,
+}: {
+  value: SeriesOrderMode;
+  onChange(mode: SeriesOrderMode): void;
+}) {
+  return (
+    <div
+      className="flex w-fit items-center gap-1 rounded border border-white/10 bg-black/20 p-0.5"
+      role="group"
+      aria-label="Team display order"
+    >
+      <span className="text-muted-foreground px-1.5 text-[11px]">Order:</span>
+      {ORDER_OPTIONS.map(([mode, label]) => (
+        <button
+          key={mode}
+          type="button"
+          onClick={() => onChange(mode)}
+          aria-pressed={value === mode}
+          className={`min-h-7 rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
+            value === mode
+              ? 'bg-secondary text-foreground font-semibold'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Which map form is open. One at a time, sharing a single set of values: correcting a recorded map
  * and adding one by hand collect exactly the same per-team inputs.
+ *
+ * `teamNos` is the row order, captured when the form opens and re-ordered only when the operator
+ * switches the order mode — never by a live snapshot, so a row can never move under the cursor
+ * mid-correction. Rows, values and the saved payload are all keyed by `teamNo`, never by position.
  */
-type MapForm = { mode: 'edit'; map: ClosedMapResult } | { mode: 'add'; position: number } | null;
+type MapForm =
+  | { mode: 'edit'; map: ClosedMapResult; teamNos: number[] }
+  | { mode: 'add'; position: number; teamNos: number[] }
+  | null;
 
 /**
  * Multi-map series scoring (specs/SCORING-LOGIC-UPDATE.md).
@@ -55,17 +115,31 @@ export function SeriesControl() {
   const [pendingDelete, setPendingDelete] = useState<ClosedMapResult | null>(null);
   const [form, setForm] = useState<MapForm>(null);
   const [formValues, setFormValues] = useState<Record<number, MapTeamResultValue>>({});
+  const [orderMode, setOrderMode] = useState<SeriesOrderMode>(loadSeriesOrderMode);
 
   const currentStandings = liveTeams ?? fallbackStandings;
   const closedMaps = seriesDocument?.closedMaps ?? [];
+  const standingsTeamNos = currentStandings.map((team) => team.teamNo);
+  const rosterTeamNos = [...standingsTeamNos].sort((a, b) => a - b);
 
-  // Team-number order, not the live ranking: adding a map by hand means transcribing a results
-  // sheet, and a list that reorders itself as the running match changes is the wrong thing to read
-  // down. The edit form keeps the map's own recorded order for the same reason.
-  const rosterTeamNos = [...currentStandings].map((team) => team.teamNo).sort((a, b) => a - b);
+  const displayedStandings =
+    orderMode === 'teamNo'
+      ? [...currentStandings].sort((a, b) => a.teamNo - b.teamNo)
+      : currentStandings;
 
-  const formTeamNos =
-    form?.mode === 'edit' ? form.map.teams.map((team) => team.teamNo) : rosterTeamNos;
+  useEffect(() => {
+    localStorage.setItem(SERIES_ORDER_STORAGE_KEY, orderMode);
+  }, [orderMode]);
+
+  /** Switching the order only re-orders rows; which teams are listed and their values never change. */
+  const changeOrderMode = (mode: SeriesOrderMode) => {
+    setOrderMode(mode);
+    setForm((previous) =>
+      previous
+        ? { ...previous, teamNos: orderTeamNos(previous.teamNos, mode, standingsTeamNos) }
+        : previous,
+    );
+  };
 
   const reload = async () => {
     try {
@@ -83,6 +157,16 @@ export function SeriesControl() {
 
   const teamName = (teamNo: number): string =>
     currentStandings.find((team) => team.teamNo === teamNo)?.name ?? `Team ${teamNo}`;
+
+  /**
+   * A correction is labelled with the name recorded for that slot when the map closed, not with
+   * whoever holds the slot today — after a renumber the two differ, and the stored result belongs
+   * to the team that actually played.
+   */
+  const formTeamName = (teamNo: number): string =>
+    (form?.mode === 'edit'
+      ? form.map.teams.find((team) => team.teamNo === teamNo)?.name
+      : undefined) ?? teamName(teamNo);
 
   const closeMapNow = async () => {
     setPendingCloseMap(false);
@@ -118,12 +202,25 @@ export function SeriesControl() {
   };
 
   const startEditing = (map: ClosedMapResult) => {
-    setForm({ mode: 'edit', map });
+    setForm({
+      mode: 'edit',
+      map,
+      teamNos: orderTeamNos(
+        map.teams.map((team) => team.teamNo),
+        orderMode,
+        standingsTeamNos,
+      ),
+    });
     setFormValues(
       Object.fromEntries(
         map.teams.map((team) => [
           team.teamNo,
-          { placement: team.placement, eliminations: team.eliminations },
+          {
+            placement: team.placement,
+            eliminations: team.eliminations,
+            additionalPoints: String(additionalPointsOf(team)),
+            adjustmentNote: team.adjustmentNote ?? '',
+          },
         ]),
       ),
     );
@@ -137,13 +234,17 @@ export function SeriesControl() {
       );
       return;
     }
-    setForm({ mode: 'add', position: closedMaps.length + 1 });
-    // Seeded with distinct placements in team order so an untouched form is already valid — the
+    const teamNos = orderTeamNos(rosterTeamNos, orderMode, standingsTeamNos);
+    setForm({ mode: 'add', position: closedMaps.length + 1, teamNos });
+    // Seeded with distinct placements down the list so an untouched form is already valid — the
     // server rejects two teams sharing a placement, and a blank form that cannot be saved without
     // first fixing every row would be a poor starting point for transcribing a results sheet.
     setFormValues(
       Object.fromEntries(
-        rosterTeamNos.map((teamNo, index) => [teamNo, { placement: index + 1, eliminations: 0 }]),
+        teamNos.map((teamNo, index) => [
+          teamNo,
+          { placement: index + 1, eliminations: 0, additionalPoints: '0', adjustmentNote: '' },
+        ]),
       ),
     );
   };
@@ -154,6 +255,8 @@ export function SeriesControl() {
       [teamNo]: {
         placement: previous[teamNo]?.placement ?? 1,
         eliminations: previous[teamNo]?.eliminations ?? 0,
+        additionalPoints: previous[teamNo]?.additionalPoints ?? '0',
+        adjustmentNote: previous[teamNo]?.adjustmentNote ?? '',
         ...changes,
       },
     }));
@@ -162,11 +265,23 @@ export function SeriesControl() {
   const submitForm = async () => {
     if (!form) return;
 
-    const teams = formTeamNos.map((teamNo) => ({
-      teamNo,
-      placement: formValues[teamNo]?.placement ?? 1,
-      eliminations: formValues[teamNo]?.eliminations ?? 0,
-    }));
+    const teams = [];
+    for (const teamNo of form.teamNos) {
+      const value = formValues[teamNo];
+      const adjustment = parseAdditionalPoints(value?.additionalPoints ?? '');
+      // The dialog disables saving while any entry is invalid; this is the backstop, never a 0.
+      if (!adjustment.ok) {
+        toast.error('Could not save', `${formTeamName(teamNo)}: ${adjustment.error}`);
+        return;
+      }
+      teams.push({
+        teamNo,
+        placement: value?.placement ?? 1,
+        eliminations: value?.eliminations ?? 0,
+        additionalPoints: adjustment.value,
+        adjustmentNote: adjustment.value === 0 ? '' : (value?.adjustmentNote ?? '').trim(),
+      });
+    }
 
     try {
       if (form.mode === 'edit') {
@@ -195,24 +310,25 @@ export function SeriesControl() {
         title={form?.mode === 'edit' ? `Correct map ${form.map.mapNumber}` : 'Add a map by hand'}
         description={
           form?.mode === 'edit'
-            ? 'Points are always recalculated from the scoring ruleset — enter the real placement and elimination count, not the points themselves.'
-            : 'Records a map the app never saw played, exactly as if it had been. Points are calculated from the scoring ruleset, so enter placements and eliminations only.'
+            ? 'Points are always recalculated from the scoring ruleset — enter the real placement and elimination count, not the points themselves. Use Adj. pts for an admin bonus or penalty.'
+            : 'Records a map the app never saw played, exactly as if it had been. Points are calculated from the scoring ruleset, so enter placements and eliminations, plus any admin bonus or penalty in Adj. pts.'
         }
         confirmLabel={form?.mode === 'edit' ? 'Save correction' : 'Add this map'}
-        teamNos={formTeamNos}
+        teamNos={form?.teamNos ?? []}
         values={formValues}
-        teamName={teamName}
+        teamName={formTeamName}
         onChange={patchValue}
         onCancel={() => setForm(null)}
         onConfirm={() => void submitForm()}
       >
+        <SeriesOrderToggle value={orderMode} onChange={changeOrderMode} />
         {form?.mode === 'add' && (
           <label className="grid gap-1 text-sm">
             <span className="text-muted-foreground text-xs">Position in the series</span>
             <select
               className="border-border bg-background w-fit rounded border px-2 py-1.5 text-sm"
               value={form.position}
-              onChange={(event) => setForm({ mode: 'add', position: Number(event.target.value) })}
+              onChange={(event) => setForm({ ...form, position: Number(event.target.value) })}
             >
               {Array.from({ length: closedMaps.length + 1 }, (_unused, index) => index + 1).map(
                 (position) => (
@@ -301,7 +417,10 @@ export function SeriesControl() {
       </div>
 
       <section className="grid gap-2">
-        <h3 className="text-sm font-medium">Current standings</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-medium">Current standings</h3>
+          <SeriesOrderToggle value={orderMode} onChange={changeOrderMode} />
+        </div>
         <div className="grid gap-1">
           <div className="text-muted-foreground grid grid-cols-[2rem_minmax(0,1fr)_3.75rem_3.75rem] gap-2 px-2 text-xs sm:grid-cols-[2rem_minmax(0,1fr)_5rem_5rem]">
             <span>#</span>
@@ -309,7 +428,7 @@ export function SeriesControl() {
             <span className="text-right sm:text-left">PTS</span>
             <span className="text-right sm:text-left">ELIMS</span>
           </div>
-          {currentStandings.map((team) => (
+          {displayedStandings.map((team) => (
             <div
               key={team.teamNo}
               className="border-border grid grid-cols-[2rem_minmax(0,1fr)_3.75rem_3.75rem] items-center gap-2 rounded border px-2 py-1.5 text-sm sm:grid-cols-[2rem_minmax(0,1fr)_5rem_5rem]"
@@ -344,36 +463,72 @@ export function SeriesControl() {
               </div>
 
               <div className="grid gap-1">
-                <div className="text-muted-foreground grid grid-cols-[2.5rem_minmax(0,1fr)_3.75rem_3.25rem] gap-2 px-1 text-[11px] font-semibold uppercase">
+                <div className="text-muted-foreground grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem_3.75rem_3rem] gap-2 px-1 text-[11px] font-semibold uppercase">
                   <span>Place</span>
                   <span>Team</span>
+                  <span
+                    className="text-right"
+                    title="Additional points: operator bonus (+) or penalty (−)"
+                  >
+                    Adj
+                  </span>
                   <span className="text-right">Match Pts</span>
                   <span className="text-right">Elims</span>
                 </div>
                 {[...map.teams]
-                  .sort((a, b) => {
-                    if (b.totalPoints !== a.totalPoints) return b.totalPoints - a.totalPoints;
-                    if (b.killPoints !== a.killPoints) return b.killPoints - a.killPoints;
-                    if (a.placement !== b.placement) return a.placement - b.placement;
-                    return a.teamNo - b.teamNo;
-                  })
-                  .map((team) => (
-                    <div
-                      key={team.teamNo}
-                      className="grid grid-cols-[2.5rem_minmax(0,1fr)_3.75rem_3.25rem] items-center gap-2 text-sm"
-                    >
-                      <span className="tabular-nums font-medium text-muted-foreground">
-                        #{team.placement}
-                      </span>
-                      <span className="truncate">{team.name ?? teamName(team.teamNo)}</span>
-                      <span className="text-right tabular-nums font-semibold text-foreground">
-                        {team.totalPoints}
-                      </span>
-                      <span className="text-right tabular-nums text-muted-foreground">
-                        {team.eliminations}
-                      </span>
-                    </div>
-                  ))}
+                  .sort((a, b) =>
+                    orderMode === 'teamNo'
+                      ? a.teamNo - b.teamNo
+                      : compareMatchResults(
+                          { ...a, totalMatchPoints: a.totalPoints },
+                          { ...b, totalMatchPoints: b.totalPoints },
+                        ),
+                  )
+                  .map((team) => {
+                    const adjustment = additionalPointsOf(team);
+                    return (
+                      <div
+                        key={team.teamNo}
+                        className="grid grid-cols-[2.5rem_minmax(0,1fr)_2.5rem_3.75rem_3rem] items-center gap-2 text-sm"
+                      >
+                        <span className="tabular-nums font-medium text-muted-foreground">
+                          #{team.placement}
+                        </span>
+                        <span className="truncate">{team.name ?? teamName(team.teamNo)}</span>
+                        <span
+                          data-testid={`map-${map.id}-adj-${team.teamNo}`}
+                          className={`text-right tabular-nums text-xs ${
+                            adjustment > 0
+                              ? 'text-[var(--brand-gold)]'
+                              : adjustment < 0
+                                ? 'text-destructive'
+                                : 'text-muted-foreground'
+                          }`}
+                          title={
+                            adjustment === 0
+                              ? undefined
+                              : [
+                                  `${formatSignedPoints(adjustment)} additional points`,
+                                  team.adjustmentNote,
+                                  team.adjustedAt
+                                    ? `changed ${new Date(team.adjustedAt).toLocaleString()}`
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' — ')
+                          }
+                        >
+                          {adjustment === 0 ? '—' : formatSignedPoints(adjustment)}
+                        </span>
+                        <span className="text-right tabular-nums font-semibold text-foreground">
+                          {team.totalPoints}
+                        </span>
+                        <span className="text-right tabular-nums text-muted-foreground">
+                          {team.eliminations}
+                        </span>
+                      </div>
+                    );
+                  })}
               </div>
 
               <div className="flex gap-2 pt-1">

@@ -1,9 +1,10 @@
-import type {
-  AutoWwcdVariant,
-  ClosedMapResult,
-  MatchState,
-  OverlayAppearance,
-  Team,
+import {
+  additionalPointsOf,
+  type AutoWwcdVariant,
+  type ClosedMapResult,
+  type MatchState,
+  type OverlayAppearance,
+  type Team,
 } from '@cdf/shared';
 
 export type LeaderboardLayoutMode = 'tower' | 'final-four' | 'wwcd';
@@ -268,10 +269,34 @@ export interface PostGameTeamRow {
   eliminations: number;
   placementPoints: number;
   killPoints: number;
-  /** Single-match total points (`placementPoints + killPoints`). */
+  /** The operator's bonus (+) or penalty (−) for this match; 0 when none (ADR-0018). */
+  additionalPoints: number;
+  /** Single-match total points (`placementPoints + killPoints + additionalPoints`). */
   totalMatchPoints: number;
   /** Cumulative series points across the tournament. */
   seriesTotalPoints: number;
+}
+
+/** The fields a single-match ranking reads. */
+export interface MatchRankFields {
+  totalMatchPoints: number;
+  killPoints: number;
+  placement: number;
+  teamNo: number;
+}
+
+/**
+ * Single-match ranking (Part 7 Feature D): match points (adjustment included) desc → official kill
+ * points desc → placement asc → slot asc. The one implementation shared by the postgame board and
+ * the admin's finished-map cards, so the two can never order the same map differently.
+ */
+export function compareMatchResults(a: MatchRankFields, b: MatchRankFields): number {
+  return (
+    b.totalMatchPoints - a.totalMatchPoints ||
+    b.killPoints - a.killPoints ||
+    a.placement - b.placement ||
+    a.teamNo - b.teamNo
+  );
 }
 
 export interface PostGameBoardData {
@@ -361,17 +386,13 @@ export function selectPostGameResults(
         eliminations: entry.eliminations,
         placementPoints: entry.placementPoints,
         killPoints: entry.killPoints,
+        additionalPoints: additionalPointsOf(entry),
         totalMatchPoints: entry.totalPoints,
         seriesTotalPoints: rosterTeam?.totalPoints ?? entry.totalPoints,
       };
     });
 
-    const sorted = [...unsorted].sort((a, b) => {
-      if (b.totalMatchPoints !== a.totalMatchPoints) return b.totalMatchPoints - a.totalMatchPoints;
-      if (b.killPoints !== a.killPoints) return b.killPoints - a.killPoints;
-      if (a.placement !== b.placement) return a.placement - b.placement;
-      return a.teamNo - b.teamNo;
-    });
+    const sorted = [...unsorted].sort(compareMatchResults);
 
     const rows: PostGameTeamRow[] = sorted.map((row, idx) => ({
       ...row,
@@ -411,17 +432,13 @@ export function selectPostGameResults(
         eliminations: team.eliminations,
         placementPoints: team.placementPoints,
         killPoints: team.killPoints,
+        additionalPoints: 0,
         totalMatchPoints: matchPoints,
         seriesTotalPoints: team.totalPoints,
       };
     });
 
-    const sorted = [...unsorted].sort((a, b) => {
-      if (b.totalMatchPoints !== a.totalMatchPoints) return b.totalMatchPoints - a.totalMatchPoints;
-      if (b.killPoints !== a.killPoints) return b.killPoints - a.killPoints;
-      if (a.placement !== b.placement) return a.placement - b.placement;
-      return a.teamNo - b.teamNo;
-    });
+    const sorted = [...unsorted].sort(compareMatchResults);
 
     const rows: PostGameTeamRow[] = sorted.map((row, idx) => ({
       ...row,
@@ -458,7 +475,9 @@ export interface SeriesStandingsRow {
   killPoints: number;
   /** Cumulative eliminations across completed matches. */
   eliminations: number;
-  /** Cumulative total series points (`placementPoints + killPoints`). */
+  /** Cumulative operator adjustments across completed matches (0 when none). */
+  additionalPoints: number;
+  /** Cumulative total series points (`placementPoints + killPoints + additionalPoints`). */
   totalPoints: number;
   /** Placement in the most recent closed match (used as official 4th tie-breaker). */
   latestPlacement: number;
@@ -526,6 +545,7 @@ export function selectSeriesStandings(
       let placementPoints = 0;
       let killPoints = 0;
       let eliminations = 0;
+      let additionalPoints = 0;
       let totalPoints = 0;
 
       for (const map of maps) {
@@ -536,6 +556,7 @@ export function selectSeriesStandings(
           placementPoints += entry.placementPoints;
           killPoints += entry.killPoints;
           eliminations += entry.eliminations;
+          additionalPoints += additionalPointsOf(entry);
           totalPoints += entry.totalPoints;
         }
       }
@@ -561,6 +582,7 @@ export function selectSeriesStandings(
         placementPoints,
         killPoints,
         eliminations,
+        additionalPoints,
         totalPoints,
         latestPlacement: latestPlacementByTeam.get(teamNo) ?? 999,
       });
@@ -593,7 +615,7 @@ export function selectSeriesStandings(
     const unsorted: Omit<SeriesStandingsRow, 'seriesRank'>[] = match.teams.map((team, idx) => {
       const placePts = team.placementPoints;
       const killPts = team.killPoints;
-      const totalPts = team.totalPoints > 0 ? team.totalPoints : placePts + killPts;
+      const totalPts = team.totalPoints !== 0 ? team.totalPoints : placePts + killPts;
       return {
         teamNo: team.teamNo,
         name: team.name,
@@ -603,6 +625,7 @@ export function selectSeriesStandings(
         placementPoints: placePts,
         killPoints: killPts,
         eliminations: team.eliminations,
+        additionalPoints: 0,
         totalPoints: totalPts,
         latestPlacement: team.placement ?? idx + 1,
       };

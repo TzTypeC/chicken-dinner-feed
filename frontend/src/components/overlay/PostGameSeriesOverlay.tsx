@@ -6,6 +6,7 @@ import {
 import { motion } from 'motion/react';
 import { appearanceToCssVariables } from './appearance';
 import type { SeriesStandingsBoardData, SeriesStandingsRow } from './broadcast-state';
+import { formatSignedPoints } from '@/lib/points';
 import { formatTeamSlot, ub } from './overlay-scale';
 
 export interface PostGameSeriesOverlayProps {
@@ -43,6 +44,9 @@ export function PostGameSeriesOverlay({
   const midpoint = isTwoColumnTable ? Math.ceil(rows.length / 2) : rows.length;
   const leftTableRows = rows.slice(0, midpoint);
   const rightTableRows = isTwoColumnTable ? rows.slice(midpoint) : [];
+  // ADJ (cumulative operator adjustments) is shown only when the series carries one, so
+  // P.PTS + E.PTS + ADJ = TOTAL stays checkable on air and unadjusted series look as before.
+  const showAdjustment = rows.some((row) => row.additionalPoints !== 0);
 
   const completedCount = board?.completedMatchesCount ?? 0;
   const displayLastMap = (board?.lastMapName ?? matchInfo.mapName).trim();
@@ -515,6 +519,7 @@ export function PostGameSeriesOverlay({
                 showLogos={showLogos}
                 showTeamNumbers={showTeamNumbers}
                 showSeriesWwcdColumn={showSeriesWwcdColumn}
+                showAdjustment={showAdjustment}
                 compact={isTwoColumnTable}
               />
               {isTwoColumnTable && (
@@ -523,6 +528,7 @@ export function PostGameSeriesOverlay({
                   showLogos={showLogos}
                   showTeamNumbers={showTeamNumbers}
                   showSeriesWwcdColumn={showSeriesWwcdColumn}
+                  showAdjustment={showAdjustment}
                   compact
                 />
               )}
@@ -576,6 +582,8 @@ interface SeriesStandingsColumnTableProps {
   showLogos: boolean;
   showTeamNumbers: boolean;
   showSeriesWwcdColumn: boolean;
+  /** Adds the ADJ column (cumulative operator adjustments); only when some row has one. */
+  showAdjustment: boolean;
   compact: boolean;
 }
 
@@ -584,6 +592,7 @@ function SeriesStandingsColumnTable({
   showLogos,
   showTeamNumbers,
   showSeriesWwcdColumn,
+  showAdjustment,
   compact,
 }: SeriesStandingsColumnTableProps) {
   const rankW = compact ? 34 : 42;
@@ -592,6 +601,7 @@ function SeriesStandingsColumnTable({
   const wwcdW = compact ? 48 : 64;
   const pPtsW = compact ? 52 : 70;
   const kPtsW = compact ? 52 : 70;
+  const adjW = compact ? 46 : 62;
   const totW = compact ? 58 : 78;
 
   const colParts = [
@@ -602,6 +612,7 @@ function SeriesStandingsColumnTable({
     ...(showSeriesWwcdColumn ? [ub(wwcdW)] : []),
     ub(pPtsW),
     ub(kPtsW),
+    ...(showAdjustment ? [ub(adjW)] : []),
     ub(totW),
   ];
   const gridCols = colParts.join(' ');
@@ -638,6 +649,11 @@ function SeriesStandingsColumnTable({
         {showSeriesWwcdColumn && <span className="text-center">WWCD</span>}
         <span className="text-center">P.PTS</span>
         <span className="text-center">E.PTS</span>
+        {showAdjustment && (
+          <span className="text-center" data-testid="postgame-series-adj-header">
+            ADJ
+          </span>
+        )}
         <span className="text-center" style={{ color: 'var(--overlay-accent)' }}>
           TOTAL
         </span>
@@ -790,6 +806,25 @@ function SeriesStandingsColumnTable({
               >
                 {row.killPoints}
               </span>
+
+              {/* Cumulative operator adjustments */}
+              {showAdjustment && (
+                <span
+                  data-testid={`postgame-series-adj-${row.teamNo}`}
+                  className="text-center font-semibold tabular-nums"
+                  style={{
+                    fontSize: ub(compact ? 13 : 14.5),
+                    color:
+                      row.additionalPoints > 0
+                        ? 'var(--overlay-accent)'
+                        : row.additionalPoints < 0
+                          ? 'var(--player-knocked)'
+                          : 'var(--overlay-text-muted)',
+                  }}
+                >
+                  {row.additionalPoints === 0 ? '—' : formatSignedPoints(row.additionalPoints)}
+                </span>
+              )}
 
               {/* Cumulative Total Series Points */}
               <span

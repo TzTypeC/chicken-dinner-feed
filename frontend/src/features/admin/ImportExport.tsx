@@ -1,8 +1,22 @@
-import { Archive, Download, FileSpreadsheet, ShieldCheck, Upload } from 'lucide-react';
+import {
+  AlertTriangle,
+  Archive,
+  Download,
+  FileSpreadsheet,
+  ShieldCheck,
+  Upload,
+} from 'lucide-react';
 import { useRef, useState } from 'react';
-import type { BackupPreview, ExcelImportMode, ExcelImportPreview } from '@cdf/shared';
+import {
+  listRecordedAdjustments,
+  type BackupPreview,
+  type ExcelImportMode,
+  type ExcelImportPreview,
+} from '@cdf/shared';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { api, ApiError } from '@/lib/api';
+import { formatSignedPoints } from '@/lib/points';
+import { useLiveStore } from '@/stores/live-store';
 import { toast } from '@/stores/toast-store';
 
 function describe(error: unknown): string {
@@ -24,6 +38,9 @@ interface PendingExcelImport {
 export function ImportExport() {
   const backupInputRef = useRef<HTMLInputElement>(null);
   const excelInputRef = useRef<HTMLInputElement>(null);
+  const closedMaps = useLiveStore((state) => state.snapshot?.closedMaps);
+  // The official sheet has no additional-points column (Part 8, Q12): list what an export leaves out.
+  const omittedAdjustments = listRecordedAdjustments(closedMaps ?? []);
 
   const [busy, setBusy] = useState(false);
   const [backupDragOver, setBackupDragOver] = useState(false);
@@ -374,6 +391,32 @@ export function ImportExport() {
                 <code>RANK</code>) evaluate cleanly on any machine.
               </p>
             </div>
+            {omittedAdjustments.length > 0 && (
+              <div
+                data-testid="excel-omitted-adjustments"
+                className="mb-3 rounded border border-amber-500/40 bg-amber-500/10 p-2.5 text-xs text-amber-200"
+              >
+                <p className="flex items-center gap-1.5 font-semibold">
+                  <AlertTriangle className="size-3.5 shrink-0" aria-hidden />
+                  {omittedAdjustments.length} additional-points adjustment
+                  {omittedAdjustments.length === 1 ? ' is' : 's are'} not in the sheet
+                </p>
+                <p className="mt-1">
+                  The official workbook only has placement and kill points, so its totals and ranks
+                  will differ from the broadcast for:
+                </p>
+                <ul className="mt-1 list-disc pl-4">
+                  {omittedAdjustments.map((adjustment) => (
+                    <li key={`${adjustment.mapId}-${adjustment.teamNo}`}>
+                      Map {adjustment.mapNumber} · T{String(adjustment.teamNo).padStart(2, '0')}
+                      {adjustment.teamName ? ` ${adjustment.teamName}` : ''}:{' '}
+                      <strong>{formatSignedPoints(adjustment.additionalPoints)}</strong>
+                      {adjustment.adjustmentNote ? ` (${adjustment.adjustmentNote})` : ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <a
               href={api.excelExportUrl}
               className="bg-primary text-primary-foreground hover:bg-primary/90 flex w-fit items-center gap-2 rounded px-3 py-1.5 text-xs font-semibold transition-colors"
