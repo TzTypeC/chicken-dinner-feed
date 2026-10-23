@@ -6,6 +6,7 @@ import type {
   OverlayAnimationType,
   OverlayAppearance,
   OverlayColors,
+  OverlayInstance,
   OverlayType,
   PostGameBackground,
   PostGameBackgroundMode,
@@ -46,6 +47,9 @@ export interface AppearanceEditorProps {
   closedMaps?: readonly ClosedMapResult[];
   /** Uploaded fonts, offered alongside the built-in choices. */
   customFonts: CustomFont[];
+  postgameInstances?: OverlayInstance[];
+  onAutoTransition?(targetId: string): Promise<void>;
+  isTransitioning?: boolean;
   onChange(appearance: OverlayAppearance): void;
   onUploadBackground?(file: File): Promise<void>;
   onRemoveBackground?(): Promise<void>;
@@ -60,6 +64,9 @@ export function AppearanceEditor({
   instanceType = 'leaderboard',
   closedMaps = [],
   customFonts,
+  postgameInstances = [],
+  onAutoTransition,
+  isTransitioning = false,
   onChange,
   onUploadBackground,
   onRemoveBackground,
@@ -249,7 +256,30 @@ export function AppearanceEditor({
     instanceType === 'top-kill' ||
     instanceType === 'most-improved';
   const supportsRowStagger = instanceType === 'leaderboard';
+  const isPostgameSuite =
+    instanceType === 'postgame-match' ||
+    instanceType === 'postgame-series' ||
+    instanceType === 'top-kill' ||
+    instanceType === 'most-improved';
 
+  const defaultTargetId =
+    instanceType === 'postgame-match'
+      ? 'default-postgame-series'
+      : instanceType === 'postgame-series'
+        ? 'default-top-kill'
+        : instanceType === 'top-kill'
+          ? 'default-most-improved'
+          : 'default-postgame-match';
+
+  const [selectedTransitionTarget, setSelectedTransitionTarget] = useState(defaultTargetId);
+
+  const availableTargets = (postgameInstances ?? []).filter(
+    (inst) =>
+      inst.type === 'postgame-match' ||
+      inst.type === 'postgame-series' ||
+      inst.type === 'top-kill' ||
+      inst.type === 'most-improved',
+  );
   return (
     <div className="grid gap-6">
       {/* D-PMCC-09: Selectable Historical Match for Postgame Match */}
@@ -327,6 +357,58 @@ export function AppearanceEditor({
           to={appearance.mostImprovedTo ?? 'latest'}
           onChange={(range) => patch(range)}
         />
+      )}
+
+      {isPostgameSuite && (
+        <section
+          data-testid="auto-transition-section"
+          className="border-border bg-secondary/20 grid gap-3 rounded-lg border p-3.5"
+        >
+          <div>
+            <h3 className="text-sm font-medium text-[var(--brand-gold)]">
+              Auto Transition (Postgame Suite)
+            </h3>
+            <p className="text-muted-foreground text-xs">
+              Seamlessly transition between postgame statistics screens. When triggered, the
+              currently ON AIR graphic executes a smooth transition OUT to full hidden, and the
+              target overlay automatically transitions IN.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="grid min-w-[240px] flex-1 gap-1 text-xs">
+              <span className="text-muted-foreground">Target overlay for next ON AIR</span>
+              <select
+                aria-label="Auto Transition target"
+                data-testid="auto-transition-target-select"
+                className="border-border bg-background min-h-9 rounded border px-2.5 py-1.5 text-sm"
+                value={selectedTransitionTarget}
+                onChange={(e) => setSelectedTransitionTarget(e.target.value)}
+                disabled={isTransitioning}
+              >
+                {availableTargets.map((inst) => (
+                  <option key={inst.id} value={inst.id}>
+                    {inst.name} (/overlay/{inst.id})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <button
+              type="button"
+              data-testid="auto-transition-button"
+              disabled={isTransitioning || !selectedTransitionTarget}
+              onClick={() => {
+                if (selectedTransitionTarget && onAutoTransition && !isTransitioning) {
+                  void onAutoTransition(selectedTransitionTarget);
+                }
+              }}
+              className="min-h-9 shrink-0 rounded border border-[var(--brand-gold)]/60 bg-[var(--brand-gold)]/20 px-4 py-1.5 text-xs font-semibold text-[var(--brand-gold)] transition-colors hover:bg-[var(--brand-gold)]/30 disabled:opacity-40"
+            >
+              {isTransitioning ? 'Transitioning...' : 'Next Show It (Transition)'}
+            </button>
+          </div>
+        </section>
       )}
 
       {visibleToggles.length > 0 && (

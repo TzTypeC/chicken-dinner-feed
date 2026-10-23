@@ -201,6 +201,12 @@ export const api = {
       { method: 'POST' },
     ),
 
+  transitionOverlay: (sourceInstanceId: string, targetInstanceId: string) =>
+    request<{
+      source: { instanceId: string; visible: boolean; changedAt: number };
+      target: { instanceId: string; visible: boolean; changedAt: number };
+    }>(`/overlays/${sourceInstanceId}/transition/${targetInstanceId}`, { method: 'POST' }),
+
   getSeries: () => request<{ document: SeriesDocument; standings: Team[] }>('/series'),
 
   updateSeriesMatchInfo: (patch: SeriesMatchInfoPatch) =>

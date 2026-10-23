@@ -354,6 +354,64 @@ export function AdminPage() {
     }
   };
 
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const isTransitioningRef = useRef(false);
+
+  const handleAutoTransition = async (targetInstanceId: string) => {
+    if (!selected || isTransitioningRef.current) return;
+    isTransitioningRef.current = true;
+    setIsTransitioning(true);
+
+    try {
+      await api.setOverlayVisibility(selected.id, 'hide');
+      setOverlays((prev) =>
+        prev
+          ? {
+              ...prev,
+              instances: prev.instances.map((entry) =>
+                entry.id === selected.id ? { ...entry, onAir: false } : entry,
+              ),
+            }
+          : prev,
+      );
+      setSavedOverlays((prev) =>
+        prev.map((entry) => (entry.id === selected.id ? { ...entry, onAir: false } : entry)),
+      );
+
+      const duration = selected.appearance?.animation?.durationMs ?? 420;
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, duration + 60);
+      });
+
+      await api.setOverlayVisibility(targetInstanceId, 'show');
+      setOverlays((prev) =>
+        prev
+          ? {
+              ...prev,
+              instances: prev.instances.map((entry) =>
+                entry.id === targetInstanceId ? { ...entry, onAir: true } : entry,
+              ),
+            }
+          : prev,
+      );
+      setSavedOverlays((prev) =>
+        prev.map((entry) => (entry.id === targetInstanceId ? { ...entry, onAir: true } : entry)),
+      );
+
+      setSelectedId(targetInstanceId);
+
+      const targetInstance = overlays?.instances.find((i) => i.id === targetInstanceId);
+      toast.success(
+        'Transition complete',
+        `“${selected.name}” transitioned to “${targetInstance?.name ?? targetInstanceId}”.`,
+      );
+    } catch (error) {
+      toast.error('Transition failed', describe(error));
+    } finally {
+      isTransitioningRef.current = false;
+      setIsTransitioning(false);
+    }
+  };
   const deleteOverlay = async (instance: OverlayInstance) => {
     setPendingDelete(null);
     try {
@@ -924,6 +982,9 @@ export function AdminPage() {
                     instanceType={selected.type}
                     closedMaps={closedMaps}
                     customFonts={fonts}
+                    postgameInstances={overlays?.instances}
+                    onAutoTransition={handleAutoTransition}
+                    isTransitioning={isTransitioning}
                     onChange={(appearance) => patchSelected({ appearance })}
                     onUploadBackground={(file) => uploadBackground(selected, file)}
                     onRemoveBackground={() => removeBackground(selected)}

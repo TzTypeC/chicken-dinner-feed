@@ -35,6 +35,7 @@ import { MostImprovedOverlay } from '@/components/overlay/MostImprovedOverlay';
 import { selectMostImproved } from '@/components/overlay/most-improved';
 import { PostGameOverlay } from '@/components/overlay/PostGameOverlay';
 import { PostGameSeriesOverlay } from '@/components/overlay/PostGameSeriesOverlay';
+import { TransitionSurface } from '@/components/overlay/TransitionSurface';
 import { selectTopKill } from '@/components/overlay/top-kill';
 import { TopKillOverlay } from '@/components/overlay/TopKillOverlay';
 import { WwcdOverlay } from '@/components/overlay/WwcdOverlay';
@@ -516,6 +517,7 @@ export function OverlayPage({
   }
 
   if (effectiveSurface === 'postgame') {
+    const isVisible = isPreview || isOperatorVisible;
     const unavailableSelection = isPinnedPostGameMatchUnavailable(
       appearance.postGameMatchSelection,
       closedMaps,
@@ -529,29 +531,25 @@ export function OverlayPage({
     return (
       <>
         {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
-        <AnimatePresence mode="wait" initial={false}>
-          {isOperatorVisible && (
-            <motion.div
-              key="postgame-match-surface"
-              variants={animation.variants}
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-            >
-              <PostGameOverlay
-                board={board}
-                matchInfo={matchInfo}
-                appearance={appearance}
-                unavailableSelection={unavailableSelection}
-              />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <TransitionSurface
+          visible={isVisible}
+          variants={animation.variants}
+          surfaceKey="postgame-match-surface"
+          testId="postgame-match-root"
+        >
+          <PostGameOverlay
+            board={board}
+            matchInfo={matchInfo}
+            appearance={appearance}
+            unavailableSelection={unavailableSelection}
+          />
+        </TransitionSurface>
       </>
     );
   }
 
   if (effectiveSurface === 'postgame-series') {
+    const isVisible = isPreview || isOperatorVisible;
     const board = selectSeriesStandings(snapshot.match, closedMaps, {
       isPreviewSimulation: isPreview,
       lastClosedMap,
@@ -559,28 +557,24 @@ export function OverlayPage({
     return (
       <>
         {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
-        <AnimatePresence mode="wait" initial={false}>
-          {isOperatorVisible && (
-            <motion.div
-              key="postgame-series-surface"
-              variants={animation.variants}
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-            >
-              <PostGameSeriesOverlay board={board} matchInfo={matchInfo} appearance={appearance} />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <TransitionSurface
+          visible={isVisible}
+          variants={animation.variants}
+          surfaceKey="postgame-series-surface"
+          testId="postgame-series-root"
+        >
+          <PostGameSeriesOverlay board={board} matchInfo={matchInfo} appearance={appearance} />
+        </TransitionSurface>
       </>
     );
   }
-
   if (effectiveSurface === 'top-kill' || effectiveSurface === 'most-improved') {
-    // Fullscreen statistics screens (Part 10): on air only by the operator (ON AIR), never
-    // automatically; data comes from closed maps only, so the live match never feeds them.
+    const isVisible = isPreview || isOperatorVisible;
     const rosterByNo = new Map(
-      snapshot.match.teams.map((team) => [team.teamNo, { name: team.name, logoUrl: team.logoUrl }]),
+      (snapshot.match?.teams ?? []).map((team) => [
+        team.teamNo,
+        { name: team.name, logoUrl: team.logoUrl },
+      ]),
     );
     const content =
       effectiveSurface === 'top-kill' ? (
@@ -602,19 +596,14 @@ export function OverlayPage({
     return (
       <>
         {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
-        <AnimatePresence mode="wait" initial={false}>
-          {isOperatorVisible && (
-            <motion.div
-              key={`${effectiveSurface}-surface`}
-              variants={animation.variants}
-              initial="hidden"
-              animate="visible"
-              exit="hidden"
-            >
-              {content}
-            </motion.div>
-          )}
-        </AnimatePresence>
+        <TransitionSurface
+          visible={isVisible}
+          variants={animation.variants}
+          surfaceKey={`${effectiveSurface}-surface`}
+          testId={`${effectiveSurface}-root`}
+        >
+          {content}
+        </TransitionSurface>
       </>
     );
   }

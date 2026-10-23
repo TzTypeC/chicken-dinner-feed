@@ -271,16 +271,12 @@ export function FullscreenWwcdOverlay({
                           data-testid="wwcd-fullscreen-status-tag"
                           style={{
                             color:
-                              winner.provisional || winner.sourceKind === 'preview'
-                                ? 'var(--player-knocked)'
-                                : undefined,
+                              winner.sourceKind === 'preview' ? 'var(--player-knocked)' : undefined,
                           }}
                         >
                           {winner.sourceKind === 'preview'
                             ? 'PREVIEW SAMPLE — NOT A RESULT'
-                            : winner.provisional
-                              ? 'PROVISIONAL — MAP NOT CLOSED'
-                              : 'OFFICIAL VICTORY CEREMONY'}
+                            : 'OFFICIAL VICTORY CEREMONY'}
                         </span>
                       </span>
                     </div>

@@ -88,11 +88,10 @@ type Target = Record<string, string | number>;
 function hiddenTarget(animation: OverlayAnimation): Target {
   switch (animation.type) {
     case 'fade':
-      return {};
+      return { scale: 0.98, y: 8 };
 
     case 'zoom-fade':
-      return { scale: 0.92 };
-
+      return { scale: 0.92, y: 12 };
     case 'slide':
       switch (animation.direction) {
         case 'left':
@@ -127,9 +126,9 @@ function hiddenTarget(animation: OverlayAnimation): Target {
 function shownTarget(animation: OverlayAnimation): Target {
   switch (animation.type) {
     case 'fade':
-      return {};
+      return { scale: 1, y: 0 };
     case 'zoom-fade':
-      return { scale: 1 };
+      return { scale: 1, y: 0 };
     case 'slide':
       return { x: 0, y: 0 };
     case 'wipe':

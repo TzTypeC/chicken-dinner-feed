@@ -137,7 +137,7 @@ export function WwcdOverlay({
                   {matchContext}
                 </p>
 
-                {(winner.provisional || winner.sourceKind === 'preview') && (
+                {winner.sourceKind === 'preview' && (
                   <p
                     data-testid="wwcd-status-tag"
                     className="font-extrabold uppercase"
@@ -148,9 +148,7 @@ export function WwcdOverlay({
                       color: 'var(--player-knocked)',
                     }}
                   >
-                    {winner.sourceKind === 'preview'
-                      ? 'Preview sample — not a result'
-                      : 'Provisional — map not closed'}
+                    Preview sample — not a result
                   </p>
                 )}
 

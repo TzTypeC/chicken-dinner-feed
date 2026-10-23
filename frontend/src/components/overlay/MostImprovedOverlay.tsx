@@ -157,6 +157,7 @@ function RankRail({ hero, teamCount }: { hero: MostImprovedEntry; teamCount: num
 export function MostImprovedOverlay({ board, appearance }: MostImprovedOverlayProps) {
   const showLogos = appearance.showLogos ?? true;
   const showTeamNumbers = appearance.showTeamNumbers ?? true;
+  const scale = appearance.scale ?? 1;
   const hasRange = board.status !== 'unavailable';
 
   return (
@@ -170,7 +171,8 @@ export function MostImprovedOverlay({ board, appearance }: MostImprovedOverlayPr
         left: '50%',
         width: ub(1920),
         height: ub(1080),
-        transform: 'translate(-50%, -50%)',
+        transform: `translate(-50%, -50%) scale(${scale})`,
+        transformOrigin: 'center center',
         overflow: 'hidden',
         pointerEvents: 'none',
         fontFamily: 'var(--overlay-font-family)',

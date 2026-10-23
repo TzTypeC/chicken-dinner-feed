@@ -160,23 +160,21 @@ describe('WWCD overlays show provisional vs final (Part 9, Q4b)', () => {
   const map = recorded([[2, 1]]);
   const final = selectWwcdWinner(LIVE, map, { closedMaps: [map] });
 
-  it('marks the card and its points provisional, then plain once closed', () => {
+  it('renders clean WWCD celebration without redundant provisional text', () => {
     const live = renderToStaticMarkup(
       <WwcdOverlay winner={provisional} matchInfo={INFO} appearance={DEFAULT_OVERLAY_APPEARANCE} />,
     );
-    expect(live).toContain('data-testid="wwcd-status-tag"');
-    expect(live).toContain('Provisional — map not closed');
-    expect(live).toContain('Points this match (provisional)');
-    expect(live).toContain('Series total (provisional)');
+    expect(live).not.toContain('wwcd-status-tag');
+    expect(live).not.toContain('Provisional — map not closed');
 
     const closed = renderToStaticMarkup(
       <WwcdOverlay winner={final} matchInfo={INFO} appearance={DEFAULT_OVERLAY_APPEARANCE} />,
     );
     expect(closed).not.toContain('wwcd-status-tag');
-    expect(closed).not.toContain('provisional');
+    expect(closed).not.toContain('Provisional — map not closed');
   });
 
-  it('marks the fullscreen celebration and its total provisional, then official once closed', () => {
+  it('renders official celebration on fullscreen without provisional banner', () => {
     const live = renderToStaticMarkup(
       <FullscreenWwcdOverlay
         winner={provisional}
@@ -184,8 +182,8 @@ describe('WWCD overlays show provisional vs final (Part 9, Q4b)', () => {
         appearance={DEFAULT_OVERLAY_APPEARANCE}
       />,
     );
-    expect(live).toContain('PROVISIONAL — MAP NOT CLOSED');
-    expect(live).toContain('MATCH TOTAL POINTS (PROVISIONAL)');
+    expect(live).not.toContain('PROVISIONAL — MAP NOT CLOSED');
+    expect(live).toContain('OFFICIAL VICTORY CEREMONY');
 
     const closed = renderToStaticMarkup(
       <FullscreenWwcdOverlay
@@ -195,7 +193,7 @@ describe('WWCD overlays show provisional vs final (Part 9, Q4b)', () => {
       />,
     );
     expect(closed).toContain('OFFICIAL VICTORY CEREMONY');
-    expect(closed).not.toContain('PROVISIONAL');
+    expect(closed).not.toContain('PROVISIONAL — MAP NOT CLOSED');
   });
 
   it('labels the admin-preview sample as not a result', () => {

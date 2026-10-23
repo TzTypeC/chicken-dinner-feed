@@ -84,7 +84,15 @@ function TiedTag({ testId }: { testId: string }) {
   );
 }
 
-function Hero({ entry, showLogos }: { entry: TopKillEntry; showLogos: boolean }) {
+function Hero({
+  entry,
+  showLogos,
+  showTeamNumbers,
+}: {
+  entry: TopKillEntry;
+  showLogos: boolean;
+  showTeamNumbers: boolean;
+}) {
   return (
     <motion.section
       data-testid="top-kill-hero"
@@ -113,17 +121,19 @@ function Hero({ entry, showLogos }: { entry: TopKillEntry; showLogos: boolean })
         <span data-testid="top-kill-hero-rank">
           {entry.tied ? 'Tied 1st' : '1st in eliminations'}
         </span>
-        <span
-          className="font-extrabold"
-          style={{
-            fontSize: ub(18),
-            padding: `${ub(4)} ${ub(10)}`,
-            border: `${ub(1)} solid ${BRONZE}`,
-            color: 'var(--overlay-text-muted)',
-          }}
-        >
-          {formatTeamSlot(entry.teamNo)}
-        </span>
+        {showTeamNumbers && entry.teamNo > 0 && (
+          <span
+            className="font-extrabold"
+            style={{
+              fontSize: ub(18),
+              padding: `${ub(4)} ${ub(10)}`,
+              border: `${ub(1)} solid ${BRONZE}`,
+              color: 'var(--overlay-text-muted)',
+            }}
+          >
+            {formatTeamSlot(entry.teamNo)}
+          </span>
+        )}
       </div>
       <div className="flex items-center" style={{ gap: ub(24), marginTop: ub(28) }}>
         <LogoBox entry={entry} size={112} showLogos={showLogos} />
@@ -204,11 +214,13 @@ function Row({
   index,
   heroElims,
   showLogos,
+  showTeamNumbers,
 }: {
   entry: TopKillEntry;
   index: number;
   heroElims: number;
   showLogos: boolean;
+  showTeamNumbers: boolean;
 }) {
   const ratio = heroElims > 0 ? Math.min(1, entry.eliminations / heroElims) : 0;
   return (
@@ -265,7 +277,7 @@ function Row({
           className="font-semibold"
           style={{ fontSize: ub(18), marginTop: ub(6), color: 'var(--overlay-text-muted)' }}
         >
-          {formatTeamSlot(entry.teamNo)} ·{' '}
+          {showTeamNumbers && entry.teamNo > 0 ? `${formatTeamSlot(entry.teamNo)} · ` : ''}
           {entry.placement !== null ? `finished #${entry.placement}` : 'finish not recorded'}
         </div>
       </div>
@@ -321,6 +333,8 @@ function EmptyState({ message }: { message: string }) {
 
 export function TopKillOverlay({ board, appearance }: TopKillOverlayProps) {
   const showLogos = appearance.showLogos ?? true;
+  const showTeamNumbers = appearance.showTeamNumbers ?? true;
+  const scale = appearance.scale ?? 1;
   const map = board.status === 'no-map' ? null : board.map;
   const hasEntries = board.status === 'ready' || board.status === 'preview';
   const hero = hasEntries ? board.entries[0] : undefined;
@@ -332,7 +346,12 @@ export function TopKillOverlay({ board, appearance }: TopKillOverlayProps) {
       style={{
         ...appearanceToCssVariables(appearance),
         position: 'fixed',
-        inset: 0,
+        top: '50%',
+        left: '50%',
+        width: ub(1920),
+        height: ub(1080),
+        transform: `translate(-50%, -50%) scale(${scale})`,
+        transformOrigin: 'center center',
         padding: `${ub(72)} ${ub(96)}`,
         display: 'grid',
         gridTemplateRows: 'auto 1fr auto',
@@ -400,7 +419,7 @@ export function TopKillOverlay({ board, appearance }: TopKillOverlayProps) {
             minHeight: 0,
           }}
         >
-          <Hero entry={hero} showLogos={showLogos} />
+          <Hero entry={hero} showLogos={showLogos} showTeamNumbers={showTeamNumbers} />
           <section
             style={{
               display: 'grid',
@@ -416,6 +435,7 @@ export function TopKillOverlay({ board, appearance }: TopKillOverlayProps) {
                 index={i + 1}
                 heroElims={hero.eliminations}
                 showLogos={showLogos}
+                showTeamNumbers={showTeamNumbers}
               />
             ))}
           </section>

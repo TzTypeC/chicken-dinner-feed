@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import { overlayInstanceIdSchema, overlayVisibilitySchema } from '@cdf/shared';
 import type { FastifyPluginAsyncZod } from 'fastify-type-provider-zod';
 import { z } from 'zod';
@@ -123,4 +124,51 @@ export const overlayControlRoutes: FastifyPluginAsyncZod<OverlayControlRoutesOpt
   register('show', 'Animate an overlay instance on air', (id) => store.set(id, true));
   register('hide', 'Animate an overlay instance off air', (id) => store.set(id, false));
   register('toggle', 'Flip an overlay instance’s visibility', (id) => store.toggle(id));
+
+  app.route({
+    method: ['GET', 'POST'],
+    url: '/overlays/:instanceId/transition/:targetId',
+    schema: {
+      summary:
+        'Sequentially transition from source instance to target instance with smooth out then in',
+      tags: ['overlay control'],
+      params: z.object({
+        instanceId: overlayInstanceIdSchema,
+        targetId: overlayInstanceIdSchema,
+      }),
+      querystring: querySchema,
+      response: {
+        200: z.object({
+          source: overlayVisibilitySchema,
+          target: overlayVisibilitySchema,
+        }),
+        401: z.object({ error: z.string() }),
+        404: z.object({ error: z.string() }),
+      },
+    },
+    handler: async (request, reply) => {
+      const rejection = controlTokenRejection(
+        request.query.token,
+        request.headers[CONTROL_TOKEN_HEADER],
+      );
+      if (rejection) {
+        await reply.code(401).send({ error: rejection });
+        return;
+      }
+
+      const { instanceId, targetId } = request.params;
+      if (isConfigured && (!isConfigured(instanceId) || !isConfigured(targetId))) {
+        await reply
+          .code(404)
+          .send({ error: `Both source and target overlays must be configured.` });
+        return;
+      }
+
+      const sourceState = store.set(instanceId, false);
+      await sleep(450);
+      const targetState = store.set(targetId, true);
+
+      return { source: sourceState, target: targetState };
+    },
+  });
 };
