@@ -359,6 +359,13 @@ export function AppearanceEditor({
         />
       )}
 
+      {instanceType === 'next-map' && (
+        <NextMapSettings
+          upcomingSelection={appearance.nextMapUpcomingMatch ?? 'auto'}
+          closedMaps={closedMaps}
+          onChange={(nextMapUpcomingMatch) => patch({ nextMapUpcomingMatch })}
+        />
+      )}
       {isPostgameSuite && (
         <section
           data-testid="auto-transition-section"
@@ -1093,6 +1100,76 @@ function MostImprovedRangeEditor({
           </ul>
         </div>
       )}
+    </section>
+  );
+}
+
+function NextMapSettings({
+  upcomingSelection,
+  closedMaps,
+  onChange,
+}: {
+  upcomingSelection: 'auto' | '1' | '2' | '3' | '4';
+  closedMaps: readonly ClosedMapResult[];
+  onChange(selection: 'auto' | '1' | '2' | '3' | '4'): void;
+}) {
+  const completedCount = Math.min(4, closedMaps.length);
+  const autoNext = completedCount >= 4 ? null : completedCount + 1;
+
+  return (
+    <section
+      data-testid="next-map-settings-section"
+      className="border-border bg-secondary/20 grid gap-3 rounded-lg border p-3.5"
+    >
+      <div>
+        <h3 className="text-sm font-medium text-[var(--brand-gold)]">
+          Next Map / Schedule Settings
+        </h3>
+        <p className="text-muted-foreground text-xs">
+          Select which match is displayed as upcoming. Automatic mode automatically tracks completed
+          matches from closed maps. You can also manually override to any match (1–4).
+        </p>
+      </div>
+
+      <div className="grid gap-2">
+        <label className="grid gap-1 text-xs">
+          <span className="text-muted-foreground">Upcoming match selection</span>
+          <select
+            aria-label="Upcoming match selection"
+            data-testid="next-map-upcoming-select"
+            className="border-border bg-background min-h-9 rounded border px-2.5 py-1.5 text-sm"
+            value={upcomingSelection}
+            onChange={(e) => onChange(e.target.value as 'auto' | '1' | '2' | '3' | '4')}
+          >
+            <option value="auto">
+              Automatic {autoNext ? `(Match ${autoNext} upcoming)` : '(All 4 matches completed)'}
+            </option>
+            <option value="1">Match 1 — Erangel</option>
+            <option value="2">Match 2 — Erangel</option>
+            <option value="3">Match 3 — Miramar</option>
+            <option value="4">Match 4 — Miramar</option>
+          </select>
+        </label>
+
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <span className="text-muted-foreground text-xs font-medium">Quick override:</span>
+          {(['auto', '1', '2', '3', '4'] as const).map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              data-testid={`next-map-quick-${opt}`}
+              onClick={() => onChange(opt)}
+              className={`min-h-7 rounded px-2.5 py-1 text-xs font-semibold transition-colors ${
+                upcomingSelection === opt
+                  ? 'border border-[var(--brand-gold)] bg-[var(--brand-gold)] text-black'
+                  : 'border-border bg-background text-muted-foreground hover:text-foreground border'
+              }`}
+            >
+              {opt === 'auto' ? 'Auto' : `M${opt}`}
+            </button>
+          ))}
+        </div>
+      </div>
     </section>
   );
 }

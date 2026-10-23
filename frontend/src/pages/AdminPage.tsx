@@ -52,8 +52,8 @@ const INSTANCE_CATEGORIES: { label: string; types: OverlayType[] }[] = [
     types: ['postgame-match', 'postgame-series'],
   },
   {
-    label: 'Broadcast Statistics',
-    types: ['top-kill', 'most-improved'],
+    label: 'Match Schedule & Statistics',
+    types: ['next-map', 'top-kill', 'most-improved'],
   },
 ];
 
@@ -1137,6 +1137,15 @@ export function AdminPage() {
                         useScopedOverlayUrls
                           ? `${window.location.origin}/overlay/${selected.id}/most-improved`
                           : `${window.location.origin}/overlay/most-improved`
+                      }
+                    />
+
+                    <CopyableUrl
+                      label="11. Next Map / Match Schedule"
+                      url={
+                        useScopedOverlayUrls
+                          ? `${window.location.origin}/overlay/${selected.id}/next-map`
+                          : `${window.location.origin}/overlay/next-map`
                       }
                     />
                   </div>

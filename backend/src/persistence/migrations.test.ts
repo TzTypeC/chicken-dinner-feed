@@ -350,7 +350,10 @@ describe('migrateOverlayInstances v5 → v6 (Part 10)', () => {
   /** A v5 document as written by the Part 9 release: the eight v5 types, operator-edited. */
   function v5Document(overrides: { autoWwcdVariant?: string; drop?: string[] } = {}) {
     const instances: Record<string, unknown>[] = DEFAULT_OVERLAY_INSTANCES.instances
-      .filter((inst) => inst.type !== 'top-kill' && inst.type !== 'most-improved')
+      .filter(
+        (inst) =>
+          inst.type !== 'top-kill' && inst.type !== 'most-improved' && inst.type !== 'next-map',
+      )
       .filter((inst) => !(overrides.drop ?? []).includes(inst.id))
       .map((inst) => {
         // A v5 file never contains the Part 10 appearance fields.
@@ -358,6 +361,7 @@ describe('migrateOverlayInstances v5 → v6 (Part 10)', () => {
           mostImprovedFrom: _from,
           mostImprovedTo: _to,
           showWwcdPrediction: _prediction,
+          nextMapUpcomingMatch: _nextMap,
           ...appearance
         } = inst.appearance;
         return { ...inst, appearance };
@@ -398,6 +402,7 @@ describe('migrateOverlayInstances v5 → v6 (Part 10)', () => {
     expect(added.map((inst) => [inst.id, inst.type, inst.onAir])).toEqual([
       ['default-top-kill', 'top-kill', false],
       ['default-most-improved', 'most-improved', false],
+      ['default-next-map', 'next-map', false],
     ]);
   });
 

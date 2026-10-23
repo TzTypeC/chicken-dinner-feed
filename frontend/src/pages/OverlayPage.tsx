@@ -36,6 +36,8 @@ import { selectMostImproved } from '@/components/overlay/most-improved';
 import { PostGameOverlay } from '@/components/overlay/PostGameOverlay';
 import { PostGameSeriesOverlay } from '@/components/overlay/PostGameSeriesOverlay';
 import { TransitionSurface } from '@/components/overlay/TransitionSurface';
+import { selectNextMapBoard } from '@/components/overlay/next-map';
+import { NextMapOverlay } from '@/components/overlay/NextMapOverlay';
 import { selectTopKill } from '@/components/overlay/top-kill';
 import { TopKillOverlay } from '@/components/overlay/TopKillOverlay';
 import { WwcdOverlay } from '@/components/overlay/WwcdOverlay';
@@ -57,7 +59,8 @@ export type OverlaySurfaceMode =
   | 'postgame-match'
   | 'postgame-series'
   | 'top-kill'
-  | 'most-improved';
+  | 'most-improved'
+  | 'next-map';
 
 export type OverlayPreviewViewMode =
   | 'auto'
@@ -66,7 +69,8 @@ export type OverlayPreviewViewMode =
   | 'postgame'
   | 'postgame-series'
   | 'top-kill'
-  | 'most-improved';
+  | 'most-improved'
+  | 'next-map';
 
 export interface OverlayPageProps {
   instanceId?: string;
@@ -135,6 +139,8 @@ function defaultInstanceIdForSurface(
       return DEFAULT_INSTANCE_ID_BY_TYPE['top-kill'];
     case 'most-improved':
       return DEFAULT_INSTANCE_ID_BY_TYPE['most-improved'];
+    case 'next-map':
+      return DEFAULT_INSTANCE_ID_BY_TYPE['next-map'];
     case 'leaderboard':
     case 'auto':
     default:
@@ -164,7 +170,8 @@ function surfaceFromInstanceType(
       return 'top-kill';
     case 'most-improved':
       return 'most-improved';
-    case 'leaderboard':
+    case 'next-map':
+      return 'next-map';
     default:
       return 'leaderboard';
   }
@@ -342,7 +349,9 @@ export function OverlayPage({
                     ? 'Top Kill'
                     : effectiveSurface === 'most-improved'
                       ? 'Most Improved Team'
-                      : (instance?.name ?? resolvedInstanceId);
+                      : effectiveSurface === 'next-map'
+                        ? 'Next Map / Schedule'
+                        : (instance?.name ?? resolvedInstanceId);
   useDocumentTitle(titlePrefix);
 
   if (protocolMismatch !== null) {
@@ -603,6 +612,34 @@ export function OverlayPage({
           testId={`${effectiveSurface}-root`}
         >
           {content}
+        </TransitionSurface>
+      </>
+    );
+  }
+
+  if (effectiveSurface === 'next-map') {
+    const isVisible = isPreview || isOperatorVisible;
+    const rosterByNo = new Map(
+      (snapshot.match?.teams ?? []).map((team) => [
+        team.teamNo,
+        { name: team.name, logoUrl: team.logoUrl },
+      ]),
+    );
+    const board = selectNextMapBoard(closedMaps, appearance.nextMapUpcomingMatch ?? 'auto', {
+      isPreviewSimulation: isPreview,
+      rosterByNo,
+      liveMatch: snapshot.match,
+    });
+    return (
+      <>
+        {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
+        <TransitionSurface
+          visible={isVisible}
+          variants={animation.variants}
+          surfaceKey="next-map-surface"
+          testId="next-map-root"
+        >
+          <NextMapOverlay board={board} appearance={appearance} />
         </TransitionSurface>
       </>
     );

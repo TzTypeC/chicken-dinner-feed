@@ -67,6 +67,7 @@ const updateInstanceSchema = overlayInstanceSchema.extend({
     mostImprovedFrom: z.string().min(1).optional(),
     mostImprovedTo: z.string().min(1).optional(),
     showWwcdPrediction: z.boolean().optional(),
+    nextMapUpcomingMatch: z.enum(['auto', '1', '2', '3', '4']).optional(),
   }),
 });
 
@@ -180,6 +181,8 @@ export const configRoutes: FastifyPluginAsyncZod<ConfigRoutesOptions> = async (a
           mostImprovedTo: body.appearance.mostImprovedTo ?? existing.appearance.mostImprovedTo,
           showWwcdPrediction:
             body.appearance.showWwcdPrediction ?? existing.appearance.showWwcdPrediction,
+          nextMapUpcomingMatch:
+            body.appearance.nextMapUpcomingMatch ?? existing.appearance.nextMapUpcomingMatch,
         },
       };
 

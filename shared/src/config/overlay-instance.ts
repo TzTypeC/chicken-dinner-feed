@@ -220,7 +220,10 @@ export const overlayAppearanceSchema = z.object({
    * players) under its card. Off by default so existing layouts are unchanged.
    */
   showWwcdPrediction: z.boolean().default(false),
-  /** Trim the table for formats with fewer than 25 teams. */
+  /**
+   * Next Map (`next-map`): which match is upcoming ('auto' follows tournament status, or 1..4).
+   */
+  nextMapUpcomingMatch: z.enum(['auto', '1', '2', '3', '4']).default('auto'),
   maxTeams: z.number().int().min(1).max(25),
 });
 export type OverlayAppearance = z.infer<typeof overlayAppearanceSchema>;
@@ -239,6 +242,7 @@ export const overlayTypeSchema = z.enum([
   'postgame-series',
   'top-kill',
   'most-improved',
+  'next-map',
 ]);
 export type OverlayType = z.infer<typeof overlayTypeSchema>;
 
@@ -356,6 +360,7 @@ export const DEFAULT_OVERLAY_APPEARANCE: OverlayAppearance = {
   mostImprovedFrom: 'previous',
   mostImprovedTo: 'latest',
   showWwcdPrediction: false,
+  nextMapUpcomingMatch: 'auto',
   maxTeams: 16,
 };
 
@@ -371,6 +376,7 @@ export const DEFAULT_INSTANCE_ID_BY_TYPE: Record<OverlayType, string> = {
   'postgame-series': 'default-postgame-series',
   'top-kill': 'default-top-kill',
   'most-improved': 'default-most-improved',
+  'next-map': 'default-next-map',
 };
 
 /** Default appearance tailored to a given overlay type. */
@@ -411,6 +417,7 @@ export function defaultAppearanceForType(type: OverlayType): OverlayAppearance {
     case 'postgame-series':
     case 'top-kill':
     case 'most-improved':
+    case 'next-map':
       return {
         ...base,
         animation: { ...base.animation, type: 'fade', durationMs: 420 },
@@ -508,6 +515,14 @@ export const DEFAULT_OVERLAY_INSTANCES: OverlayInstancesDocument = {
       enabled: true,
       onAir: false,
       appearance: defaultAppearanceForType('most-improved'),
+    },
+    {
+      id: 'default-next-map',
+      name: 'Next Map / Schedule',
+      type: 'next-map',
+      enabled: true,
+      onAir: false,
+      appearance: defaultAppearanceForType('next-map'),
     },
   ],
 };

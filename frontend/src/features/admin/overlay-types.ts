@@ -11,4 +11,5 @@ export const OVERLAY_TYPE_LABELS: Record<OverlayType, string> = {
   'postgame-series': 'Postgame Series',
   'top-kill': 'Top Kill',
   'most-improved': 'Most Improved Team',
+  'next-map': 'Next Map / Schedule',
 };

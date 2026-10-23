@@ -24,7 +24,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Overlay types added in schema v6 (Part 10); seeded into v5 documents on upgrade. */
-const PART10_SEEDED_TYPES: ReadonlySet<string> = new Set(['top-kill', 'most-improved']);
+const PART10_SEEDED_TYPES: ReadonlySet<string> = new Set(['top-kill', 'most-improved', 'next-map']);
 
 /**
  * v1 → v2: the animation gained a type, and direction became one of four edges.

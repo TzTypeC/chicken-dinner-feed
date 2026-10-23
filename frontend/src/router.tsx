@@ -24,6 +24,8 @@ import {
   OverlayPostGameSeriesRoute,
   OverlayMostImprovedRoute,
   OverlayTopKillRoute,
+  OverlayNextMapRoute,
+  OverlayInstanceNextMapRoute,
   OverlayRoute,
   OverlayWwcdFullscreenRoute,
   OverlayWwcdRoute,
@@ -266,6 +268,22 @@ const shortcutMostImprovedRoute = createRoute({
   component: OverlayMostImprovedRoute,
 });
 
+const overlayNextMapRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/next-map',
+  component: OverlayNextMapRoute,
+});
+const overlayInstanceNextMapRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$instanceId/next-map',
+  component: OverlayInstanceNextMapRoute,
+});
+const shortcutNextMapRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/next-map',
+  component: OverlayNextMapRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
   shortcutMainRoute,
@@ -303,6 +321,9 @@ const routeTree = rootRoute.addChildren([
   overlayMostImprovedRoute,
   overlayInstanceMostImprovedRoute,
   shortcutMostImprovedRoute,
+  overlayNextMapRoute,
+  overlayInstanceNextMapRoute,
+  shortcutNextMapRoute,
   overlayRoute,
   adminRoute,
 ]);

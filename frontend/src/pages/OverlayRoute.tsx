@@ -97,3 +97,12 @@ export function OverlayInstanceMostImprovedRoute() {
   const { instanceId } = useParams({ strict: false }) as { instanceId?: string };
   return <OverlayPage instanceId={instanceId} surfaceMode="most-improved" />;
 }
+
+export function OverlayNextMapRoute() {
+  return <OverlayPage surfaceMode="next-map" />;
+}
+
+export function OverlayInstanceNextMapRoute() {
+  const { instanceId } = useParams({ strict: false }) as { instanceId?: string };
+  return <OverlayPage instanceId={instanceId} surfaceMode="next-map" />;
+}
