@@ -75,7 +75,7 @@ describe('MatchStore', () => {
     expect(eliminated?.placement).toBe(2);
   });
 
-  it('marks roster teams that never appeared this match as not present, and ranks them last', () => {
+  it('marks roster teams that never appeared this match as not present', () => {
     const store = new MatchStore({ source: 'pcob', roster: roster(1, 2, 3) });
 
     store.applyUpdate(update({ players: [player({ teamNo: 1, slot: 1, kills: 3 })] }));
@@ -293,9 +293,9 @@ describe('MatchStore', () => {
   });
 
   describe('setSeriesContext', () => {
-    it('adds series points on top of this match and keeps a never-appeared team last', () => {
+    it('adds series points on top of this match', () => {
       const store = new MatchStore({ source: 'pcob', roster: roster(1, 2) });
-      store.setSeriesContext(new Map([[1, 25]]), new Set());
+      store.setSeriesContext(new Map([[1, 25]]));
 
       store.applyUpdate(update({ players: [player({ teamNo: 1, slot: 1, kills: 1 })] }));
 
@@ -304,7 +304,7 @@ describe('MatchStore', () => {
 
       // Default ruleset: 1 kill point + guaranteed-minimum for the 1 team standing (10) + 25 series.
       expect(byTeam.get(1)?.totalPoints).toBe(36);
-      expect(match.teams[0]?.teamNo).toBe(1); // Team 2 never appeared, still sorts last.
+      expect(match.teams[0]?.teamNo).toBe(1); // 36 points: well clear of never-appeared Team 2 (0).
     });
 
     it('defaults to no series context, adding nothing beyond this match on its own', () => {
@@ -334,7 +334,6 @@ describe('MatchStore', () => {
       // The series total now includes this same match's 18 points, as it would right after close.
       store.setSeriesContext(
         new Map([[1, 18]]),
-        new Set([1]),
         new Map([[1, { killPoints: 8, placementPoints: 10 }]]),
       );
 
@@ -349,7 +348,6 @@ describe('MatchStore', () => {
       store.applyUpdate(update({ players: [player({ teamNo: 1, slot: 1, kills: 8 })] }));
       store.setSeriesContext(
         new Map([[1, 18]]),
-        new Set([1]),
         new Map([[1, { killPoints: 8, placementPoints: 10 }]]),
       );
       expect(store.project().match.teams[0]?.totalPoints).toBe(18);
@@ -368,7 +366,6 @@ describe('MatchStore', () => {
       );
       store.setSeriesContext(
         new Map([[1, 18]]),
-        new Set([1]),
         new Map([[1, { killPoints: 8, placementPoints: 10 }]]),
       );
 
@@ -376,7 +373,7 @@ describe('MatchStore', () => {
         update({ matchId: 'match-2', players: [player({ teamNo: 1, slot: 1, kills: 3 })] }),
       );
       // Nothing is banked against match-2 — this is what the caller re-derives per update.
-      store.setSeriesContext(new Map([[1, 18]]), new Set([1]), new Map());
+      store.setSeriesContext(new Map([[1, 18]]), new Map());
 
       // 3 kill points + the guaranteed-minimum for the only team standing (10) + 18 series.
       expect(store.project().match.teams[0]?.totalPoints).toBe(31);

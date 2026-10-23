@@ -267,7 +267,21 @@ export function FullscreenWwcdOverlay({
                           color: 'var(--overlay-text-muted)',
                         }}
                       >
-                        OFFICIAL VICTORY CEREMONY
+                        <span
+                          data-testid="wwcd-fullscreen-status-tag"
+                          style={{
+                            color:
+                              winner.provisional || winner.sourceKind === 'preview'
+                                ? 'var(--player-knocked)'
+                                : undefined,
+                          }}
+                        >
+                          {winner.sourceKind === 'preview'
+                            ? 'PREVIEW SAMPLE — NOT A RESULT'
+                            : winner.provisional
+                              ? 'PROVISIONAL — MAP NOT CLOSED'
+                              : 'OFFICIAL VICTORY CEREMONY'}
+                        </span>
                       </span>
                     </div>
                     <div
@@ -698,17 +712,19 @@ export function FullscreenWwcdOverlay({
                         >
                           {winner.name}
                         </div>
-                        <span
-                          className="font-bold uppercase"
-                          style={{
-                            fontSize: ub(11),
-                            letterSpacing: ub(1.2),
-                            color: 'var(--overlay-accent)',
-                            marginTop: ub(2),
-                          }}
-                        >
-                          SURVIVING SQUAD: {winner.aliveCount} / 4 ALIVE
-                        </span>
+                        {winner.aliveCount !== null && (
+                          <span
+                            className="font-bold uppercase"
+                            style={{
+                              fontSize: ub(11),
+                              letterSpacing: ub(1.2),
+                              color: 'var(--overlay-accent)',
+                              marginTop: ub(2),
+                            }}
+                          >
+                            SURVIVING SQUAD: {winner.aliveCount} / 4 ALIVE
+                          </span>
+                        )}
                       </div>
                     </div>
                   </FullscreenStatCard>
@@ -816,7 +832,9 @@ export function FullscreenWwcdOverlay({
                         color: 'var(--overlay-accent)',
                       }}
                     >
-                      MATCH TOTAL POINTS
+                      {winner.provisional
+                        ? 'MATCH TOTAL POINTS (PROVISIONAL)'
+                        : 'MATCH TOTAL POINTS'}
                     </span>
                     <div className="flex items-baseline" style={{ gap: ub(8), marginBlock: ub(4) }}>
                       <span
@@ -850,7 +868,8 @@ export function FullscreenWwcdOverlay({
                         color: 'var(--overlay-text-muted)',
                       }}
                     >
-                      SERIES TOTAL: {winner.seriesPoints} PTS
+                      SERIES TOTAL{winner.provisional ? ' (PROVISIONAL)' : ''}:{' '}
+                      {winner.seriesPoints} PTS
                     </span>
                   </FullscreenStatCard>
                 </motion.div>

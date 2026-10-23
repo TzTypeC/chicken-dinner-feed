@@ -4,7 +4,7 @@ import { AlivePlayerBars } from './AlivePlayerBars';
 import { formatTeamSlot, LEADERBOARD_METRICS as M, leaderboardColumns, u } from './overlay-scale';
 import { BADGE_GAP, NAME_FONT_MAX } from './team-name-fit';
 import { SLOT_BADGE_CLASS, SLOT_BADGE_STYLE, TEAM_NAME_CLASS } from './team-row-styles';
-import { TeamNameMarquee } from './TeamNameMarquee';
+import { OverflowMarquee } from './OverflowMarquee';
 import type { TeamNamePlan } from './useTeamNameLayout';
 
 export interface TeamRowProps {
@@ -115,12 +115,14 @@ export function TeamRow({
             {formatTeamSlot(team.teamNo)}
           </span>
         )}
-        {plan.mode === 'marquee' ? (
-          <TeamNameMarquee
+        {plan.mode === 'scroll' ? (
+          <OverflowMarquee
+            testId={`team-name-${team.teamNo}`}
             text={plan.text}
             fontSize={nameFontSize}
-            distance={plan.distance}
+            fontSizeCss={u(nameFontSize)}
             color={textColor}
+            className={TEAM_NAME_CLASS}
           />
         ) : (
           <span

@@ -71,7 +71,7 @@ describe('SeriesStore', () => {
     const match = new MatchStore({ source: 'pcob', roster: roster(1, 2) });
     // Series context is set, on purpose, to prove the closed record does not capture it — only
     // MatchStore.project()'s own total does. Persisting that would double-count on every future map.
-    match.setSeriesContext(new Map([[1, 100]]), new Set());
+    match.setSeriesContext(new Map([[1, 100]]));
     match.applyUpdate(
       update({
         players: [
@@ -94,8 +94,6 @@ describe('SeriesStore', () => {
     expect(team1?.totalPoints).toBe(12); // killPoints(2) + placementPoints(10) — no +100 from series.
 
     expect(store.getSeriesTotals().get(1)).toBe(12);
-    expect(store.getSeriesHasAppeared().has(1)).toBe(true);
-    expect(store.getSeriesHasAppeared().has(2)).toBe(true);
   });
 
   it('accumulates a team’s points additively across two closed maps', async () => {
@@ -660,7 +658,6 @@ describe('SeriesStore', () => {
       await store.insertManualMap(1, [{ teamNo: 5, placement: 1, eliminations: 3 }], ruleset);
 
       expect(store.getSeriesTotals().get(5)).toBe(13);
-      expect(store.getSeriesHasAppeared().has(5)).toBe(true);
     });
 
     it('rejects duplicate placements, duplicate teams, and an empty result', async () => {
@@ -939,11 +936,7 @@ describe('SeriesStore', () => {
       );
 
       // The match is still on screen after closing: its own points are banked, the adjustment is not.
-      match.setSeriesContext(
-        store.getSeriesTotals(),
-        store.getSeriesHasAppeared(),
-        store.getBankedPointsForMatch('m1'),
-      );
+      match.setSeriesContext(store.getSeriesTotals(), store.getBankedPointsForMatch('m1'));
       const teams = match.project().match.teams;
       const team1 = teams.find((team) => team.teamNo === 1)!;
       const team2 = teams.find((team) => team.teamNo === 2)!;

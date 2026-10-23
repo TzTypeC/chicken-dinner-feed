@@ -37,6 +37,15 @@ release time — add to `[Unreleased]` in the same change that makes the change.
   now go below zero. The finished-map cards show each adjustment with its reason and time, the
   backend log records every change, and the postgame match and series screens get an ADJ column
   whenever one exists.
+- **Close current map now resets the manual match.** In Manual mode, once the map is recorded the
+  app starts a fresh manual match on its own (4 alive, 0 eliminations, same lobby). It happens only
+  after a successful close, never touches the recorded map, the roster or a PCOB map, and is
+  finished automatically at the next start if the app stopped in between. If the reset itself fails,
+  the map stays recorded and the admin asks you to press **Reset manual match**.
+- **Provisional results are labelled.** Before a map is closed, the WWCD screens and the post-game
+  match screen say **PROVISIONAL — MAP NOT CLOSED**, including on the points; the label disappears
+  once the map is closed. The post-game screen's _latest_ setting now shows the current map as soon
+  as it has a provisional result, instead of the previous map.
 
 ### Changed
 
@@ -56,6 +65,36 @@ release time — add to `[Unreleased]` in the same change that makes the change.
   the previous version show "out of date — reload" until they are refreshed. Refresh every browser
   source in OBS (right-click → Refresh, or "Refresh cache of current page") and reload the admin
   after upgrading.
+- **Leaderboard order follows the Teams order on equal points.** The main leaderboard ranks by
+  total points, and teams on equal points are listed in Teams order (T01, T02, …) instead of
+  alphabetically; before anyone scores it is exactly the Teams order. Eliminations no longer break
+  ties on the main leaderboard, and roster slots that have not joined are no longer pushed to the
+  bottom (they stay dimmed). The post-game and series standings keep their official tie-breakers.
+- **Close current map now refuses unsafe closes.** A map in which nobody has been eliminated yet is
+  rejected, and a close for a match that is no longer running (a double click, a second tab) is
+  refused instead of recorded. The button is disabled while it works.
+- **Extended team names scroll only when they really do not fit, and Final 4 names scroll too.**
+  The decision now comes from what is on screen, so a name never stops on `...` without moving, at
+  any resolution, size setting or show/hide animation. Final 4 cards scroll a long name at the same
+  speed as the leaderboard instead of cutting it off.
+
+### Fixed
+
+- **The post-game screen named the wrong WWCD before the map was closed.** It invented a placement
+  for the surviving team from its position in the table and then crowned the highest scorer. It now
+  names the confirmed last team standing (or says the winner cannot be confirmed yet), the same team
+  as the WWCD screens.
+- **A closed map without a placement #1 no longer crowns the #2 team**; the screens say "WWCD not
+  recorded" and the admin flags the map (and the Excel import warns). The WWCD screen's fallback to
+  the last closed map now shows the name and logo recorded for that map, not the slot's current
+  team.
+- **The leaderboard no longer slides sideways after Save.** Turning extended mode on or off (or a
+  font finishing loading) made every row slide in from the old position for half a second, in OBS
+  and in the admin preview; the panel now changes width in place while rank changes still animate.
+- **The glow behind the post-game WWCD team was cut into a hard band** when team logos are off. It
+  now fades out fully inside the card.
+- **A second "Close current map now" right after a manual reset recorded the empty new match** as
+  a map with made-up placements. It is now refused.
 
 ## [1.2.0] - 2026-08-30
 

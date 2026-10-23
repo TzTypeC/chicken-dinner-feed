@@ -205,8 +205,9 @@ export class ManualStore {
   }
 
   /**
-   * Resets the manual match for a new map (fresh `matchId`, all teams back to 4 alive and 0 elims),
-   * or seeds it from the automatic source's current standings for mid-match failover.
+   * Resets the manual match for a new map (fresh `matchId`, every team back to 4 alive and 0 elims,
+   * lobby presence **kept**: a team marked not participating stays out of the next map), or seeds it
+   * from the automatic source's current standings for mid-match failover.
    */
   resetMatch(options: ResetManualMatchOptions = {}): Promise<ManualMatchDocument> {
     return this.mutate(async () => {
@@ -214,8 +215,15 @@ export class ManualStore {
       const matchId = `manual-${randomUUID()}`;
 
       if (!options.seedFromTeams || options.seedFromTeams.length === 0) {
+        const presentByTeamNo = new Map(current.teams.map((team) => [team.teamNo, team.present]));
         const fresh = createDefaultManualMatchDocument(matchId, this.roster, current.mode);
-        return this.document.write(fresh);
+        return this.document.write({
+          ...fresh,
+          teams: fresh.teams.map((team) => ({
+            ...team,
+            present: presentByTeamNo.get(team.teamNo) ?? team.present,
+          })),
+        });
       }
 
       const seededByNo = new Map(options.seedFromTeams.map((team) => [team.teamNo, team]));

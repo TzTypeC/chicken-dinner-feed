@@ -141,7 +141,7 @@ export class SeriesStore {
    * reproducing that directly before it was fixed there), but that alone does not stop a second
    * mutation here from *reading* `this.document.current` before the first one's write has landed:
    * two auto-close ticks racing (the second poll arriving before the first's write completes) would
-   * both pass `hasClosedMapFor`'s check against the same stale snapshot and both build a closed-map
+   * both pass `hasClosedMap`'s check against the same stale snapshot and both build a closed-map
    * entry, the second silently overwriting the first's on disk. Serializing the whole read-then-write
    * body, not just the write, is what makes the second call's own guard see the first call's result.
    */
@@ -176,14 +176,6 @@ export class SeriesStore {
     return totals;
   }
 
-  getSeriesHasAppeared(): ReadonlySet<number> {
-    const teams = new Set<number>();
-    for (const map of this.document.current.closedMaps) {
-      for (const team of map.teams) teams.add(team.teamNo);
-    }
-    return teams;
-  }
-
   /**
    * How much of `matchId`'s own points is already recorded in the history, per team.
    *
@@ -209,8 +201,8 @@ export class SeriesStore {
     return banked;
   }
 
-  /** Whether the history already holds a map closed from this PCOB match. */
-  private hasClosedMapFor(matchId: string): boolean {
+  /** Whether the history already holds a map closed from this match. */
+  hasClosedMap(matchId: string): boolean {
     return this.document.current.closedMaps.some((entry) => entry.matchId === matchId);
   }
 
@@ -302,7 +294,7 @@ export class SeriesStore {
     }
 
     if (this.standingStableCount < this.stabilityTicks) return false;
-    return !this.hasClosedMapFor(matchId);
+    return !this.hasClosedMap(matchId);
   }
 
   /**
@@ -325,7 +317,7 @@ export class SeriesStore {
       // repeat everything the first one already banked. Adding the map by hand is the supported
       // way to record a result the app did not observe. Queued behind `mutate`, so this check sees
       // the result of any close still in flight rather than a stale pre-write snapshot.
-      if (this.hasClosedMapFor(matchId)) {
+      if (this.hasClosedMap(matchId)) {
         throw new Error(
           'This match has already been closed into the series. Add a map by hand if you need another entry.',
         );

@@ -446,3 +446,43 @@ Chronological record of phases, tasks, files changed, and verification results.
   - `npm run typecheck`: 0 errors. `npm run lint`: 0 diagnostics. `npm run format:check`: clean. `npm run build`: OK (pre-existing chunk-size warning).
   - Browser verification at 1920×1080 (headless Chromium, temp data copy): normal and extended layout, marquee loop continuity, toggle reversion, left anchor, admin dialog and validation, postgame ADJ columns, and the v10 → v11 protocol-mismatch flow. Details in proposal §15.5.
 - **Next Steps:** deploy and refresh browser sources (proposal §15.4).
+
+## Entry 9 — 2026-10-23 — Part 9: Audit & Proposal — Team Ordering, WWCD/Postgame Logic, Extended Name Animation & Final 4 Names
+
+- **Phase:** Part 9 audit, reproduction, research and proposal. **No implementation** (stopped at the approval gate).
+- **Status:** `AWAITING_USER_APPROVAL`
+- **Files Affected:** `docs/part9-audit-and-proposal.md` (new), `docs/checkpoint.md`, `docs/progress.md`. No source, test or configuration file was changed.
+- **Baseline (before any Part 9 change):** `npm test` 461 passed (backend 26 files / 322; frontend 12 files / 139); typecheck 0 errors; lint 0 diagnostics; `format:check` clean; build OK (pre-existing chunk-size warning). Working tree clean at `6a89db9`.
+- **Reproduced (isolated temp copy of `backend/data`, built backend on port 4419, headless Chromium):**
+  - A: tied rows in A–Z order (final tie-break `name.localeCompare`); the user's Zebra/Alpha example reproduced with the real `computeStandings`.
+  - B: production manual state → `/overlay/postgame-match` crowned LONG BLACK (`#2`, 11 elims) while `/overlay/wwcd` showed tes doang. Cause: index-based placement in the pre-close fallback plus a points-based winner fallback. Also: a closed map without `#1` promotes `#2`; the WWCD closed-map fallback shows the current roster name; the winner-card glow is clipped when the logo box is hidden (gold alpha 0.076/0.132 at the block edges).
+  - C: rows slide by the extension (93–113 px, ≈ 0.5 s) after Save or font load; `zoom-fade` remount mis-measures (font 10.67 → 11.87 px, CSS ellipsis without marquee); exact-fit overflow of 0.3–1.6 px at 1280×720, 1366×768 and scale ≠ 1. Ordinary saves do not restart marquees; 20 marquees keep 60 fps headless.
+  - D: Final 4 `LANANG NAK CHICKEN MAIN PUBG` needs 274.8 px in a 245.9 px (logos off) / 201.9 px (logos on) box and is permanently truncated.
+- **Safeguards honoured:** no destructive git commands; production `backend/data` only read (SHA-256 identical before and after); throwaway script kept outside the repository; `payload.ts`/`payload.test.ts` untouched; temp server stopped and browser tab closed.
+- **Next Steps:** user decisions Q1–Q11 (proposal §16) and explicit approval; then `WS-9.1`–`WS-9.9` (proposal §12).
+
+## Entry 10 — 2026-10-23 — Part 9: Proposal Revision 2 (user clarifications + Reset After Close scope)
+
+- **Phase:** Part 9 audit/proposal revision. **No implementation** (stopped at the approval gate).
+- **Status:** `AWAITING_USER_APPROVAL`
+- **Files Affected:** `docs/part9-audit-and-proposal.md` (Revision 2), `docs/checkpoint.md`, `docs/progress.md`. No source, test or configuration file was changed.
+- **Decisions incorporated:** Q1 (points first, Team Order tie-break, all 0 → exactly Team Order, never alphabetical); Q3/Q4 (recorded valid `#1` → confirmed last standing → "not confirmed"; provisional vs final; transition check); Q6 (roughness in OBS and the admin preview); Q5 on hold (no visual change on assumption); new scope: Reset Manual Match after a successful Close Current Map.
+- **New measurements (isolated temp copy, real admin page, headless Chromium):**
+  - Admin preview (iframe at `scale(0.403)`): Save toggling Extended OFF/ON slides every row by ±93 px for ≈ 550 ms; one 33.5 ms frame inside the iframe during Save.
+  - Transition (manual): before close postgame shows LONG BLACK `#2` while WWCD overlays show tes doang; after close all show tes doang `#1`; after Reset Manual Match the WWCD celebration overlays disappear and the tower returns; the closed map is byte-identical before/after the reset.
+  - Hazard: after close + reset, a second close returned 200 and recorded the fresh, unplayed manual match as map 2 with fabricated placements.
+  - Attached image (Q5) analysed: matches the measured clipping in the postgame winner card; not acted on pending confirmation.
+- **Safeguards honoured:** no destructive git commands; production `backend/data` only read (SHA-256 identical before and after); temp copies, throwaway files, server and browser tab removed afterwards; `payload.ts`/`payload.test.ts` untouched.
+- **Next Steps:** answers to proposal §17 (Q1a, Q2, Q4b, Q4c, Q5, Q6, Q7–Q10, Q13–Q16) and explicit approval; then `WS-9.1`–`WS-9.11` (proposal §13).
+
+## Entry 11 — 2026-10-23 — Part 9: Implementation & Verification (`WS-9.1`–`WS-9.10`)
+
+- **Phase:** Part 9 implementation after approval of Revision 2.
+- **Status:** `COMPLETED`
+- **Files Affected:**
+  - Backend: `scoring/standings.ts`, `state/match-store.ts`, `state/series-store.ts`, `state/manual-store.ts`, `state/pending-manual-reset.ts` (new), `routes/series.ts`, `routes/manual.ts`, `excel/import.ts`, `app.ts`; tests `standings.test.ts`, `match-store.test.ts`, `series-store.test.ts`, `manual.test.ts`, `series.test.ts`, `excel.test.ts`, `pending-manual-reset.test.ts` (new).
+  - Frontend: `components/overlay/wwcd-resolver.ts` (new), `OverflowMarquee.tsx` (new, replaces `TeamNameMarquee.tsx`), `broadcast-state.ts`, `PostGameOverlay.tsx`, `WwcdOverlay.tsx`, `FullscreenWwcdOverlay.tsx`, `FinalFourOverlay.tsx`, `LeaderboardOverlay.tsx`, `TeamRow.tsx`, `team-name-fit.ts`, `useTeamNameLayout.ts`, `pages/OverlayPage.tsx`, `features/admin/use-close-map.ts` (new), `ManualControl.tsx`, `SeriesControl.tsx`, `lib/api.ts`; tests `wwcd-resolver.test.ts`, `part9-overlays.test.tsx` (new), `overlays.test.tsx`, `adjustments.test.ts`, `team-name-fit.test.ts`.
+  - Docs: `part9-audit-and-proposal.md` (§19), `adr/0019-wwcd-identity-is-placement-one.md` + index, `CHANGELOG.md`, `user/user-guide.en.md`, `user/user-guide.hu.md`, `checkpoint.md`, `progress.md`.
+- **Verification Results:** `npm test` 521 passed (backend 343 / 27, frontend 178 / 14); typecheck 0 errors; lint 0 diagnostics; build OK; Prettier clean on changed files. Browser checks on an isolated data copy: proposal §19.5. OBS not available (not verified).
+- **Safeguards honoured:** no destructive git commands; production `backend/data` hashes unchanged; `payload.ts`/`payload.test.ts`, the external Obsidian vault folder and the user's `.gitignore` edit untouched; temp data copy, server and browser tabs removed.
+- **Next Steps:** deploy per proposal §19.7 and run the operator OBS check.

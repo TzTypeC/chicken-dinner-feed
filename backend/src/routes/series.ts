@@ -21,9 +21,24 @@ export interface SeriesRoutesOptions {
   config: ConfigStore;
   /** Called after a close/reset/edit/delete changes the series so `MatchStore`'s PTS can catch up. */
   onSeriesChanged: () => void;
+  /**
+   * Runs right after a map was closed successfully, still inside the close lock. Decides whether the
+   * map that just closed was the Manual Match and, if so, resets it with the one existing Reset
+   * Manual Match mechanism. Throws if the reset failed: the close has then already succeeded.
+   * Omitted where there is no manual match (the map stays as it is).
+   */
+  afterMapClosed?: (closed: ClosedMapResult) => Promise<'done' | 'skipped'>;
 }
 
 const errorSchema = z.object({ error: z.string() });
+
+const closeMapBodySchema = z.object({
+  /**
+   * The match the operator is looking at. A close for a match that is no longer the running one
+   * (already closed, a new match started, a stale tab or a double click) is refused with 409.
+   */
+  expectedMatchId: z.string().min(1).optional(),
+});
 
 /**
  * `additionalPoints`/`adjustmentNote` are optional on purpose (ADR-0018): on a correction, omitting
@@ -95,7 +110,18 @@ function logAdjustmentChanges(
  * history, and the operations the Series control admin page needs against it.
  */
 export const seriesRoutes: FastifyPluginAsyncZod<SeriesRoutesOptions> = async (app, options) => {
-  const { series, match, config, onSeriesChanged } = options;
+  const { series, match, config, onSeriesChanged, afterMapClosed } = options;
+  // Close + reset run as one unit: a second request starts only after the first finished, and then
+  // meets either a different running match (409) or an already-closed one (409/400).
+  let closeQueue: Promise<unknown> = Promise.resolve();
+  const runExclusive = <T>(task: () => Promise<T>): Promise<T> => {
+    const run = closeQueue.then(task, task);
+    closeQueue = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  };
 
   app.get(
     '/series',
@@ -132,31 +158,81 @@ export const seriesRoutes: FastifyPluginAsyncZod<SeriesRoutesOptions> = async (a
     '/series/close-map',
     {
       schema: {
-        summary: 'Manually close the currently running map',
+        summary:
+          'Manually close the currently running map (and reset the Manual Match if that is what was closed)',
         tags: ['series'],
-        response: { 200: seriesDocumentSchema, 400: errorSchema },
+        response: { 200: seriesDocumentSchema, 400: errorSchema, 409: errorSchema },
       },
     },
-    async (_request, reply) => {
-      try {
-        // Checked here rather than in the store, which only ever sees a projection — and
-        // `projectAsEnded()` has by then already dressed a warmup lobby up as a finished match,
-        // complete with a final placement for every team in it.
-        if (match.isInWarmup()) {
-          throw new Error(
-            'The round has not started yet — the lobby is still warming up. Nothing has been played to record.',
-          );
+    async (request, reply) =>
+      runExclusive(async () => {
+        // Parsed by hand: older clients POST without a body, which the typed body schema rejects.
+        const body = closeMapBodySchema.safeParse(request.body ?? {});
+        if (!body.success) {
+          return reply.code(400).send({ error: 'expectedMatchId must be a non-empty string.' });
         }
+        const expectedMatchId = body.data.expectedMatchId;
+        try {
+          // Checked here rather than in the store, which only ever sees a projection — and
+          // `projectAsEnded()` has by then already dressed a warmup lobby up as a finished match,
+          // complete with a final placement for every team in it.
+          if (match.isInWarmup()) {
+            throw new Error(
+              'The round has not started yet — the lobby is still warming up. Nothing has been played to record.',
+            );
+          }
 
-        await series.closeMapNow(match.projectAsEnded(), Date.now());
-        // Re-derives what this match has now banked, so the PTS column stops counting it twice
-        // without freezing: anything scored *after* this close still lands in the total.
-        onSeriesChanged();
-        return series.getState();
-      } catch (error) {
-        return reply.code(400).send({ error: (error as Error).message });
-      }
-    },
+          const live = match.project().match;
+          if (live.matchId === null) {
+            throw new Error('There is no match running to close. Add the map by hand instead.');
+          }
+          if (expectedMatchId !== undefined) {
+            if (live.matchId !== expectedMatchId || series.hasClosedMap(expectedMatchId)) {
+              return reply.code(409).send({
+                error:
+                  'That map is no longer running (it was already closed, or a new match has started). Reload the page and check the series.',
+              });
+            }
+          }
+
+          // Judged on the live projection: `projectAsEnded()` hands every alive team a placement, so
+          // checking it afterwards can never notice a match nobody has played (Part 9).
+          if (
+            !live.teams.some(
+              (team) => team.hasAppeared && (team.isEliminated || team.placement !== null),
+            )
+          ) {
+            throw new Error(
+              'No team has been eliminated yet, so there is nothing to record. Play the map first.',
+            );
+          }
+
+          const closed = await series.closeMapNow(match.projectAsEnded(), Date.now());
+          // Re-derives what this match has now banked, so the PTS column stops counting it twice
+          // without freezing: anything scored *after* this close still lands in the total.
+          onSeriesChanged();
+
+          let manualReset: 'done' | 'skipped' | 'failed' = 'skipped';
+          if (afterMapClosed) {
+            try {
+              manualReset = await afterMapClosed(closed);
+            } catch (error) {
+              // The map is recorded and stays recorded; only the follow-up reset failed. The
+              // operator is told, and boot reconciliation finishes it if the process dies first.
+              manualReset = 'failed';
+              request.log.error(
+                { error, mapId: closed.id },
+                'Manual match reset after close failed',
+              );
+            }
+            onSeriesChanged();
+          }
+          reply.header('x-cdf-manual-reset', manualReset);
+          return series.getState();
+        } catch (error) {
+          return reply.code(400).send({ error: (error as Error).message });
+        }
+      }),
   );
 
   app.post(

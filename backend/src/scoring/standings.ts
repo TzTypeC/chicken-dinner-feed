@@ -37,13 +37,6 @@ export interface StandingsInput {
    */
   seriesPointsByTeam?: ReadonlyMap<number, number>;
   /**
-   * Team numbers that have appeared in some *previous* map of the series, even if not in this one
-   * (a bye, or data lagging at the very start of a new map). Used only to break the "never appeared"
-   * sort tie correctly across a series — it does not change the `hasAppeared` field itself, which
-   * stays this-match-only because the overlay's grey-out relies on that exact meaning.
-   */
-  seriesHasAppeared?: ReadonlySet<number>;
-  /**
    * How much of *this* match's own kill and placement points is already banked into
    * `seriesPointsByTeam`, per team — because a map was closed from this same match, and
    * `MatchStore` is still showing that match (frozen until the next one's first update arrives,
@@ -111,13 +104,13 @@ function placementPointsFor(placement: number | undefined, ruleset: ScoringRules
  * a team the match simply has not gotten to yet renders as present-but-unknown rather than
  * vanishing mid-broadcast. `hasAppeared` distinguishes that "not yet" case from "never in this
  * match at all" (a roster sized for a full tournament, reused for a small test room), and such
- * never-present teams always sort last regardless of points.
+ * never-present teams score no placement points, and sit among the other 0-point teams in Team
+ * Order (their rows are dimmed by the overlay via `hasAppeared`).
  */
 export function computeStandings(input: StandingsInput): Team[] {
   const { players, roster, ruleset, placements } = input;
   const presentTeams = input.presentTeams ?? new Set(roster.map((entry) => entry.teamNo));
   const seriesPointsByTeam = input.seriesPointsByTeam;
-  const seriesHasAppeared = input.seriesHasAppeared;
   const bankedPointsByTeam = input.bankedPointsByTeam;
   const inWarmup = input.inWarmup ?? false;
 
@@ -193,21 +186,13 @@ export function computeStandings(input: StandingsInput): Team[] {
     };
   });
 
-  // Present teams first (this match, or anywhere earlier in the series), then points, then this
-  // map's eliminations, then team name — deterministic, so equal teams never swap places between
-  // snapshots and trigger a pointless reorder animation on air. A roster team that has never
-  // appeared, in this map or any earlier one in the series, must never outrank one that actually
-  // played, however few points the real one has earned so far.
-  const ranked = unranked.sort((a, b) => {
-    const aAppeared = a.hasAppeared || (seriesHasAppeared?.has(a.teamNo) ?? false);
-    const bAppeared = b.hasAppeared || (seriesHasAppeared?.has(b.teamNo) ?? false);
-    return (
-      Number(bAppeared) - Number(aAppeared) ||
-      b.totalPoints - a.totalPoints ||
-      b.eliminations - a.eliminations ||
-      a.name.localeCompare(b.name)
-    );
-  });
+  // Competitive points first; Team Order (`teamNo`, the order of the Teams section) breaks every
+  // tie — including "all teams on 0", which therefore reads exactly as the roster. Neither the team
+  // name nor eliminations take part (Part 9, Q1): a name tie-break shuffles tied teams A–Z, and
+  // `teamNo` keeps equal teams from swapping between snapshots and triggering a reorder animation.
+  // Teams that have not appeared are not pushed to the bottom: unused roster slots simply sit among
+  // the other 0-point teams in Team Order (their rows are dimmed via `hasAppeared`).
+  const ranked = unranked.sort((a, b) => b.totalPoints - a.totalPoints || a.teamNo - b.teamNo);
 
   return ranked.map((team, index) => ({ ...team, rank: index + 1 }));
 }

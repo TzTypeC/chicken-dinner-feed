@@ -162,37 +162,166 @@ describe('computeStandings', () => {
     expect(teams.map((team) => team.teamNo).sort()).toEqual([1, 2, 3]);
   });
 
-  it('breaks ties by eliminations, then by team name, so equal teams never swap places', () => {
-    // A non-deterministic tie-break would reorder rows between identical snapshots and trigger
-    // reorder animations on air for no reason. T1/T2/T3 happen to sort the same way alphabetically
-    // as by team number, so this alone would not catch a regression to number-based sorting — see
-    // the next test for that.
-    const teams = computeStandings({
-      players: [
-        player({ teamNo: 3, slot: 1, kills: 1 }),
-        player({ teamNo: 1, slot: 1, kills: 1 }),
-        player({ teamNo: 2, slot: 1, kills: 1 }),
-      ],
-      roster: roster(1, 2, 3),
-      ruleset,
-      placements: new Map(),
+  describe('tower ordering: total points first, Team Order (teamNo) as the only tie-break (Part 9)', () => {
+    it('puts the lower teamNo first when points tie, however the names sort', () => {
+      const teams = computeStandings({
+        players: [],
+        roster: [
+          { teamNo: 1, name: 'Zebra Esports', logoUrl: null },
+          { teamNo: 2, name: 'Alpha Team', logoUrl: null },
+          { teamNo: 3, name: 'Bravo Squad', logoUrl: null },
+          { teamNo: 4, name: 'Delta Gaming', logoUrl: null },
+        ],
+        ruleset,
+        placements: new Map(),
+      });
+
+      expect(teams.map((team) => team.name)).toEqual([
+        'Zebra Esports',
+        'Alpha Team',
+        'Bravo Squad',
+        'Delta Gaming',
+      ]);
+      expect(teams.map((team) => team.rank)).toEqual([1, 2, 3, 4]);
     });
 
-    expect(teams.map((team) => team.teamNo)).toEqual([1, 2, 3]);
-  });
+    it('keeps Team A (order 1) above Team B (order 2) at equal points, and lets more points win', () => {
+      const equal = computeStandings({
+        players: [
+          player({ teamNo: 1, slot: 1, kills: 10 }),
+          player({ teamNo: 2, slot: 1, kills: 10 }),
+        ],
+        roster: roster(2, 1),
+        ruleset,
+        placements: new Map(),
+      });
+      expect(equal.map((team) => team.teamNo)).toEqual([1, 2]);
 
-  it('breaks a final tie alphabetically by name, even when that disagrees with team number order', () => {
-    const teams = computeStandings({
-      players: [],
-      roster: [
-        { teamNo: 1, name: 'Zebra', logoUrl: null },
-        { teamNo: 2, name: 'Alpha', logoUrl: null },
-      ],
-      ruleset,
-      placements: new Map(),
+      const bWins = computeStandings({
+        players: [
+          player({ teamNo: 1, slot: 1, kills: 10 }),
+          player({ teamNo: 2, slot: 1, kills: 15 }),
+        ],
+        roster: roster(1, 2),
+        ruleset,
+        placements: new Map(),
+      });
+      expect(bWins.map((team) => team.teamNo)).toEqual([2, 1]);
     });
 
-    expect(teams.map((team) => team.name)).toEqual(['Alpha', 'Zebra']);
+    it('ignores eliminations on a points tie', () => {
+      // Team 1: 0 kills + 10 (1st) = 10. Team 2: 2 kills + 5 (3rd) + 3 series = 10. More
+      // eliminations (Team 2) must not matter: Team Order decides.
+      const teams = computeStandings({
+        players: [
+          player({ teamNo: 1, slot: 1, kills: 0 }),
+          player({ teamNo: 2, slot: 1, kills: 2 }),
+        ],
+        roster: roster(1, 2),
+        ruleset,
+        placements: new Map([
+          [1, 1],
+          [2, 3],
+        ]),
+        // Team 1: 0 kills + 10 (1st) = 10. Team 2: 2 kills + 5 (3rd) = 7 + 3 series = 10.
+        seriesPointsByTeam: new Map([[2, 3]]),
+      });
+      expect(teams.map((team) => team.totalPoints)).toEqual([10, 10]);
+      expect(teams[0]?.eliminations).toBe(0);
+      expect(teams.map((team) => team.teamNo)).toEqual([1, 2]);
+    });
+
+    it('orders an all-zero table exactly like the roster, whatever order the roster array is in', () => {
+      const shuffled = [7, 3, 12, 1, 25, 5];
+      const teams = computeStandings({
+        players: [],
+        roster: shuffled.map((teamNo) => ({ teamNo, name: `n${26 - teamNo}`, logoUrl: null })),
+        ruleset,
+        placements: new Map(),
+      });
+      expect(teams.map((team) => team.teamNo)).toEqual([1, 3, 5, 7, 12, 25]);
+    });
+
+    it('does not use the name even when names are identical or differ only by case', () => {
+      const teams = computeStandings({
+        players: [],
+        roster: [
+          { teamNo: 2, name: 'TEAM A', logoUrl: null },
+          { teamNo: 1, name: 'Team A', logoUrl: null },
+          { teamNo: 3, name: 'Team A', logoUrl: null },
+        ],
+        ruleset,
+        placements: new Map(),
+      });
+      expect(teams.map((team) => team.teamNo)).toEqual([1, 2, 3]);
+    });
+
+    it('does not push never-appeared teams below appeared teams that are tied with them', () => {
+      // Team 3 has appeared; teams 1 and 2 never have. All have 0 points once Team 3 has none
+      // either (no guaranteed-minimum credit: the standing count of 1 awards 10, so use a ruleset
+      // whose first placement is worth nothing to isolate the ordering rule).
+      const flat: ScoringRuleset = { ...ruleset, placementPoints: [0, 0, 0] };
+      const teams = computeStandings({
+        players: [player({ teamNo: 3, slot: 1 })],
+        roster: roster(1, 2, 3),
+        ruleset: flat,
+        placements: new Map(),
+        presentTeams: new Set([3]),
+      });
+      expect(teams.map((team) => team.teamNo)).toEqual([1, 2, 3]);
+      expect(teams.map((team) => team.hasAppeared)).toEqual([false, false, true]);
+    });
+
+    it('sorts a large table by points descending then teamNo ascending, for any input order', () => {
+      const teamNos = Array.from({ length: 25 }, (_unused, index) => index + 1);
+      const killsOf = (teamNo: number) => (teamNo * 7) % 4; // 0..3, many ties
+      const expected = [...teamNos].sort((a, b) => killsOf(b) - killsOf(a) || a - b);
+      // Deterministic pseudo-shuffles of both the roster and the players.
+      for (const seed of [1, 2, 3, 4, 5]) {
+        const order = [...teamNos].sort(
+          (a, b) => ((a * seed * 31) % 17) - ((b * seed * 31) % 17) || a - b,
+        );
+        const teams = computeStandings({
+          players: order.map((teamNo) => player({ teamNo, slot: 1, kills: killsOf(teamNo) })),
+          roster: order.map((teamNo) => ({
+            teamNo,
+            name: `x${(teamNo * seed) % 25}`,
+            logoUrl: null,
+          })),
+          ruleset: { ...ruleset, placementPoints: [0, 0, 0] },
+          placements: new Map(),
+        });
+        expect(teams.map((team) => team.teamNo)).toEqual(expected);
+        expect(teams.map((team) => team.rank)).toEqual(teamNos);
+      }
+    });
+
+    it('ranks a negative total below teams on zero, and still uses Team Order among equal negatives', () => {
+      const teams = computeStandings({
+        players: [],
+        roster: roster(1, 2, 3),
+        ruleset,
+        placements: new Map(),
+        presentTeams: new Set(),
+        seriesPointsByTeam: new Map([
+          [1, -5],
+          [3, -5],
+        ]),
+      });
+      expect(teams.map((team) => team.teamNo)).toEqual([2, 1, 3]);
+    });
+
+    it('includes series points in the comparison', () => {
+      const teams = computeStandings({
+        players: [],
+        roster: roster(1, 2),
+        ruleset,
+        placements: new Map(),
+        presentTeams: new Set(),
+        seriesPointsByTeam: new Map([[2, 4]]),
+      });
+      expect(teams.map((team) => team.teamNo)).toEqual([2, 1]);
+    });
   });
 
   it('orders players within a team by slot, so each player keeps the same bar', () => {
@@ -235,18 +364,18 @@ describe('computeStandings', () => {
     expect(team?.hasAppeared).toBe(true);
   });
 
-  it('ranks a never-present roster team behind every real team, however few points the real team has', () => {
-    // The exact bug this guards: a small test lobby using 2 of a 16-team roster must not let the
-    // other 14, never-joined teams outrank the real, placed team just because it is tied on points.
+  it('a never-present roster team with a lower teamNo does not outrank the real team that scored', () => {
+    // A small test lobby using 1 of a 16-team roster: the real team is the only one standing, so it
+    // holds the guaranteed-minimum points and ranks first by points, not by roster position.
     const teams = computeStandings({
-      players: [player({ teamNo: 1, slot: 1 })], // 0 kills, not placed — 0 points, same as the ghost.
+      players: [player({ teamNo: 2, slot: 1 })],
       roster: roster(1, 2),
       ruleset,
       placements: new Map(),
-      presentTeams: new Set([1]),
+      presentTeams: new Set([2]),
     });
 
-    expect(teams.map((team) => team.teamNo)).toEqual([1, 2]);
+    expect(teams.map((team) => team.teamNo)).toEqual([2, 1]);
     expect(teams[0]?.hasAppeared).toBe(true);
     expect(teams[1]?.hasAppeared).toBe(false);
   });
@@ -330,20 +459,17 @@ describe('computeStandings', () => {
       expect(teams.find((team) => team.teamNo === 2)?.placementPoints).toBe(0);
     });
 
-    it('sorts a team that sat out this map, but appeared earlier in the series, ahead of a true ghost', () => {
-      // A bye or a data lag at the very start of a new map must not drop a real, scoring team behind
-      // a roster slot that has never once appeared, anywhere in the series.
+    it('a team that sat out this map but scored earlier in the series ranks by its series points', () => {
       const teams = computeStandings({
         players: [],
         roster: roster(1, 2),
         ruleset: pubgmRuleset,
         placements: new Map(),
         presentTeams: new Set(), // neither team has appeared in THIS map yet.
-        seriesPointsByTeam: new Map([[1, 12]]),
-        seriesHasAppeared: new Set([1]), // team 1 played (and scored) in an earlier map.
+        seriesPointsByTeam: new Map([[2, 12]]), // team 2 played (and scored) in an earlier map.
       });
 
-      expect(teams.map((team) => team.teamNo)).toEqual([1, 2]);
+      expect(teams.map((team) => team.teamNo)).toEqual([2, 1]);
       // The exposed `hasAppeared` stays this-match-only — the overlay's grey-out depends on that.
       expect(teams[0]?.hasAppeared).toBe(false);
     });

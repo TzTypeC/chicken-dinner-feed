@@ -64,7 +64,7 @@ describe('postgame selectors with Additional Points (Part 8)', () => {
       totalMatchPoints: 4,
     });
     // The WWCD winner is still the team that placed 1st; a penalty does not move placement.
-    expect(board.winner.teamNo).toBe(1);
+    expect(board.winner!.teamNo).toBe(1);
   });
 
   it('a pre-Part-8 map reads as no adjustment', () => {

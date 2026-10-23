@@ -415,6 +415,7 @@ export function OverlayPage({
         isPreviewingWwcd);
     const winner = selectWwcdWinner(snapshot.match, lastClosedMap, {
       allowClosedMapFallback: true,
+      closedMaps,
       isPreviewSimulation: isPreviewingWwcd,
     });
     return (
@@ -445,6 +446,7 @@ export function OverlayPage({
         isPreviewingFullscreenWwcd);
     const winner = selectWwcdWinner(snapshot.match, lastClosedMap, {
       allowClosedMapFallback: true,
+      closedMaps,
       isPreviewSimulation: isPreviewingFullscreenWwcd,
     });
     return (

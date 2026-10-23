@@ -4,6 +4,7 @@ import { AlivePlayerBars } from './AlivePlayerBars';
 import { appearanceToCssVariables } from './appearance';
 import type { FinalFourCardItem } from './broadcast-state';
 import { formatTeamSlot, ub } from './overlay-scale';
+import { OverflowMarquee } from './OverflowMarquee';
 
 export interface FinalFourOverlayProps {
   cohort: FinalFourCardItem[];
@@ -284,17 +285,22 @@ export function FinalFourOverlay({
                               {formatTeamSlot(team.teamNo)}
                             </span>
                           )}
-                          <span
-                            className="truncate font-extrabold uppercase tracking-wide"
-                            style={{
-                              fontSize: ub(15),
-                              color: isKnockedOut
-                                ? 'var(--overlay-text-muted)'
-                                : 'var(--overlay-text)',
-                            }}
-                          >
-                            {team.name}
-                          </span>
+                          {/*
+                           * The full name: still when it fits, scrolling at the tower's tempo when
+                           * it does not — never a permanent ellipsis (Part 9). The cell is
+                           * `flex-1 min-w-0`, so the card never resizes; the `OUT #n` pill or a logo
+                           * narrowing the cell re-decides automatically.
+                           */}
+                          <OverflowMarquee
+                            testId={`final-four-name-${team.teamNo}`}
+                            text={team.name}
+                            fontSize={15}
+                            fontSizeCss={ub(15)}
+                            color={
+                              isKnockedOut ? 'var(--overlay-text-muted)' : 'var(--overlay-text)'
+                            }
+                            className="font-extrabold uppercase tracking-wide"
+                          />
                         </div>
                       </div>
 

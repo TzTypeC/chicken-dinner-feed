@@ -100,6 +100,12 @@ describe('extended mode geometry', () => {
     expect(nameExtension({ fullWidths: [80, 90], area: 103, maxExtension: 200 })).toBe(0);
     expect(nameExtension({ fullWidths: [80, 196.4], area: 103, maxExtension: 200 })).toBe(94);
     expect(nameExtension({ fullWidths: [600], area: 103, maxExtension: 200 })).toBe(200);
+    // Slack for sub-pixel rendering: the widest name gets `margin` px of room, still capped.
+    expect(nameExtension({ fullWidths: [196.4], area: 103, maxExtension: 200, margin: 3 })).toBe(
+      97,
+    );
+    expect(nameExtension({ fullWidths: [100], area: 103, maxExtension: 200, margin: 2 })).toBe(0);
+    expect(nameExtension({ fullWidths: [600], area: 103, maxExtension: 200, margin: 3 })).toBe(200);
   });
 
   it('keeps a right-anchored panel on canvas and a left-anchored one from leaving the left edge', () => {

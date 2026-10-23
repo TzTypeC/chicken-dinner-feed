@@ -36,6 +36,7 @@ import { seriesRoutes } from './routes/series.js';
 import { ManualStore } from './state/manual-store.js';
 import { createDelegatingMatchStore, MatchStore } from './state/match-store.js';
 import { OverlayControlStore } from './state/overlay-control-store.js';
+import { finishPendingManualReset } from './state/pending-manual-reset.js';
 import { SeriesStore } from './state/series-store.js';
 import { LiveHub } from './ws/live-hub.js';
 import { liveRoutes } from './ws/routes.js';
@@ -166,15 +167,12 @@ export async function buildApp(): Promise<AppContext> {
   // match changes on its own.
   const refreshSeriesContext = (): void => {
     const totals = seriesStore.getSeriesTotals();
-    const hasAppeared = seriesStore.getSeriesHasAppeared();
     autoMatchStore.setSeriesContext(
       totals,
-      hasAppeared,
       seriesStore.getBankedPointsForMatch(autoMatchStore.currentMatchId()),
     );
     manualMatchStore.setSeriesContext(
       totals,
-      hasAppeared,
       seriesStore.getBankedPointsForMatch(manualMatchStore.currentMatchId()),
     );
   };
@@ -185,6 +183,10 @@ export async function buildApp(): Promise<AppContext> {
     await seriesStore.observeMatch(manualMatchStore.project(), Date.now());
     refreshSeriesContext();
   };
+  // Boot reconciliation for a close whose Manual Match reset never ran (see the helper's notes).
+  if (await finishPendingManualReset(manualStore, seriesStore)) {
+    app.log.warn('Finished a pending Manual Match reset left over from the last close.');
+  }
   await syncManualProjection();
 
   const overlayControl = new OverlayControlStore({
@@ -315,11 +317,20 @@ export async function buildApp(): Promise<AppContext> {
   });
   await app.register(configRoutes, { prefix: '/api', store: configStore, logos: logoStore });
 
+  // The single Reset Manual Match mechanism: used by `POST /api/manual/reset` and by the
+  // close-map orchestration below.
+  const resetManualMatch = async (): Promise<void> => {
+    await manualStore.resetMatch({});
+    await syncManualProjection();
+    hub.schedulePublish();
+  };
+
   await app.register(manualRoutes, {
     prefix: '/api',
     manual: manualStore,
     manualMatch: manualMatchStore,
     autoMatch: autoMatchStore,
+    resetManualMatch,
     onManualStateChanged: async () => {
       await syncManualProjection();
       hub.schedulePublish();
@@ -346,6 +357,15 @@ export async function buildApp(): Promise<AppContext> {
     onSeriesChanged: () => {
       refreshSeriesContext();
       hub.schedulePublish();
+    },
+    // Only a map closed *from the Manual Match* resets it. Closing a PCOB map must never touch a
+    // manual draft, and a manual map closed while PCOB mode is active leaves the draft alone too.
+    afterMapClosed: async (closed) => {
+      if (manualStore.getMode() !== 'manual' || closed.matchId !== manualStore.getState().matchId) {
+        return 'skipped';
+      }
+      await resetManualMatch();
+      return 'done';
     },
   });
 

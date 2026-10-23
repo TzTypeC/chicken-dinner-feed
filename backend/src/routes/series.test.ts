@@ -33,6 +33,9 @@ function update(overrides: Partial<IngestUpdate> = {}): IngestUpdate {
   return { matchId: 'match-1', phase: 'live', players: [], ...overrides };
 }
 
+/** Bravo, already eliminated: a match with at least one elimination is one worth recording. */
+const deadBravo = player({ teamNo: 2, slot: 1, liveState: 'dead' });
+
 describe('series routes', () => {
   let dir: string;
   let app: FastifyInstance;
@@ -106,7 +109,7 @@ describe('series routes', () => {
   });
 
   it('POST /series/reset clears history', async () => {
-    match.applyUpdate(update({ players: [player({ teamNo: 1, slot: 1 })] }));
+    match.applyUpdate(update({ players: [player({ teamNo: 1, slot: 1 }), deadBravo] }));
     await app.inject({ method: 'POST', url: '/api/series/close-map' });
 
     const response = await app.inject({ method: 'POST', url: '/api/series/reset' });
@@ -156,7 +159,7 @@ describe('series routes', () => {
   });
 
   it('DELETE /series/maps/:mapId removes a closed map', async () => {
-    match.applyUpdate(update({ players: [player({ teamNo: 1, slot: 1 })] }));
+    match.applyUpdate(update({ players: [player({ teamNo: 1, slot: 1 }), deadBravo] }));
     const closed = (await app.inject({ method: 'POST', url: '/api/series/close-map' })).json();
     const mapId = closed.closedMaps[0].id as string;
 
@@ -213,7 +216,7 @@ describe('series routes', () => {
   });
 
   it('POST /series/close-map responds 400 rather than recording the same match twice', async () => {
-    match.applyUpdate(update({ players: [player({ teamNo: 1, slot: 1, kills: 1 })] }));
+    match.applyUpdate(update({ players: [player({ teamNo: 1, slot: 1, kills: 1 }), deadBravo] }));
     await app.inject({ method: 'POST', url: '/api/series/close-map' });
 
     const second = await app.inject({ method: 'POST', url: '/api/series/close-map' });

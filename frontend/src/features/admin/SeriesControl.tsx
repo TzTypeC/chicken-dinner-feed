@@ -12,8 +12,10 @@ import { useLiveStore } from '@/stores/live-store';
 import { formatSignedPoints } from '@/lib/points';
 import { toast } from '@/stores/toast-store';
 import { parseAdditionalPoints } from './additional-points';
+import { useCloseMap } from './use-close-map';
 import { MapResultDialog, type MapTeamResultValue } from './MapResultDialog';
 import { MatchConfigBar } from './MatchConfigBar';
+import { resolveClosedWwcd } from '@/components/overlay/wwcd-resolver';
 import {
   loadSeriesOrderMode,
   orderTeamNos,
@@ -168,15 +170,10 @@ export function SeriesControl() {
       ? form.map.teams.find((team) => team.teamNo === teamNo)?.name
       : undefined) ?? teamName(teamNo);
 
-  const closeMapNow = async () => {
-    setPendingCloseMap(false);
-    try {
-      setSeriesDocument(await api.closeMapNow());
-      toast.success('Map closed', 'It is now part of the series history below.');
-    } catch (error) {
-      toast.error('Could not close the map', describe(error));
-    }
-  };
+  const { closing, close: closeCurrentMap } = useCloseMap({
+    onClosed: setSeriesDocument,
+    onSettled: reload,
+  });
 
   const resetSeries = async () => {
     setPendingReset(false);
@@ -342,6 +339,16 @@ export function SeriesControl() {
             </select>
           </label>
         )}
+
+        {form && form.teamNos.every((teamNo) => formValues[teamNo]?.placement !== 1) && (
+          <p
+            data-testid="map-dialog-no-wwcd"
+            className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-xs text-amber-200"
+          >
+            No team is set to placement #1. The map can still be saved, but the overlays will show
+            &quot;WWCD not recorded&quot; instead of a winner.
+          </p>
+        )}
       </MapResultDialog>
 
       <ConfirmDialog
@@ -349,12 +356,20 @@ export function SeriesControl() {
         title="Close the current map?"
         confirmLabel="Close it"
         onCancel={() => setPendingCloseMap(false)}
-        onConfirm={() => void closeMapNow()}
+        onConfirm={() => {
+          setPendingCloseMap(false);
+          void closeCurrentMap();
+        }}
       >
         <p>
           Every currently alive team gets its final placement for this map now, ranked by
           eliminations — the same as if the match had actually ended. This becomes a permanent entry
           in the series history below, though it can still be corrected or deleted afterward.
+        </p>
+        <p className="text-foreground font-medium">
+          If this is the Manual Match, a fresh manual match starts right after the map is recorded
+          (every team back to 4 alive and 0 eliminations, lobby kept). The recorded map is not
+          changed, and a PCOB map never touches the manual match.
         </p>
       </ConfirmDialog>
 
@@ -397,8 +412,9 @@ export function SeriesControl() {
           type="button"
           className="border-border hover:bg-secondary min-h-10 rounded border px-3 py-1.5 text-sm transition-colors"
           onClick={() => setPendingCloseMap(true)}
+          disabled={closing}
         >
-          Close current map now
+          {closing ? 'Closing…' : 'Close current map now'}
         </button>
         <button
           type="button"
@@ -460,6 +476,14 @@ export function SeriesControl() {
                   {map.mapName ? ` — ${map.mapName}` : ''}
                 </span>
                 <span className="text-muted-foreground text-xs">{formatWhen(map)}</span>
+                {resolveClosedWwcd(map).state === 'final-invalid' && (
+                  <span
+                    data-testid={`map-no-wwcd-${map.mapNumber}`}
+                    className="text-xs font-medium text-amber-300"
+                  >
+                    No valid placement #1 — overlays show &quot;WWCD not recorded&quot;
+                  </span>
+                )}
               </div>
 
               <div className="grid gap-1">

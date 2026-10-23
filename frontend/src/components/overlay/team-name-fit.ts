@@ -143,14 +143,23 @@ export function maxExtensionOnCanvas(options: {
   return Math.max(0, Math.min(configured, Math.floor(room)));
 }
 
-/** Extended mode: widen just enough for the widest full name, never more than `maxExtension`. */
+/**
+ * Extended mode: widen just enough for the widest full name, never more than `maxExtension`.
+ *
+ * `margin` is slack, in design px, for the few sub-pixel ways the real box ends up narrower than the
+ * formula says (device-pixel snapping of borders and padding at a non-1 unit, kerning that does not
+ * scale linearly). Without it the widest name fits "exactly" on paper and overflows by a fraction
+ * of a pixel on screen, which would start a scroll for nothing.
+ */
 export function nameExtension(options: {
   fullWidths: readonly number[];
   area: number;
   maxExtension: number;
+  margin?: number;
 }): number {
   const widest = Math.max(0, ...options.fullWidths);
-  return Math.max(0, Math.min(options.maxExtension, Math.ceil(widest - options.area)));
+  const margin = options.margin ?? 0;
+  return Math.max(0, Math.min(options.maxExtension, Math.ceil(widest - options.area + margin)));
 }
 
 /**

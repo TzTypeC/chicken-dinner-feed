@@ -1,6 +1,6 @@
 import type { IngestSourceKind, MatchState, OverlayAppearance } from '@cdf/shared';
 import { motion } from 'motion/react';
-import { useLayoutEffect, useMemo, useRef, type CSSProperties } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import { appearanceToCssVariables, ROW_VARIANTS } from './appearance';
 import { formatTeamSlot, LEADERBOARD_METRICS as M, leaderboardColumns, u } from './overlay-scale';
 import { TeamRow } from './TeamRow';
@@ -55,8 +55,16 @@ export function LeaderboardOverlay({
   const probeRef = useRef<HTMLDivElement>(null);
   const probeTextRef = useRef<HTMLSpanElement>(null);
   const probeBadgeRef = useRef<HTMLSpanElement>(null);
+  const rulerPxRef = useRef<HTMLDivElement>(null);
+  const rulerUnitRef = useRef<HTMLDivElement>(null);
   const probeRefs = useMemo(
-    () => ({ probe: probeRef, text: probeTextRef, badge: probeBadgeRef }),
+    () => ({
+      probe: probeRef,
+      text: probeTextRef,
+      badge: probeBadgeRef,
+      rulerPx: rulerPxRef,
+      rulerUnit: rulerUnitRef,
+    }),
     [],
   );
   // Every team in the snapshot, not only the visible rows: standings moving on air never resize.
@@ -87,27 +95,28 @@ export function LeaderboardOverlay({
       }}
     >
       {/*
-       * Measuring probe for the name layout. `--overlay-unit: 1px` makes every length inside it one
-       * real pixel per design pixel, so measurements are scale-independent. Never visible.
+       * Measuring probe for the name layout, drawn with the panel's real `--overlay-unit` so names
+       * are measured at the size they are painted at. The two rulers turn the measurements into
+       * design px and cancel any transform an ancestor is animating. Never visible.
        */}
       <div
         ref={probeRef}
         aria-hidden
-        style={
-          {
-            '--overlay-unit': '1px',
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            visibility: 'hidden',
-            pointerEvents: 'none',
-            whiteSpace: 'nowrap',
-            width: 0,
-            overflow: 'hidden',
-          } as CSSProperties
-        }
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap',
+          width: 0,
+          height: 0,
+          overflow: 'hidden',
+        }}
       >
-        <span ref={probeTextRef} className={TEAM_NAME_CLASS} style={{ fontSize: '100px' }} />
+        <div ref={rulerPxRef} style={{ width: '1000px', height: 0 }} />
+        <div ref={rulerUnitRef} style={{ width: u(1000), height: 0 }} />
+        <span ref={probeTextRef} className={TEAM_NAME_CLASS} />
         <span ref={probeBadgeRef} className={SLOT_BADGE_CLASS} style={SLOT_BADGE_STYLE}>
           {formatTeamSlot(25)}
         </span>
@@ -148,11 +157,22 @@ export function LeaderboardOverlay({
         <span className="text-center font-bold">ELIMS</span>
       </div>
 
-      <div className="flex flex-col">
-        {teams.map((team, index) => {
-          const row = (
+      {/*
+       * `layoutRoot`: the rows' reorder animation is measured relative to this container, and the
+       * container itself never animates. When extended mode widens the panel to the left, every row
+       * moves with the panel instead of sliding back from its old position (Part 9); rank changes —
+       * a row's position *within* the list — still animate.
+       */}
+      <motion.div layout layoutRoot className="flex flex-col">
+        {teams.map((team, index) => (
+          /*
+           * Always the same keyed wrapper, so switching the row stagger on or off never remounts the
+           * rows (and their marquees). Variants live here rather than on TeamRow: the row already
+           * animates its own opacity to dim eliminated teams, and two things writing the same
+           * property fight; the two opacities simply multiply.
+           */
+          <motion.div key={team.teamNo} variants={animateRows ? ROW_VARIANTS : undefined}>
             <TeamRow
-              key={animateRows ? undefined : team.teamNo}
               team={team}
               isAlternate={index % 2 === 1}
               showLogo={showLogos}
@@ -165,21 +185,9 @@ export function LeaderboardOverlay({
                 }
               }
             />
-          );
-          return animateRows ? (
-            /*
-             * A wrapper rather than variants on TeamRow itself: the row already animates its own
-             * opacity to dim eliminated teams, and two things writing the same property fight. The
-             * two opacities simply multiply, which is the behaviour we want anyway.
-             */
-            <motion.div key={team.teamNo} variants={ROW_VARIANTS}>
-              {row}
-            </motion.div>
-          ) : (
-            row
-          );
-        })}
-      </div>
+          </motion.div>
+        ))}
+      </motion.div>
 
       {appearance.showLegend && (
         <div

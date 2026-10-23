@@ -47,7 +47,17 @@ export class ApiError extends Error {
   }
 }
 
+/** What the server did to the Manual Match after a successful Close Current Map. */
+export type ManualResetOutcome = 'done' | 'skipped' | 'failed';
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await requestWithResponse<T>(path, init)).data;
+}
+
+async function requestWithResponse<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<{ data: T; response: Response }> {
   const headers = new Headers(init?.headers);
 
   // Only declare a JSON body when there actually is one. Declaring `application/json` on a bodyless
@@ -85,8 +95,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(response.status, message, errors);
   }
 
-  if (response.status === 204) return undefined as T;
-  return (await response.json()) as T;
+  if (response.status === 204) return { data: undefined as T, response };
+  return { data: (await response.json()) as T, response };
 }
 
 /**
@@ -199,7 +209,24 @@ export const api = {
       body: JSON.stringify(patch),
     }),
 
-  closeMapNow: () => request<SeriesDocument>('/series/close-map', { method: 'POST' }),
+  /**
+   * Closes the running map. `expectedMatchId` is the match the operator is looking at: the server
+   * answers 409 if it is no longer the running one (double click, stale tab). `manualReset` reports
+   * what happened to the Manual Match: `done` (reset after the close), `skipped`, or `failed` (the
+   * map is recorded, the reset is not — the operator must press Reset manual match).
+   */
+  closeMapNow: async (
+    expectedMatchId?: string,
+  ): Promise<{ document: SeriesDocument; manualReset: ManualResetOutcome }> => {
+    const { data, response } = await requestWithResponse<SeriesDocument>('/series/close-map', {
+      method: 'POST',
+      ...(expectedMatchId === undefined ? {} : { body: JSON.stringify({ expectedMatchId }) }),
+    });
+    const header = response.headers.get('x-cdf-manual-reset');
+    const manualReset: ManualResetOutcome =
+      header === 'done' || header === 'failed' ? header : 'skipped';
+    return { document: data, manualReset };
+  },
 
   resetSeries: () => request<SeriesDocument>('/series/reset', { method: 'POST' }),
 

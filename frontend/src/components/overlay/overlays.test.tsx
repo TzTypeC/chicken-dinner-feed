@@ -534,8 +534,8 @@ describe('PostGameOverlay & Custom Background Media (D-PMCC-04 / A3 & D-PMCC-05)
     });
     expect(board).not.toBeNull();
     expect(board?.sourceKind).toBe('closed-map');
-    expect(board?.winner.teamNo).toBe(5);
-    expect(board?.winner.totalMatchPoints).toBe(26); // 10 place + 16 elims
+    expect(board?.winner!.teamNo).toBe(5);
+    expect(board?.winner!.totalMatchPoints).toBe(26); // 10 place + 16 elims
     expect(board?.rows).toHaveLength(16);
 
     const html = renderToStaticMarkup(
@@ -1414,17 +1414,23 @@ describe('D-PMCC-09 — Postgame Match Historical Selection & Postgame Series Cu
     });
     expect(match1Results?.mapNumber).toBe(1);
     expect(match1Results?.mapName).toBe('Erangel');
-    expect(match1Results?.winner.name).toBe('ALPHA SQUAD');
-    expect(match1Results?.winner.totalMatchPoints).toBe(18);
+    expect(match1Results?.winner!.name).toBe('ALPHA SQUAD');
+    expect(match1Results?.winner!.totalMatchPoints).toBe(18);
 
-    const latestResults = selectPostGameResults(baseMatch, closedMap2, matchInfo, {
-      closedMaps: [closedMap1, closedMap2],
-      postGameMatchSelection: 'latest',
-    });
+    // The live screen still shows match 2, which was closed: `latest` is that recorded map.
+    const latestResults = selectPostGameResults(
+      { ...baseMatch, matchId: 'match-2' },
+      closedMap2,
+      matchInfo,
+      {
+        closedMaps: [closedMap1, closedMap2],
+        postGameMatchSelection: 'latest',
+      },
+    );
     expect(latestResults?.mapNumber).toBe(2);
     expect(latestResults?.mapName).toBe('Miramar');
-    expect(latestResults?.winner.name).toBe('BRAVO SQUAD');
-    expect(latestResults?.winner.totalMatchPoints).toBe(12);
+    expect(latestResults?.winner!.name).toBe('BRAVO SQUAD');
+    expect(latestResults?.winner!.totalMatchPoints).toBe(12);
   });
 
   it('renders deliberate unavailable state when a pinned historical match ID is missing and never substitutes another match', () => {
@@ -1459,7 +1465,7 @@ describe('D-PMCC-09 — Postgame Match Historical Selection & Postgame Series Cu
       postGameMatchSelection: 'latest',
     });
     // Placement points (10) + Kill points (5) = 15 (NOT 99 from team.totalPoints)
-    expect(results?.winner.totalMatchPoints).toBe(15);
+    expect(results?.winner!.totalMatchPoints).toBe(15);
   });
 
   it('selectSeriesStandings and PostGameSeriesOverlay compute cumulative statistics and apply PUBG Esports tie-breakers', () => {
@@ -1589,7 +1595,7 @@ describe('D-PMCC-09 — Postgame Match Historical Selection & Postgame Series Cu
       },
     );
     expect(match2Results).not.toBeNull();
-    expect(match2Results?.winner.name).toBe('Team B');
+    expect(match2Results?.winner!.name).toBe('Team B');
     expect(match2Results?.rows.map((r) => r.name)).toEqual(['Team B', 'Team A', 'Team C']);
     expect(match2Results?.rows[0]?.matchRank).toBe(1);
     expect(match2Results?.rows[0]?.totalMatchPoints).toBe(25);
@@ -1769,7 +1775,7 @@ describe('Universal ON AIR / HIDE enforcement across all overlay types', () => {
     // Uses the snapshot name and logo, not the new live roster identity
     expect(board?.rows[0]?.name).toBe('Historic Alpha Squad');
     expect(board?.rows[0]?.logoUrl).toBe('/api/logos/historic-alpha.png');
-    expect(board?.winner.name).toBe('Historic Alpha Squad');
-    expect(board?.winner.logoUrl).toBe('/api/logos/historic-alpha.png');
+    expect(board?.winner!.name).toBe('Historic Alpha Squad');
+    expect(board?.winner!.logoUrl).toBe('/api/logos/historic-alpha.png');
   });
 });

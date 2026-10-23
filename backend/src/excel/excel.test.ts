@@ -297,6 +297,29 @@ describe('Excel Integration (WS-7.3 & WS-7.4)', () => {
     );
   });
 
+  it('warns, without rejecting the import, about a round with no placement #1', async () => {
+    const buffer = await buildExcelExport({
+      roster: DEFAULT_PMCC_2026_ROSTER.teams,
+      ruleset: DEFAULT_SCORING_RULESET,
+      series: createDefaultSeriesDocument(),
+    });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const ws = wb.getWorksheet('10. Offline Scoring Sheets')!;
+    ws.getCell('L6').value = 2;
+    ws.getCell('L7').value = 3; // Round 1 has placements, but nobody is #1.
+
+    const result = await validateExcelImport(Buffer.from(await wb.xlsx.writeBuffer()), 'matches');
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(
+      result.value.preview.warnings.some((w) =>
+        w.message.includes('Round 1: no team has placement #1'),
+      ),
+    ).toBe(true);
+  });
+
   it('imports the actual pristine template assets/PMCC 2026 OFLINE SCORING SHEETS.xlsx cleanly across modes', async () => {
     const templateBytes = await readFile(resolveDefaultTemplatePath());
 

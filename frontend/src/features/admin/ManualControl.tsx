@@ -11,6 +11,7 @@ import { api, ApiError } from '@/lib/api';
 import { useLiveStore } from '@/stores/live-store';
 import { toast } from '@/stores/toast-store';
 import { MatchConfigBar } from './MatchConfigBar';
+import { useCloseMap } from './use-close-map';
 
 export interface ManualControlProps {
   roster: readonly TeamRosterEntry[];
@@ -63,6 +64,8 @@ export function ManualControl({ roster, mode, onModeChanged }: ManualControlProp
     void reload();
   }, [reload, roster]);
 
+  const { closing, close: closeCurrentMap } = useCloseMap({ onSettled: reload });
+
   // When Manual Mode is active on air, keep the PTS/rank preview in sync with the live broadcast
   // snapshot so the operator sees any series or scoring changes immediately.
   const displayedStandings =
@@ -74,6 +77,8 @@ export function ManualControl({ roster, mode, onModeChanged }: ManualControlProp
   const rosterByTeamNo = new Map(roster.map((entry) => [entry.teamNo, entry]));
 
   const patchTeam = async (teamNo: number, patch: ManualTeamPatch) => {
+    // A close (and the reset that follows it) is in flight: an edit now could land on the next map.
+    if (closing) return;
     try {
       const response = await api.patchManualTeam(teamNo, patch);
       setDocument(response.document);
@@ -113,20 +118,6 @@ export function ManualControl({ roster, mode, onModeChanged }: ManualControlProp
       );
     } catch (error) {
       toast.error('Could not reset manual match', describe(error));
-    }
-  };
-
-  const closeMapNow = async () => {
-    setPendingCloseMap(false);
-    try {
-      await api.closeMapNow();
-      await reload();
-      toast.success(
-        'Map closed into series history',
-        'When you are ready for the next map, click "Reset manual match".',
-      );
-    } catch (error) {
-      toast.error('Could not close the map', describe(error));
     }
   };
 
@@ -189,12 +180,20 @@ export function ManualControl({ roster, mode, onModeChanged }: ManualControlProp
         title="Close the current manual map now?"
         confirmLabel="Close map now"
         onCancel={() => setPendingCloseMap(false)}
-        onConfirm={() => void closeMapNow()}
+        onConfirm={() => {
+          setPendingCloseMap(false);
+          void closeCurrentMap();
+        }}
       >
         <p>
           Records this map&apos;s placements and eliminations into the tournament series history.
           Any teams still alive will be assigned the top remaining placements sorted by
           eliminations.
+        </p>
+        <p className="text-foreground font-medium">
+          Once the map is recorded, the manual match is reset automatically for the next map: every
+          team goes back to 4 alive and 0 eliminations, and the lobby (who is participating) is
+          kept. The recorded map is not changed.
         </p>
       </ConfirmDialog>
 
@@ -242,7 +241,7 @@ export function ManualControl({ roster, mode, onModeChanged }: ManualControlProp
             <button
               type="button"
               onClick={() => setPendingCloseMap(true)}
-              disabled={mode !== 'manual'}
+              disabled={mode !== 'manual' || closing}
               className="border-border hover:bg-secondary min-h-9 rounded border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-40"
               title={
                 mode === 'manual'
@@ -250,7 +249,7 @@ export function ManualControl({ roster, mode, onModeChanged }: ManualControlProp
                   : 'Switch to Manual mode first to close the manual map'
               }
             >
-              Close current map now
+              {closing ? 'Closing…' : 'Close current map now'}
             </button>
             <button
               type="button"

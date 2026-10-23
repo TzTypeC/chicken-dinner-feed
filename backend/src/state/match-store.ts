@@ -59,13 +59,11 @@ export class MatchStore {
   private readonly seenTeams = new Set<number>();
 
   /**
-   * Points already banked in earlier, closed maps of the series, and which teams have appeared in
-   * some earlier map even if not this one — set from outside by whatever owns the series history
-   * (specs/SCORING-LOGIC-UPDATE.md). Default to nothing, so a store nobody has told about a series
-   * behaves exactly as it always has: this-match-only points.
+   * Points already banked in earlier, closed maps of the series — set from outside by whatever owns
+   * the series history (specs/SCORING-LOGIC-UPDATE.md). Defaults to nothing, so a store nobody has
+   * told about a series behaves exactly as it always has: this-match-only points.
    */
   private seriesPointsByTeam: ReadonlyMap<number, number> = new Map();
-  private seriesHasAppeared: ReadonlySet<number> = new Set();
   /**
    * How much of the currently displayed match is already banked in `seriesPointsByTeam`, per team,
    * because a map was closed from this same match. Without it, the window between a map closing and
@@ -96,11 +94,9 @@ export class MatchStore {
    */
   setSeriesContext(
     seriesPointsByTeam: ReadonlyMap<number, number>,
-    seriesHasAppeared: ReadonlySet<number>,
     bankedPointsByTeam: ReadonlyMap<number, BankedPoints> = new Map(),
   ): void {
     this.seriesPointsByTeam = seriesPointsByTeam;
-    this.seriesHasAppeared = seriesHasAppeared;
     this.bankedPointsByTeam = bankedPointsByTeam;
   }
 
@@ -243,7 +239,6 @@ export class MatchStore {
       placements: this.resolvePlacements(phase),
       presentTeams: this.seenTeams,
       seriesPointsByTeam: this.seriesPointsByTeam,
-      seriesHasAppeared: this.seriesHasAppeared,
       bankedPointsByTeam: this.bankedPointsByTeam,
       inWarmup: this.lastUpdate?.inWarmup ?? false,
     });

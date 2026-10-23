@@ -14,8 +14,15 @@ export interface ManualRoutesOptions {
   manual: ManualStore;
   manualMatch: MatchStore;
   autoMatch: MatchStore;
-  /** Called whenever a manual team edit or match reset occurs so `manualMatch` and `LiveHub` update. */
+  /**
+   * Called whenever a manual team edit or match reset occurs so `manualMatch` and `LiveHub` update.
+   */
   onManualStateChanged: () => Promise<void> | void;
+  /**
+   * The one Reset Manual Match mechanism (fresh match, presence kept): used by this route and by
+   * the close-map orchestration, so the two can never behave differently.
+   */
+  resetManualMatch: () => Promise<void>;
   /** Called when the operator switches between PCOB (`auto`) and `manual` operating modes. */
   onModeChanged: (mode: OperatingMode) => Promise<void> | void;
 }
@@ -51,7 +58,8 @@ const resetBodySchema = z
  * feed during a mid-match failover.
  */
 export const manualRoutes: FastifyPluginAsyncZod<ManualRoutesOptions> = async (app, options) => {
-  const { manual, manualMatch, autoMatch, onManualStateChanged, onModeChanged } = options;
+  const { manual, manualMatch, autoMatch, onManualStateChanged, onModeChanged, resetManualMatch } =
+    options;
 
   const buildResponse = () => ({
     document: manual.getState(),
@@ -156,11 +164,12 @@ export const manualRoutes: FastifyPluginAsyncZod<ManualRoutesOptions> = async (a
       },
     },
     async (request) => {
-      const seedFromAuto = request.body?.seedFromAuto ?? false;
-      await manual.resetMatch(
-        seedFromAuto ? { seedFromTeams: autoMatch.project().match.teams } : {},
-      );
-      await onManualStateChanged();
+      if (request.body?.seedFromAuto) {
+        await manual.resetMatch({ seedFromTeams: autoMatch.project().match.teams });
+        await onManualStateChanged();
+      } else {
+        await resetManualMatch();
+      }
       return buildResponse();
     },
   );

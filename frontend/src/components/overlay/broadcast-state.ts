@@ -2,10 +2,12 @@ import {
   additionalPointsOf,
   type AutoWwcdVariant,
   type ClosedMapResult,
+  type ClosedMapTeamResult,
   type MatchState,
   type OverlayAppearance,
   type Team,
 } from '@cdf/shared';
+import { findClosedMapForMatch, resolveClosedWwcd, resolveLiveWwcd } from './wwcd-resolver';
 
 export type LeaderboardLayoutMode = 'tower' | 'final-four' | 'wwcd';
 
@@ -54,12 +56,19 @@ export interface WwcdWinnerSummary {
   eliminations: number;
   killPoints: number;
   placementPoints: number;
-  /** Single-match total points (`killPoints + placementPoints`). */
+  /** Single-match total points (`killPoints + placementPoints`, plus any adjustment once recorded). */
   matchPoints: number;
-  /** Cumulative tournament points including this match. */
+  /** Cumulative tournament points. */
   seriesPoints: number;
-  aliveCount: number;
+  /** Players still standing; `null` when the squad's live state is not known (a historical map). */
+  aliveCount: number | null;
   players: Team['players'];
+  /**
+   * True while the map is not closed: the team is the confirmed last one standing, but the result
+   * is not recorded yet and its points can still change. Final once the map is closed.
+   */
+  provisional: boolean;
+  /** `preview` marks the admin-preview sample, which is not a result. */
   sourceKind: 'live' | 'closed-map' | 'preview';
 }
 
@@ -91,8 +100,10 @@ export function resolveLeaderboardLayoutMode(
   // 0 eliminated) never falsely triggers Final-4 or WWCD.
   if (eliminatedCount < 1) return 'tower';
 
+  // Only a *confirmed* sole survivor starts the WWCD screen: a team whose status is unknown (no
+  // players in this snapshot), nobody standing, or conflicting data must not (Part 9).
   const showWwcd = appearance.showWwcdOverlay ?? true;
-  if (showWwcd && standingTeams.length === 1) {
+  if (showWwcd && resolveLiveWwcd(match).state === 'provisional') {
     return 'wwcd';
   }
 
@@ -190,59 +201,65 @@ export function selectFinalFourCohort(
 }
 
 /**
- * Resolves the confirmed WWCD winner for either:
- * - automatic in-game WWCD display (`allowClosedMapFallback = false`), or
- * - dedicated `/overlay/wwcd` route / admin preview (`allowClosedMapFallback = true`).
+ * A sample shown only in the admin preview when there is no result to show. It is deliberately not
+ * a roster team: inventing a winner out of the standings is exactly what Part 9 removed.
  */
-export function selectWwcdWinner(
-  match: MatchState,
-  lastClosedMap: ClosedMapResult | null | undefined,
-  options: { allowClosedMapFallback?: boolean; isPreviewSimulation?: boolean } = {},
-): WwcdWinnerSummary | null {
-  const { allowClosedMapFallback = false, isPreviewSimulation = false } = options;
+const PREVIEW_WINNER_SAMPLE: WwcdWinnerSummary = {
+  teamNo: 0,
+  name: 'PREVIEW SAMPLE',
+  logoUrl: null,
+  eliminations: 0,
+  killPoints: 0,
+  placementPoints: 0,
+  matchPoints: 0,
+  seriesPoints: 0,
+  aliveCount: null,
+  players: [],
+  provisional: false,
+  sourceKind: 'preview',
+};
 
-  if (match.phase !== 'idle') {
-    const appeared = match.teams.filter((team) => team.hasAppeared);
-    const standing = appeared.filter((team) => !team.isEliminated);
-    const eliminatedCount = appeared.filter((team) => team.isEliminated).length;
-
-    if (standing.length === 1 && eliminatedCount >= 1) {
-      const winner = standing[0]!;
-      return teamToWinnerSummary(winner, 'live');
-    }
+/** The series total across every recorded map, so the card never mixes in a running match. */
+function seriesTotalFor(closedMaps: readonly ClosedMapResult[], teamNo: number): number {
+  let total = 0;
+  for (const map of closedMaps) {
+    for (const entry of map.teams) if (entry.teamNo === teamNo) total += entry.totalPoints;
   }
-
-  if (allowClosedMapFallback && lastClosedMap && lastClosedMap.teams.length > 0) {
-    const closedWinner =
-      lastClosedMap.teams.find((entry) => entry.placement === 1) ??
-      [...lastClosedMap.teams].sort((a, b) => a.placement - b.placement)[0]!;
-    const rosterMatch = match.teams.find((team) => team.teamNo === closedWinner.teamNo);
-
-    return {
-      teamNo: closedWinner.teamNo,
-      name: rosterMatch?.name ?? `Team ${closedWinner.teamNo}`,
-      logoUrl: rosterMatch?.logoUrl ?? null,
-      eliminations: closedWinner.eliminations,
-      killPoints: closedWinner.killPoints,
-      placementPoints: closedWinner.placementPoints,
-      matchPoints: closedWinner.totalPoints,
-      seriesPoints: rosterMatch?.totalPoints ?? closedWinner.totalPoints,
-      aliveCount: rosterMatch && !rosterMatch.isEliminated ? rosterMatch.standingPlayerCount : 4,
-      players: rosterMatch?.players ?? [],
-      sourceKind: 'closed-map',
-    };
-  }
-
-  if (isPreviewSimulation && match.teams.length > 0) {
-    const topTeam = match.teams[0]!;
-    return teamToWinnerSummary(topTeam, 'preview');
-  }
-
-  return null;
+  return total;
 }
 
-function teamToWinnerSummary(team: Team, sourceKind: 'live' | 'preview'): WwcdWinnerSummary {
-  const matchPoints = team.killPoints + team.placementPoints;
+/**
+ * The winner of a **closed** map, from the record itself. Name and logo come from the snapshot taken
+ * when the map closed; the live roster only fills in a map that predates snapshots. Live players are
+ * used only when the screen still shows that very match.
+ */
+function closedEntryToSummary(
+  entry: ClosedMapTeamResult,
+  map: ClosedMapResult,
+  match: MatchState,
+  closedMaps: readonly ClosedMapResult[],
+): WwcdWinnerSummary {
+  const rosterTeam = match.teams.find((team) => team.teamNo === entry.teamNo);
+  const sameMatch = map.matchId !== null && map.matchId === match.matchId;
+  const live = sameMatch ? rosterTeam : undefined;
+
+  return {
+    teamNo: entry.teamNo,
+    name: entry.name ?? rosterTeam?.name ?? `Team ${entry.teamNo}`,
+    logoUrl: entry.logoUrl !== undefined ? entry.logoUrl : (rosterTeam?.logoUrl ?? null),
+    eliminations: entry.eliminations,
+    killPoints: entry.killPoints,
+    placementPoints: entry.placementPoints,
+    matchPoints: entry.totalPoints,
+    seriesPoints: seriesTotalFor(closedMaps.length > 0 ? closedMaps : [map], entry.teamNo),
+    aliveCount: live && live.standingPlayerCount > 0 ? live.standingPlayerCount : null,
+    players: live?.players ?? [],
+    provisional: false,
+    sourceKind: 'closed-map',
+  };
+}
+
+function teamToWinnerSummary(team: Team): WwcdWinnerSummary {
   return {
     teamNo: team.teamNo,
     name: team.name,
@@ -250,12 +267,64 @@ function teamToWinnerSummary(team: Team, sourceKind: 'live' | 'preview'): WwcdWi
     eliminations: team.eliminations,
     killPoints: team.killPoints,
     placementPoints: team.placementPoints,
-    matchPoints,
+    matchPoints: team.killPoints + team.placementPoints,
     seriesPoints: team.totalPoints,
-    aliveCount: team.standingPlayerCount > 0 ? team.standingPlayerCount : 4,
+    aliveCount: team.standingPlayerCount,
     players: team.players,
-    sourceKind,
+    provisional: true,
+    sourceKind: 'live',
   };
+}
+
+export interface SelectWwcdWinnerOptions {
+  /** Dedicated `/overlay/wwcd` route / admin preview: may fall back to the last recorded map. */
+  allowClosedMapFallback?: boolean;
+  /** Admin preview: shows a labelled sample instead of nothing when there is no result. */
+  isPreviewSimulation?: boolean;
+  /** Every recorded map, to know whether the match on screen was already closed. */
+  closedMaps?: readonly ClosedMapResult[];
+}
+
+/**
+ * Who the WWCD overlays name (Part 9, ADR-0019), by the shared rule in `wwcd-resolver.ts`:
+ *
+ * 1. The match on screen was closed → the recorded placement #1 (`provisional: false`); a closed map
+ *    without exactly one #1 names nobody.
+ * 2. The map is unclosed and exactly one team is confirmed standing → that team, `provisional: true`.
+ * 3. The map is unclosed and the survivor cannot be confirmed → nobody (never a guess).
+ * 4. The map is still running → the last recorded map's winner when the fallback is allowed, or
+ *    (preview only) a labelled sample.
+ */
+export function selectWwcdWinner(
+  match: MatchState,
+  lastClosedMap: ClosedMapResult | null | undefined,
+  options: SelectWwcdWinnerOptions = {},
+): WwcdWinnerSummary | null {
+  const { allowClosedMapFallback = false, isPreviewSimulation = false } = options;
+  const closedMaps =
+    options.closedMaps && options.closedMaps.length > 0
+      ? options.closedMaps
+      : lastClosedMap
+        ? [lastClosedMap]
+        : [];
+
+  const closedForShownMatch =
+    match.phase !== 'idle' ? findClosedMapForMatch(match.matchId, closedMaps) : null;
+  if (closedForShownMatch) {
+    const { winner } = resolveClosedWwcd(closedForShownMatch);
+    return winner ? closedEntryToSummary(winner, closedForShownMatch, match, closedMaps) : null;
+  }
+
+  const live = resolveLiveWwcd(match);
+  if (live.winner) return teamToWinnerSummary(live.winner);
+  if (live.state === 'unconfirmed') return null;
+
+  if (allowClosedMapFallback && lastClosedMap && lastClosedMap.teams.length > 0) {
+    const { winner } = resolveClosedWwcd(lastClosedMap);
+    return winner ? closedEntryToSummary(winner, lastClosedMap, match, closedMaps) : null;
+  }
+
+  return isPreviewSimulation ? PREVIEW_WINNER_SAMPLE : null;
 }
 
 export interface PostGameTeamRow {
@@ -264,8 +333,11 @@ export interface PostGameTeamRow {
   teamNo: number;
   name: string;
   logoUrl: string | null;
-  /** 1-based match survival placement (`#1` = WWCD winner). */
-  placement: number;
+  /**
+   * 1-based match survival placement (`#1` = WWCD winner). `null` while the map is unclosed and the
+   * team has no final placement yet — never a number invented from the table position.
+   */
+  placement: number | null;
   eliminations: number;
   placementPoints: number;
   killPoints: number;
@@ -281,33 +353,44 @@ export interface PostGameTeamRow {
 export interface MatchRankFields {
   totalMatchPoints: number;
   killPoints: number;
-  placement: number;
+  placement: number | null;
   teamNo: number;
 }
 
 /**
  * Single-match ranking (Part 7 Feature D): match points (adjustment included) desc → official kill
- * points desc → placement asc → slot asc. The one implementation shared by the postgame board and
- * the admin's finished-map cards, so the two can never order the same map differently.
+ * points desc → placement asc (no placement yet sorts last) → slot asc. The one implementation
+ * shared by the postgame board and the admin's finished-map cards, so the two can never order the
+ * same map differently.
  */
 export function compareMatchResults(a: MatchRankFields, b: MatchRankFields): number {
   return (
     b.totalMatchPoints - a.totalMatchPoints ||
     b.killPoints - a.killPoints ||
-    a.placement - b.placement ||
+    (a.placement ?? Number.MAX_SAFE_INTEGER) - (b.placement ?? Number.MAX_SAFE_INTEGER) ||
     a.teamNo - b.teamNo
   );
 }
+
+/**
+ * - `final`: a recorded map with exactly one placement #1.
+ * - `provisional`: the current map, not closed yet, with a confirmed last-standing team.
+ * - `unconfirmed`: the current map, not closed yet, whose winner cannot be confirmed.
+ * - `not-recorded`: a recorded map without a valid placement #1.
+ * - `preview`: admin-preview sample data, not a result.
+ */
+export type PostGameStatus = 'final' | 'provisional' | 'unconfirmed' | 'not-recorded' | 'preview';
 
 export interface PostGameBoardData {
   mapId?: string;
   mapNumber: number;
   mapName: string;
-  /** The team that won the match (`placement === 1`, or rank 1 if placements are tied in preview). */
-  winner: PostGameTeamRow;
+  /** The WWCD team (`null` unless `status` is `final` or `provisional`). */
+  winner: PostGameTeamRow | null;
   /** All participating teams (#1–#25) ordered by `totalMatchPoints` descending (`D-PMCC-04` / `A3`). */
   rows: PostGameTeamRow[];
   sourceKind: 'closed-map' | 'live-fallback' | 'preview';
+  status: PostGameStatus;
 }
 
 export interface SelectPostGameResultsOptions {
@@ -316,7 +399,8 @@ export interface SelectPostGameResultsOptions {
   closedMaps?: readonly ClosedMapResult[];
   /**
    * Which completed match to display (`D-PMCC-09`):
-   * - `'latest'` (default): most recently completed match (`closedMaps.at(-1)` or `lastClosedMap`)
+   * - `'latest'` (default): the current map once it has a result (provisional until it is closed),
+   *   otherwise the most recently completed match (`closedMaps.at(-1)` or `lastClosedMap`)
    * - `<ClosedMapResult.id>`: pinned historical match ID
    */
   postGameMatchSelection?: string;
@@ -338,15 +422,39 @@ export function isPinnedPostGameMatchUnavailable(
   return !maps.some((m) => m.id === selection);
 }
 
+function rankRows(unsorted: Omit<PostGameTeamRow, 'matchRank'>[]): PostGameTeamRow[] {
+  return [...unsorted]
+    .sort(compareMatchResults)
+    .map((row, idx) => ({ ...row, matchRank: idx + 1 }));
+}
+
+/** Rows for the current, unclosed map: real placements only (plus the confirmed survivor as #1). */
+function liveRows(teams: readonly Team[], winnerTeamNo: number | null): PostGameTeamRow[] {
+  return rankRows(
+    teams.map((team) => ({
+      teamNo: team.teamNo,
+      name: team.name,
+      logoUrl: team.logoUrl,
+      placement: team.teamNo === winnerTeamNo ? 1 : team.placement,
+      eliminations: team.eliminations,
+      placementPoints: team.placementPoints,
+      killPoints: team.killPoints,
+      additionalPoints: 0,
+      totalMatchPoints: team.killPoints + team.placementPoints,
+      seriesTotalPoints: team.totalPoints,
+    })),
+  );
+}
+
 /**
- * Resolves the post-game single-match standings board from persisted `ClosedMapResult` records
- * (`D-PMCC-04` & `D-PMCC-09`).
+ * Resolves the post-game single-match standings board (`D-PMCC-04` & `D-PMCC-09`, Part 9):
  *
- * - When `postGameMatchSelection` is `'latest'` (or omitted), uses the latest closed map, with a
- *   clean fallback to finished live match data (or preview simulation) when no closed map exists.
- * - When `postGameMatchSelection` is a specific `ClosedMapResult.id`, renders **exclusively** from
- *   that persisted match record and returns `null` if that record is unavailable (never silently
- *   substituting another match).
+ * - `'latest'` (or omitted): when the **current** map has a result but is not closed yet, that map
+ *   — `provisional` with a confirmed last-standing team, `unconfirmed` when it cannot be confirmed.
+ *   Otherwise the latest recorded map (`final`, or `not-recorded` without a valid placement #1).
+ *   The previous map is never shown in place of a finished current one.
+ * - A pinned `ClosedMapResult.id` renders **exclusively** from that record and returns `null` when it
+ *   is unavailable (never silently substituting another match).
  */
 export function selectPostGameResults(
   match: MatchState,
@@ -365,6 +473,22 @@ export function selectPostGameResults(
 
   let targetClosedMap: ClosedMapResult | null = null;
   if (selection === 'latest') {
+    const currentMapIsClosed = findClosedMapForMatch(match.matchId, availableMaps) !== null;
+    const live = currentMapIsClosed ? null : resolveLiveWwcd(match);
+
+    if (live && (live.state === 'provisional' || live.state === 'unconfirmed')) {
+      const appeared = match.teams.filter((team) => team.hasAppeared);
+      const rows = liveRows(appeared, live.winner?.teamNo ?? null);
+      return {
+        mapNumber: matchInfo.matchNumber,
+        mapName: matchInfo.mapName,
+        winner: rows.find((row) => row.teamNo === live.winner?.teamNo) ?? null,
+        rows,
+        sourceKind: 'live-fallback',
+        status: live.state,
+      };
+    }
+
     targetClosedMap = availableMaps.at(-1) ?? lastClosedMap ?? null;
   } else {
     targetClosedMap = availableMaps.find((m) => m.id === selection) ?? null;
@@ -376,83 +500,47 @@ export function selectPostGameResults(
   }
 
   if (targetClosedMap && targetClosedMap.teams.length > 0) {
-    const unsorted: Omit<PostGameTeamRow, 'matchRank'>[] = targetClosedMap.teams.map((entry) => {
-      const rosterTeam = rosterByNo.get(entry.teamNo);
-      return {
-        teamNo: entry.teamNo,
-        name: entry.name ?? rosterTeam?.name ?? `Team ${entry.teamNo}`,
-        logoUrl: entry.logoUrl !== undefined ? entry.logoUrl : (rosterTeam?.logoUrl ?? null),
-        placement: entry.placement,
-        eliminations: entry.eliminations,
-        placementPoints: entry.placementPoints,
-        killPoints: entry.killPoints,
-        additionalPoints: additionalPointsOf(entry),
-        totalMatchPoints: entry.totalPoints,
-        seriesTotalPoints: rosterTeam?.totalPoints ?? entry.totalPoints,
-      };
-    });
+    const rows = rankRows(
+      targetClosedMap.teams.map((entry) => {
+        const rosterTeam = rosterByNo.get(entry.teamNo);
+        return {
+          teamNo: entry.teamNo,
+          name: entry.name ?? rosterTeam?.name ?? `Team ${entry.teamNo}`,
+          logoUrl: entry.logoUrl !== undefined ? entry.logoUrl : (rosterTeam?.logoUrl ?? null),
+          placement: entry.placement,
+          eliminations: entry.eliminations,
+          placementPoints: entry.placementPoints,
+          killPoints: entry.killPoints,
+          additionalPoints: additionalPointsOf(entry),
+          totalMatchPoints: entry.totalPoints,
+          seriesTotalPoints: rosterTeam?.totalPoints ?? entry.totalPoints,
+        };
+      }),
+    );
 
-    const sorted = [...unsorted].sort(compareMatchResults);
-
-    const rows: PostGameTeamRow[] = sorted.map((row, idx) => ({
-      ...row,
-      matchRank: idx + 1,
-    }));
-
-    const winner =
-      rows.find((row) => row.placement === 1) ??
-      [...rows].sort((a, b) => a.placement - b.placement)[0]!;
-
+    const { winner } = resolveClosedWwcd(targetClosedMap);
     return {
       mapId: targetClosedMap.id,
       mapNumber: targetClosedMap.mapNumber,
       mapName: targetClosedMap.mapName ?? matchInfo.mapName,
-      winner,
+      winner: rows.find((row) => row.teamNo === winner?.teamNo) ?? null,
       rows,
       sourceKind: 'closed-map',
+      status: winner ? 'final' : 'not-recorded',
     };
   }
 
-  // Fallback when operator switches to /overlay/postgame at match end before clicking "Close map",
-  // or when previewing Post-Game Standings in the Admin Preview (only when selection === 'latest').
-  const appearedTeams = match.teams.filter((team) => team.hasAppeared);
-  const standingCount = appearedTeams.filter((team) => !team.isEliminated).length;
-  const isFinishedLiveMatch =
-    match.phase !== 'idle' && appearedTeams.length >= 2 && standingCount <= 1;
-
-  if (isFinishedLiveMatch || (options.isPreviewSimulation && match.teams.length > 0)) {
-    const sourceTeams = appearedTeams.length >= 2 ? appearedTeams : match.teams;
-    const unsorted: Omit<PostGameTeamRow, 'matchRank'>[] = sourceTeams.map((team, idx) => {
-      const matchPoints = team.killPoints + team.placementPoints;
-      return {
-        teamNo: team.teamNo,
-        name: team.name,
-        logoUrl: team.logoUrl,
-        placement: team.placement ?? idx + 1,
-        eliminations: team.eliminations,
-        placementPoints: team.placementPoints,
-        killPoints: team.killPoints,
-        additionalPoints: 0,
-        totalMatchPoints: matchPoints,
-        seriesTotalPoints: team.totalPoints,
-      };
-    });
-
-    const sorted = [...unsorted].sort(compareMatchResults);
-
-    const rows: PostGameTeamRow[] = sorted.map((row, idx) => ({
-      ...row,
-      matchRank: idx + 1,
-    }));
-
-    const winner = rows.find((row) => row.placement === 1) ?? rows[0]!;
-
+  // Admin preview only (`latest`, nothing recorded and nothing finished): a labelled sample board.
+  if (selection === 'latest' && options.isPreviewSimulation && match.teams.length > 0) {
+    const appeared = match.teams.filter((team) => team.hasAppeared);
+    const sourceTeams = appeared.length >= 2 ? appeared : match.teams;
     return {
       mapNumber: matchInfo.matchNumber,
       mapName: matchInfo.mapName,
-      winner,
-      rows,
-      sourceKind: isFinishedLiveMatch ? 'live-fallback' : 'preview',
+      winner: null,
+      rows: liveRows(sourceTeams, null),
+      sourceKind: 'preview',
+      status: 'preview',
     };
   }
 

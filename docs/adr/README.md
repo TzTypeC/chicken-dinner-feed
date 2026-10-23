@@ -26,6 +26,7 @@ decision changes, write a new ADR and mark the old one `Superseded by ADR-XXXX`.
 | [0016](0016-built-in-fonts-loaded-live-from-google-fonts.md) | Built-in fonts load live from Google Fonts                    | Accepted |
 | [0017](0017-import-and-export-as-one-backup-zip.md)          | Import & Export carries every setting as one backup ZIP       | Accepted |
 | [0018](0018-additional-points-as-a-closed-map-input.md)      | Additional points are an independent closed-map input         | Accepted |
+| [0019](0019-wwcd-identity-is-placement-one.md)               | WWCD identity is the recorded placement #1, never inferred    | Accepted |
 
 ## Writing a new one
 

@@ -1,9 +1,9 @@
 # Project Checkpoint
 
-- **Last Updated:** 2026-10-22
-- **Current Task:** Part 8 — Configurable Leaderboard Team Names, Extended Marquee Mode, Series Team Ordering & Additional Match Points
+- **Last Updated:** 2026-10-23
+- **Current Task:** Part 9 — Team Ordering, WWCD/Postgame Logic, Extended Name Animation, Final 4 Names & Reset Manual Match After Close
 - **Current Phase:** Implementation & Quality Gate Verification Complete (`COMPLETED`)
-- **Last Completed Checkpoint:** WS-8.1 through WS-8.8 implemented and verified. 461/461 tests pass (backend 322 / 26 files, frontend 139 / 12 files), 0 typecheck errors, 0 lint diagnostics, Prettier clean, build OK (pre-existing Vite chunk-size warning only). Browser-verified at 1920×1080 against an isolated data copy. See [`docs/part8-audit-and-proposal.md`](part8-audit-and-proposal.md) §15.
+- **Last Completed Checkpoint:** Part 9 implemented and verified ([`docs/part9-audit-and-proposal.md`](part9-audit-and-proposal.md) §19). 521/521 tests pass (backend 343 / 27 files, frontend 178 / 14 files), 0 typecheck errors, 0 lint diagnostics, Prettier clean on all changed files, build OK (pre-existing chunk-size warning). Browser-verified on an isolated data copy (standalone overlays and the real admin preview). OBS not verified.
 
 ---
 
@@ -63,20 +63,29 @@
 - **Feature D (Additional Points):** independent per-team, per-map input (−100…+100, optional reason, `adjustedAt`), applied exactly once in `totalPoints`. Signed totals end to end. `PROTOCOL_VERSION` 11. Conditional ADJ columns on postgame screens. Excel stays official-only, with export and import warnings. ADR-0018.
 - **Compatibility:** no persisted-data migration. Stale clients cannot wipe new settings or adjustments; the v10 → v11 mismatch flow was verified live.
 
+### Part 9 — Team Ordering, WWCD/Postgame Logic, Extended Name Animation, Final 4 Names & Reset After Close (Completed)
+
+- **Tower order:** total points desc, then Team Order (`teamNo`); no name, elimination or "never appeared" key. All 0 → exactly Team Order.
+- **WWCD:** one resolver (ADR-0019): recorded placement #1 (final) → confirmed last standing (provisional) → "not confirmed" / "not recorded". Provisional labelled on postgame and WWCD overlays incl. points; postgame `latest` follows the finished-but-unclosed current map; snapshot identity everywhere; admin/Excel warnings for maps without #1.
+- **Glow:** postgame winner-card glow on its own `closest-side` layer, no clipping.
+- **Extended Name / Final 4:** transform-independent measurement at rendered size with margin; shared `OverflowMarquee` deciding from real overflow; rows container `layout layoutRoot` (no sideways slide, rank changes still animate); stable row structure; Final 4 names scroll at tower tempo.
+- **Close → reset:** server-side, only after a successful close of the Manual Match; `expectedMatchId` (409), "no team eliminated" guard, single queue, `x-cdf-manual-reset` header, boot reconciliation, presence kept, shared `useCloseMap` hook.
+
 ---
 
-## 2. Review Gate Status (Part 8)
+## 2. Review Gate Status (Part 9)
 
-- [x] **Phase 1:** Repository Audit & Baseline Quality Gates — **COMPLETED**
-- [x] **Phase 2:** Online Research & Design References — **COMPLETED**
-- [x] **Phases 3–6:** Feature A–D investigation & design — **COMPLETED** (see proposal §5–§9)
-- [x] **Phase 7:** Clarification & Approval Gate — **COMPLETED** (12/12 answered, approved 2026-10-22)
-- [x] **Phase 8:** Implementation (`WS-8.1` – `WS-8.8`) — **COMPLETED**
-- [x] **Phase 9:** Testing & Acceptance — **COMPLETED** (unit/integration + browser verification, proposal §15.5)
-- [x] **Phase 10:** Final Delivery Report — **COMPLETED** (proposal §15)
+- [x] **Phase 1:** Repository audit & baseline quality gates — **COMPLETED** (proposal §2)
+- [x] **Phase 2:** Safe reproduction on an isolated data copy — **COMPLETED** (proposal §3, §5–§8)
+- [x] **Phase 3:** Online research — **COMPLETED** (proposal §11)
+- [x] **Phase 4:** Root-cause analysis & proposal — **COMPLETED** (proposal §5–§16, Revision 2)
+- [x] **Phase 5:** Clarification & approval gate — **COMPLETED** (approved 2026-10-23)
+- [x] **Phase 6:** Implementation (`WS-9.1` – `WS-9.10`) — **COMPLETED**
+- [x] **Phase 7:** Testing & acceptance — **COMPLETED** (proposal §19.4–§19.5)
+- [x] **Phase 8:** Final delivery report — **COMPLETED** (proposal §19)
 
 ---
 
 ## 3. Exact Next Action
 
-Deploy per proposal §15.4. After restarting the server, refresh every OBS browser source and reload any open admin tab (protocol v11). Then follow the operator verification steps in the Part 8 delivery report. No open Part 8 work remains.
+Deploy per proposal §19.7: restart the server, refresh every OBS browser source and reload the admin; keep OBS "Use custom frame rate" off (or equal to the canvas FPS). Then run the operator check in OBS (Extended Name, Final 4, close → provisional/final transition), which could not be verified here.

@@ -131,8 +131,12 @@ Ha meccs közben szakad meg a kapcsolat, az overlay **az utoljára kapott adatot
    vászon méretére. **1920 × 1080, 2560 × 1440 és 3840 × 2160 is támogatott** — az overlay magától
    skálázódik, és mindháromnál ugyanúgy néz ki, tehát felbontásonként nincs mit beállítani.
 3. A **"Forrás leállítása, ha nem látható"** opciót kapcsold **ki**, hogy az overlay elrejtve is
-   kapcsolatban maradjon.
-4. Az overlay háttere átlátszó, így közvetlenül ráilleszkedik a videóra.
+   kapcsolatban maradjon. (Bekapcsolva az OBS minden elrejtéskor kiüríti az oldalt, és visszatéréskor
+   minden animáció elölről indul.)
+4. Az **"Egyéni képkockasebesség használata"** maradjon kikapcsolva, így az oldal a vászon
+   képkockasebességével fut. Ha mégis bekapcsolod, állítsd a vászonéval megegyezőre (pl. 60): kisebb
+   értéknél a görgő csapatnevek láthatóan lépcsőzetesen mozognak.
+5. Az overlay háttere átlátszó, így közvetlenül ráilleszkedik a videóra.
 
 Ismételd meg minden overlaynél, mindegyiknek más azonosítót adva. Az overlayeket ugyanaz az élő adat
 hajtja, de egymástól függetlenül jeleníthetők meg és rejthetők el.
@@ -291,6 +295,33 @@ Második overlay létrehozásához — például egy világos és egy sötét v�
 
 **Az overlay azonosítója létrehozás után nem módosítható.** Bele van égetve a browser source-ba és a
 Companion gombokba, tehát az átnevezés csendben eltörné őket. Helyette hozz létre újat.
+
+### Eredmények adásban: ideiglenes, végleges és „nem megerősített”
+
+- **Ranglista sorrendje:** előbb a több összpontszám; azonos pontszámnál a **Teams** fül sorrendje
+  (T01, T02, …) dönt. Amíg senki nem szerzett pontot, a ranglista pontosan a Teams sorrend. A név és
+  az eliminációk soha nem döntenek.
+- **WWCD** a **#1** helyezésű csapat. Amíg a pálya nincs lezárva, a WWCD képernyők és a post-game
+  meccs képernyő a biztosan utolsóként állva maradt csapatot mutatják **PROVISIONAL — MAP NOT
+  CLOSED** jelöléssel (a pontok még változhatnak). A **Close current map now** után ugyanezek a
+  képernyők a rögzített eredményt mutatják, jelölés nélkül.
+- **„WWCD not confirmed yet”**: az adatokból nem erősíthető meg egyetlen túlélő (például egy csapat
+  játékosai pillanatnyilag hiányoznak a játék adataiból). **„WWCD not recorded”**: egy lezárt pályán
+  nincs #1 helyezett — javítsd a Series control oldalon. Az alkalmazás soha nem pontszám vagy rang
+  alapján választ győztest.
+- A post-game meccs képernyő _latest_ beállítása az aktuális pályát mutatja, amint ideiglenes
+  eredménye van, lezárás után pedig ugyanazt a pályát véglegesként.
+
+### Pálya lezárása Manual módban
+
+A **Close current map now** (Manual control vagy Series control oldalon) rögzíti a pályát, majd
+automatikusan új manuális meccset indít: minden csapat 4 élő játékosra és 0 eliminációra áll vissza,
+a lobby (mely csapatok vesznek részt) megmarad, a rögzített pálya pedig soha nem változik. A
+lezárással véget ér az automatikus WWCD képernyő, mert az élő meccs már a következő. PCOB pálya
+lezárása soha nem érinti a manuális meccset. A gomb működés közben le van tiltva; a második
+kattintást, az elavult fület vagy azt a pályát, ahol még senki nem esett ki, elutasítja ahelyett,
+hogy rögzítené. Ha az utána következő visszaállítás nem sikerül, a pálya akkor is el van mentve, és
+az admin jelzi, hogy nyomd meg a **Reset manual match** gombot.
 
 ### Teams fül
 

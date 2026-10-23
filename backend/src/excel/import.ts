@@ -246,6 +246,14 @@ export async function validateExcelImport(
         seenPlacements.add(t.placement);
       }
 
+      // WWCD is placement #1: without it the overlays can only say "WWCD not recorded". Not an
+      // error — the result is imported as is, never silently corrected — but the operator should know.
+      if (!seenPlacements.has(1)) {
+        warnings.push({
+          message: `Round ${roundNumber}: no team has placement #1, so this match will show "WWCD not recorded" until a winner is entered.`,
+        });
+      }
+
       rounds.push({ roundNumber, teams: roundTeams });
       roundSummaries.push({
         roundNumber,

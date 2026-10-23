@@ -128,8 +128,13 @@ than going blank on air. It reconnects on its own when data returns.
 2. In OBS: **Sources → + → Browser**, paste the address, and set the width and height to your canvas
    size. **1920 × 1080, 2560 × 1440 and 3840 × 2160 are all supported** — the overlay scales itself
    and looks identical at each, so there is nothing to configure per resolution.
-3. Untick **Shutdown source when not visible**, so the overlay stays connected while hidden.
-4. The overlay has a transparent background, so it composites straight over your video.
+3. Untick **Shutdown source when not visible**, so the overlay stays connected while hidden. (With it
+   ticked, OBS unloads the page whenever the source is hidden, and every animation starts over when
+   it comes back.)
+4. Leave **Use custom frame rate** off, so the page renders at your canvas frame rate. If you do
+   turn it on, set it to the canvas frame rate (e.g. 60): a lower rate makes scrolling team names
+   move in visible steps.
+5. The overlay has a transparent background, so it composites straight over your video.
 
 Repeat for each overlay you want, giving each a different id. Multiple overlays are driven by the
 same live data but are shown and hidden independently.
@@ -285,6 +290,32 @@ overlay currently selected).
 
 **An overlay id cannot be changed after it is created.** It is baked into your browser source and
 Companion buttons, so renaming it would silently break them. Create a new overlay instead.
+
+### Results on air: provisional, final, and "not confirmed"
+
+- **Leaderboard order:** higher total points first; teams on equal points are listed in the order
+  of the **Teams** tab (T01, T02, …). Before anyone scores, the leaderboard is exactly the Teams
+  order. Names and eliminations never decide the order.
+- **WWCD** is the team with placement **#1**. While a map is not closed yet, the WWCD screens and the
+  post-game match screen show the team that is confirmed as the last one standing and label it
+  **PROVISIONAL — MAP NOT CLOSED** (the points can still change). After **Close current map now**
+  the same screens show the recorded result, without the label.
+- **"WWCD not confirmed yet"** means the data cannot confirm a single survivor (for example a team
+  whose players are momentarily missing from the game feed). **"WWCD not recorded"** means a closed
+  map has no team at placement #1 — correct it in Series control. The app never picks a winner from
+  points or rank.
+- The post-game match screen's _latest_ setting shows the current map as soon as it has a
+  provisional result, then the same map as final once it is closed.
+
+### Closing a map in Manual mode
+
+**Close current map now** (on Manual control or Series control) records the map and then starts a
+fresh manual match automatically: every team goes back to 4 alive and 0 eliminations, the lobby
+(which teams are participating) is kept, and the recorded map is never changed. Closing the map ends
+the automatic WWCD screen, because the live match is now the next one. Closing a PCOB map never
+touches the manual match. The button is disabled while it works; a second click, a stale tab or a
+map nobody has been eliminated in yet is refused instead of being recorded. If the follow-up reset
+fails, the map is still saved and the admin tells you to press **Reset manual match**.
 
 ### Teams tab
 

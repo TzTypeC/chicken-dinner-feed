@@ -137,6 +137,23 @@ export function WwcdOverlay({
                   {matchContext}
                 </p>
 
+                {(winner.provisional || winner.sourceKind === 'preview') && (
+                  <p
+                    data-testid="wwcd-status-tag"
+                    className="font-extrabold uppercase"
+                    style={{
+                      marginTop: ub(8),
+                      fontSize: ub(14),
+                      letterSpacing: ub(1.6),
+                      color: 'var(--player-knocked)',
+                    }}
+                  >
+                    {winner.sourceKind === 'preview'
+                      ? 'Preview sample — not a result'
+                      : 'Provisional — map not closed'}
+                  </p>
+                )}
+
                 <h1
                   className="font-extrabold uppercase"
                   style={{
@@ -211,12 +228,14 @@ export function WwcdOverlay({
                     style={{ marginTop: ub(16), gap: ub(14) }}
                   >
                     {winner.players.length > 0 && <AlivePlayerBars players={winner.players} />}
-                    <span
-                      className="font-semibold tabular-nums"
-                      style={{ fontSize: ub(17), lineHeight: 1 }}
-                    >
-                      {winner.aliveCount} of 4 still standing
-                    </span>
+                    {winner.aliveCount !== null && (
+                      <span
+                        className="font-semibold tabular-nums"
+                        style={{ fontSize: ub(17), lineHeight: 1 }}
+                      >
+                        {winner.aliveCount} of 4 still standing
+                      </span>
+                    )}
                   </div>
                 )}
 
@@ -237,12 +256,14 @@ export function WwcdOverlay({
                   <WwcdStat
                     testId="wwcd-match-pts"
                     value={`+${winner.matchPoints}`}
-                    label="Points this match"
+                    label={
+                      winner.provisional ? 'Points this match (provisional)' : 'Points this match'
+                    }
                   />
                   <WwcdStat
                     testId="wwcd-series-pts"
                     value={String(winner.seriesPoints)}
-                    label="Series total"
+                    label={winner.provisional ? 'Series total (provisional)' : 'Series total'}
                   />
                 </dl>
               </motion.div>
