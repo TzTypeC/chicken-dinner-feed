@@ -14,6 +14,13 @@ export interface OverflowMarqueeProps {
   /** Font classes (weight, case, tracking). */
   className?: string;
   testId?: string;
+  /**
+   * While true the scroll decision is held: size changes are ignored and the current state (still
+   * or scrolling) is kept. The tower sets it while the panel width is transitioning, so a name never
+   * starts scrolling in a half-wide column and stops again a moment later (Part 10). When it turns
+   * false the cell is measured once more.
+   */
+  frozen?: boolean;
 }
 
 /**
@@ -57,6 +64,7 @@ export function OverflowMarquee({
   color,
   className = '',
   testId,
+  frozen = false,
 }: OverflowMarqueeProps) {
   const viewportRef = useRef<HTMLSpanElement>(null);
   const trackRef = useRef<HTMLSpanElement>(null);
@@ -65,11 +73,11 @@ export function OverflowMarquee({
   /** One copy's layout width in whole px; changes when the text, font or scale really change. */
   const [copyWidth, setCopyWidth] = useState(0);
 
-  // Decide before the first paint, then follow real layout changes.
+  // Decide before the first paint, then follow real layout changes — unless frozen.
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
     const copy = copyRef.current;
-    if (!viewport || !copy) return;
+    if (!viewport || !copy || frozen) return;
 
     const measure = () => {
       const viewportWidth = viewport.getBoundingClientRect().width;
@@ -85,7 +93,7 @@ export function OverflowMarquee({
     observer.observe(viewport);
     observer.observe(copy);
     return () => observer.disconnect();
-  }, [text, fontSizeCss]);
+  }, [text, fontSizeCss, frozen]);
 
   useLayoutEffect(() => {
     const track = trackRef.current;

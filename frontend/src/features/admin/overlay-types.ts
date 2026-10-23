@@ -9,4 +9,6 @@ export const OVERLAY_TYPE_LABELS: Record<OverlayType, string> = {
   'wwcd-fullscreen': 'WWCD (Fullscreen)',
   'postgame-match': 'Postgame Match',
   'postgame-series': 'Postgame Series',
+  'top-kill': 'Top Kill',
+  'most-improved': 'Most Improved Team',
 };

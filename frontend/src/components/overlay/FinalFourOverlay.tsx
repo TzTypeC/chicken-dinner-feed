@@ -5,6 +5,7 @@ import { appearanceToCssVariables } from './appearance';
 import type { FinalFourCardItem } from './broadcast-state';
 import { formatTeamSlot, ub } from './overlay-scale';
 import { OverflowMarquee } from './OverflowMarquee';
+import type { WwcdPrediction } from './wwcd-prediction';
 
 export interface FinalFourOverlayProps {
   cohort: FinalFourCardItem[];
@@ -12,6 +13,8 @@ export interface FinalFourOverlayProps {
   appearance: OverlayAppearance;
   source?: IngestSourceKind;
   visible?: boolean;
+  /** Win chance estimate (Part 10 §7). Null/undefined renders the bar exactly as before. */
+  prediction?: WwcdPrediction | null;
 }
 
 /**
@@ -30,6 +33,7 @@ export function FinalFourOverlay({
   matchInfo,
   appearance,
   visible = true,
+  prediction = null,
 }: FinalFourOverlayProps) {
   const showLogos = appearance.showLogos ?? true;
   const showTeamNumbers = appearance.showTeamNumbers ?? true;
@@ -112,6 +116,18 @@ export function FinalFourOverlay({
                 >
                   {aliveTeamCount} / 4 SQUADS ALIVE
                 </span>
+                {prediction && (
+                  <span
+                    data-testid="final-four-prediction-note"
+                    style={{
+                      fontSize: ub(10),
+                      color: 'var(--overlay-text-muted)',
+                      opacity: 0.85,
+                    }}
+                  >
+                    Win chance = share of players still standing · estimate, not a calibrated model
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center" style={{ gap: ub(8) }}>
@@ -400,12 +416,130 @@ export function FinalFourOverlay({
                         </div>
                       </div>
                     </div>
+
+                    {prediction && (
+                      <PredictionStrip
+                        slotIndex={index}
+                        prediction={prediction}
+                        teamNo={team.teamNo}
+                        isKnockedOut={isKnockedOut}
+                        eliminatedPlacement={eliminatedPlacement}
+                      />
+                    )}
                   </motion.div>
                 );
               })}
             </div>
           </motion.div>
         )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+interface PredictionStripProps {
+  slotIndex: number;
+  prediction: WwcdPrediction;
+  teamNo: number;
+  isKnockedOut: boolean;
+  eliminatedPlacement: number | null | undefined;
+}
+
+const PREDICTION_LABEL: Record<WwcdPrediction['status'], string> = {
+  live: 'WIN CHANCE · MODEL',
+  stale: 'DATA STALE',
+  unavailable: 'ESTIMATE UNAVAILABLE',
+  stopped: '',
+};
+
+/**
+ * The `ub(30)` win-chance strip at the bottom of a Final 4 card: muted label, thin zero-based bar,
+ * integer percent. Deliberately lighter than the name/points so it never reads as a result; the
+ * number swaps with a short crossfade, never a count-up.
+ */
+function PredictionStrip({
+  slotIndex,
+  prediction,
+  teamNo,
+  isKnockedOut,
+  eliminatedPlacement,
+}: PredictionStripProps) {
+  const { status } = prediction;
+  const entry = prediction.entries.find((candidate) => candidate.teamNo === teamNo);
+  const hasNumber = !isKnockedOut && (status === 'live' || status === 'stale') && entry != null;
+  const percent = hasNumber ? entry.percent : 0;
+  const valueText = isKnockedOut
+    ? eliminatedPlacement
+      ? `OUT #${eliminatedPlacement}`
+      : 'OUT'
+    : hasNumber
+      ? `${percent}%`
+      : '—';
+  const dim = status === 'stale' ? 0.5 : 1;
+
+  return (
+    <div
+      data-testid={`final-four-prediction-${slotIndex}`}
+      data-state={isKnockedOut ? 'out' : status}
+      className="flex items-center"
+      style={{
+        height: ub(30),
+        paddingInline: ub(12),
+        gap: ub(10),
+        borderTop: `${ub(1)} solid rgba(129, 96, 54, 0.22)`,
+        backgroundColor: 'rgba(0, 0, 0, 0.18)',
+      }}
+    >
+      <span
+        className="shrink-0 font-semibold uppercase"
+        style={{
+          fontSize: ub(8.5),
+          letterSpacing: ub(1),
+          color: 'var(--overlay-text-muted)',
+          visibility: status === 'stopped' ? 'hidden' : 'visible',
+          minWidth: ub(112),
+        }}
+      >
+        {PREDICTION_LABEL[status]}
+      </span>
+      <div
+        aria-hidden
+        className="flex-1"
+        style={{
+          height: ub(3),
+          borderRadius: ub(2),
+          backgroundColor: 'rgba(129, 96, 54, 0.22)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: `${percent}%`,
+            height: '100%',
+            backgroundColor: 'var(--overlay-text-muted)',
+            opacity: dim,
+            transition: 'width 400ms ease',
+          }}
+        />
+      </div>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.span
+          key={valueText}
+          data-testid={`final-four-prediction-percent-${slotIndex}`}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: dim }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18 }}
+          className="shrink-0 text-right font-semibold tabular-nums"
+          style={{
+            minWidth: ub(44),
+            fontSize: ub(12),
+            fontVariantNumeric: 'tabular-nums',
+            color: 'var(--overlay-text-muted)',
+          }}
+        >
+          {valueText}
+        </motion.span>
       </AnimatePresence>
     </div>
   );

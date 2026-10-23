@@ -16,6 +16,8 @@ export interface TeamRowProps {
   namePlan?: TeamNamePlan;
   /** The uniform name font size shared by every row, in design px. */
   nameFontSize?: number;
+  /** Hold the name's scroll decision while the panel width is transitioning (Part 10). */
+  nameFrozen?: boolean;
 }
 
 /** A number that draws attention to itself when it changes, without moving the layout. */
@@ -40,6 +42,7 @@ export function TeamRow({
   showTeamNumber = true,
   namePlan,
   nameFontSize = NAME_FONT_MAX,
+  nameFrozen = false,
 }: TeamRowProps) {
   const isLeader = team.rank === 1 && !team.isEliminated;
   const textColor = team.isEliminated ? 'var(--overlay-text-muted)' : 'var(--overlay-text)';
@@ -123,6 +126,7 @@ export function TeamRow({
             fontSizeCss={u(nameFontSize)}
             color={textColor}
             className={TEAM_NAME_CLASS}
+            frozen={nameFrozen}
           />
         ) : (
           <span

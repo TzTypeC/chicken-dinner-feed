@@ -1,5 +1,6 @@
 import {
   CONFIG_SCHEMA_VERSION,
+  DEFAULT_OVERLAY_INSTANCES,
   LEGACY_FACTORY_OVERLAY_COLORS,
   overlayInstancesDocumentSchema,
   PMCC_2026_OVERLAY_COLORS,
@@ -342,6 +343,93 @@ describe('migrateOverlayInstances', () => {
     expect(ids).toContain('default-wwcd-fullscreen');
     expect(ids).toContain('default-postgame-match');
     expect(ids).toContain('default-postgame-series');
+  });
+});
+
+describe('migrateOverlayInstances v5 → v6 (Part 10)', () => {
+  /** A v5 document as written by the Part 9 release: the eight v5 types, operator-edited. */
+  function v5Document(overrides: { autoWwcdVariant?: string; drop?: string[] } = {}) {
+    const instances: Record<string, unknown>[] = DEFAULT_OVERLAY_INSTANCES.instances
+      .filter((inst) => inst.type !== 'top-kill' && inst.type !== 'most-improved')
+      .filter((inst) => !(overrides.drop ?? []).includes(inst.id))
+      .map((inst) => {
+        // A v5 file never contains the Part 10 appearance fields.
+        const {
+          mostImprovedFrom: _from,
+          mostImprovedTo: _to,
+          showWwcdPrediction: _prediction,
+          ...appearance
+        } = inst.appearance;
+        return { ...inst, appearance };
+      });
+    const main = instances[0]!;
+    instances[0] = {
+      ...main,
+      name: 'Operator main',
+      onAir: false,
+      appearance: {
+        ...(main['appearance'] as Record<string, unknown>),
+        teamNameExtendedMode: true,
+        scale: 1.2,
+      },
+    };
+    return {
+      schemaVersion: 5,
+      autoWwcdVariant: overrides.autoWwcdVariant ?? 'standard',
+      instances,
+    };
+  }
+
+  it('appends hidden Top Kill and Most Improved defaults after every existing instance, untouched', () => {
+    const before = v5Document();
+    const parsed = migrateAndParse(before);
+
+    expect(parsed.schemaVersion).toBe(6);
+    expect(parsed.instances.slice(0, before.instances.length).map((inst) => inst.id)).toEqual(
+      before.instances.map((inst) => inst['id']),
+    );
+    expect(parsed.instances[0]).toMatchObject({ name: 'Operator main', onAir: false });
+    expect(parsed.instances[0]?.appearance).toMatchObject({
+      teamNameExtendedMode: true,
+      scale: 1.2,
+      showWwcdPrediction: false,
+    });
+    const added = parsed.instances.slice(before.instances.length);
+    expect(added.map((inst) => [inst.id, inst.type, inst.onAir])).toEqual([
+      ['default-top-kill', 'top-kill', false],
+      ['default-most-improved', 'most-improved', false],
+    ]);
+  });
+
+  it('keeps a stored Dual WWCD choice (it used to be reset to standard on any re-migration)', () => {
+    expect(migrateAndParse(v5Document({ autoWwcdVariant: 'dual' })).autoWwcdVariant).toBe('dual');
+  });
+
+  it('does not bring back v5 default instances the operator deleted', () => {
+    const ids = migrateAndParse(v5Document({ drop: ['default-match-info'] })).instances.map(
+      (inst) => inst.id,
+    );
+    expect(ids).not.toContain('default-match-info');
+    expect(ids).toContain('default-top-kill');
+  });
+
+  it('never replaces an instance whose id or type is already taken', () => {
+    const doc = v5Document();
+    const main = doc.instances[0]!;
+    doc.instances.push({ ...main, id: 'default-top-kill', name: 'Operator board' });
+    doc.instances.push({ ...main, id: 'my-most-improved', type: 'most-improved' });
+
+    const parsed = migrateAndParse(doc);
+    const named = parsed.instances.filter((inst) => inst.id === 'default-top-kill');
+    expect(named).toHaveLength(1);
+    expect(named[0]?.type).toBe('leaderboard');
+    expect(parsed.instances.filter((inst) => inst.type === 'most-improved')).toHaveLength(1);
+    expect(parsed.instances.some((inst) => inst.type === 'top-kill')).toBe(false);
+  });
+
+  it('is idempotent: a migrated v6 document is returned as is', () => {
+    const once = migrateOverlayInstances(v5Document());
+    expect(migrateOverlayInstances(once)).toBe(once);
   });
 });
 

@@ -1,9 +1,9 @@
 # Project Checkpoint
 
 - **Last Updated:** 2026-10-23
-- **Current Task:** Part 9 — Team Ordering, WWCD/Postgame Logic, Extended Name Animation, Final 4 Names & Reset Manual Match After Close
-- **Current Phase:** Implementation & Quality Gate Verification Complete (`COMPLETED`)
-- **Last Completed Checkpoint:** Part 9 implemented and verified ([`docs/part9-audit-and-proposal.md`](part9-audit-and-proposal.md) §19). 521/521 tests pass (backend 343 / 27 files, frontend 178 / 14 files), 0 typecheck errors, 0 lint diagnostics, Prettier clean on all changed files, build OK (pre-existing chunk-size warning). Browser-verified on an isolated data copy (standalone overlays and the real admin preview). OBS not verified.
+- **Current Task:** Part 10 — Extended Name Animation Recovery, Top Kill, Most Improved Team & Live WWCD Prediction
+- **Current Phase:** Implementation & Quality Gate Verification Complete (`COMPLETED`, uncommitted). Proposal approved 2026-10-23 (§23); implementation report §24.
+- **Last Completed Checkpoint:** Part 10 audit and proposal ([`docs/part10-audit-and-proposal.md`](part10-audit-and-proposal.md)). Baseline at HEAD `4893dc6` (Part 9 committed): 521/521 tests (backend 343 / 27 files, frontend 178 / 14 files), 0 typecheck errors, 0 lint diagnostics, Prettier clean, build OK (pre-existing chunk-size warning). Part 9 remains completed as recorded below.
 
 ---
 
@@ -71,21 +71,30 @@
 - **Extended Name / Final 4:** transform-independent measurement at rendered size with margin; shared `OverflowMarquee` deciding from real overflow; rows container `layout layoutRoot` (no sideways slide, rank changes still animate); stable row structure; Final 4 names scroll at tower tempo.
 - **Close → reset:** server-side, only after a successful close of the Manual Match; `expectedMatchId` (409), "no team eliminated" guard, single queue, `x-cdf-manual-reset` header, boot reconciliation, presence kept, shared `useCloseMap` hook.
 
+### Part 10 — Extended Name Animation Recovery, Top Kill, Most Improved Team & Live WWCD Prediction (Completed — uncommitted)
+
+- **Scope:** audit and proposal only; no production code, test, configuration or data changed. Reproductions ran on an isolated temp copy of `backend/data`; production hashes unchanged.
+- **Issue A (proven):** Extended Name toggle/Save moves the panel and rows 96 px in one frame (standalone and admin preview). The panel width was never animated; Part 9's `layoutRoot` removed the incidental per-row slide that used to hide this. Proposed: one designed 400 ms width transition (background and rows together), snap on first load/font load, marquee decisions frozen while settling (a naive width transition made 5 names flicker into scrolling).
+- **Top Kill:** last closed map's `eliminations`, max 4 cards, tie rule elims → placement → slot with TIED tags; hero + ladder design.
+- **Most Improved:** rank after start map − rank after end map on the official series chain recomputed from closed-map prefixes; operator range per instance; hero + rank rail design.
+- **WWCD Prediction:** 0 usable historical matches → no empirical model possible; proposed transparent Model U (standing-player share), Hamilton rounding to exactly 100%, per-instance toggle; conflicts with the elimination banner clearance (open question).
+- **Implemented (2026-10-23):** all of the above per §23; verification §24.3: 592/592 tests (backend 351, frontend 241), full browser matrix, v5→v6 migration and rollback on copies; production data unchanged.
+
 ---
 
-## 2. Review Gate Status (Part 9)
+## 2. Review Gate Status (Part 10)
 
-- [x] **Phase 1:** Repository audit & baseline quality gates — **COMPLETED** (proposal §2)
-- [x] **Phase 2:** Safe reproduction on an isolated data copy — **COMPLETED** (proposal §3, §5–§8)
-- [x] **Phase 3:** Online research — **COMPLETED** (proposal §11)
-- [x] **Phase 4:** Root-cause analysis & proposal — **COMPLETED** (proposal §5–§16, Revision 2)
-- [x] **Phase 5:** Clarification & approval gate — **COMPLETED** (approved 2026-10-23)
-- [x] **Phase 6:** Implementation (`WS-9.1` – `WS-9.10`) — **COMPLETED**
-- [x] **Phase 7:** Testing & acceptance — **COMPLETED** (proposal §19.4–§19.5)
-- [x] **Phase 8:** Final delivery report — **COMPLETED** (proposal §19)
+- [x] **Phase 1:** Obsidian memory, repository audit & baseline quality gates — **COMPLETED** (proposal §1–§3)
+- [x] **Phase 2:** Safe reproduction on an isolated data copy — **COMPLETED** (proposal §4)
+- [x] **Phase 3:** Online research & design skills — **COMPLETED** (proposal §9–§10)
+- [x] **Phase 4:** Design exploration, root-cause analysis & proposal — **COMPLETED** (proposal §4–§17)
+- [x] **Phase 5:** Clarification & approval gate — **COMPLETED** (approved 2026-10-23, proposal §23)
+- [x] **Phase 6:** Implementation (`WS-10.1` – `WS-10.6`) — **COMPLETED**
+- [x] **Phase 7:** Testing & acceptance — **COMPLETED** (proposal §24.3)
+- [x] **Phase 8:** Final delivery report — **COMPLETED** (proposal §24)
 
 ---
 
 ## 3. Exact Next Action
 
-Deploy per proposal §19.7: restart the server, refresh every OBS browser source and reload the admin; keep OBS "Use custom frame rate" off (or equal to the canvas FPS). Then run the operator check in OBS (Extended Name, Final 4, close → provisional/final transition), which could not be verified here.
+Review and commit Part 10 (nothing committed). Deploy: stop the app, back up `backend/data`, start the new build (config migrates to v6 and keeps `*.v5.bak`), refresh OBS sources, reload the admin. Operator checks in OBS: Extended Name transition, Final 4 prediction strip with the elimination banner, Top Kill / Most Improved legibility over live footage.

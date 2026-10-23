@@ -2,7 +2,7 @@ import type { OverlayAppearance } from '@cdf/shared';
 import { AnimatePresence, motion } from 'motion/react';
 import type { EliminationAlertItem } from '@/hooks/useEliminationQueue';
 import { appearanceToCssVariables } from './appearance';
-import { formatTeamSlot, u } from './overlay-scale';
+import { formatTeamSlot, u, ub } from './overlay-scale';
 
 export interface EliminationOverlayProps {
   alert: EliminationAlertItem | null;
@@ -16,7 +16,7 @@ export interface EliminationOverlayProps {
  * Anchored at top-center of the 1920×1080 broadcast frame.
  * Standard position: `top: u(42)`.
  * Dynamic Final-4 clearance: When Final-4 is active (4 or fewer squads alive), shifts down to
- * `top: u(164)` ($19px below the Final-4 card cluster) to avoid occluding alive bars and scores
+ * `top: ub(194)` (below the Final-4 cards, including the optional WWCD prediction strip — Part 10) to avoid occluding alive bars and scores
  * while staying inside EBU R95 upper safe margin.
  *
  * Respects:
@@ -41,7 +41,9 @@ export function EliminationOverlay({
       style={{
         ...appearanceToCssVariables(appearance),
         position: 'fixed',
-        top: finalFourActive ? u(164) : u(42),
+        // Final-4 clearance in base units, like the Final-4 bar itself: the operator's scale on this
+        // banner must not pull it up into the cards (Part 10).
+        top: finalFourActive ? ub(194) : u(42),
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 20,

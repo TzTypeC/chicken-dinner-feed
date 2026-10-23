@@ -15,11 +15,15 @@ import {
   OverlayInstanceMatchInfoRoute,
   OverlayInstancePostGameRoute,
   OverlayInstancePostGameSeriesRoute,
+  OverlayInstanceMostImprovedRoute,
+  OverlayInstanceTopKillRoute,
   OverlayInstanceWwcdFullscreenRoute,
   OverlayInstanceWwcdRoute,
   OverlayMatchInfoRoute,
   OverlayPostGameRoute,
   OverlayPostGameSeriesRoute,
+  OverlayMostImprovedRoute,
+  OverlayTopKillRoute,
   OverlayRoute,
   OverlayWwcdFullscreenRoute,
   OverlayWwcdRoute,
@@ -229,6 +233,39 @@ const shortcutEliminationRoute = createRoute({
   component: OverlayEliminationRoute,
 });
 
+// Part 10 fullscreen statistics screens: `/overlay/top-kill`, `/overlay/<id>/top-kill`, `/top-kill`
+// (and the same for `most-improved`), like the post-game screens.
+const overlayTopKillRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/top-kill',
+  component: OverlayTopKillRoute,
+});
+const overlayInstanceTopKillRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$instanceId/top-kill',
+  component: OverlayInstanceTopKillRoute,
+});
+const shortcutTopKillRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/top-kill',
+  component: OverlayTopKillRoute,
+});
+const overlayMostImprovedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/most-improved',
+  component: OverlayMostImprovedRoute,
+});
+const overlayInstanceMostImprovedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/overlay/$instanceId/most-improved',
+  component: OverlayInstanceMostImprovedRoute,
+});
+const shortcutMostImprovedRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/most-improved',
+  component: OverlayMostImprovedRoute,
+});
+
 const routeTree = rootRoute.addChildren([
   homeRoute,
   shortcutMainRoute,
@@ -260,6 +297,12 @@ const routeTree = rootRoute.addChildren([
   overlayInstancePostGameRoute,
   overlayInstancePostGameMatchRoute,
   overlayInstancePostGameSeriesRoute,
+  overlayTopKillRoute,
+  overlayInstanceTopKillRoute,
+  shortcutTopKillRoute,
+  overlayMostImprovedRoute,
+  overlayInstanceMostImprovedRoute,
+  shortcutMostImprovedRoute,
   overlayRoute,
   adminRoute,
 ]);

@@ -1,5 +1,5 @@
 import type { OverlayAppearance } from '@cdf/shared';
-import { useEffect, useLayoutEffect, useMemo, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import {
   BADGE_GAP,
   fitDisplayName,
@@ -28,6 +28,14 @@ export interface TeamNameLayout {
   /** How far the panel widens to the left, in design px (0 outside extended mode). */
   extension: number;
   rows: ReadonlyMap<number, TeamNamePlan>;
+  /**
+   * True when this layout differs from the previous one only because a web font finished loading.
+   * Such a change is applied without the panel-width transition (Part 10): the operator did not ask
+   * for it, and animating "settling" metrics would read as the overlay moving by itself.
+   */
+  instant: boolean;
+  /** False for the pre-measurement fallback: nothing may decide from its sizes (marquees wait). */
+  measured: boolean;
 }
 
 /**
@@ -73,7 +81,7 @@ export function fallbackTeamNameLayout(
         : { mode: 'static', text: truncateTeamName(team.name, appearance.teamNameMaxChars) },
     );
   }
-  return { fontSize: NAME_FONT_MAX, extension: 0, rows };
+  return { fontSize: NAME_FONT_MAX, extension: 0, rows, instant: true, measured: false };
 }
 
 /**
@@ -118,6 +126,9 @@ export function useTeamNameLayout(
     () => JSON.stringify(teams.map((team) => [team.teamNo, team.name])),
     [teams],
   );
+
+  /** The non-font inputs of the last measurement, to tell a font-load re-layout from a real change. */
+  const lastInputsRef = useRef<string | null>(null);
 
   useLayoutEffect(() => {
     const textEl = refs.text.current;
@@ -194,16 +205,29 @@ export function useTeamNameLayout(
       });
       for (const entry of full) rows.set(entry.teamNo, { mode: 'scroll', text: entry.text });
     }
-
     textEl.textContent = '';
     textEl.style.fontSize = '';
+    const inputs = JSON.stringify([
+      namesKey,
+      fontFamily,
+      teamNameMaxChars,
+      teamNameExtendedMode,
+      teamNameMaxExtension,
+      showLogos,
+      showTeamNumbers,
+      anchor,
+      offsetX,
+      scale,
+    ]);
+    const instant = lastInputsRef.current === null || lastInputsRef.current === inputs;
+    lastInputsRef.current = inputs;
     setLayout((previous) =>
       previous &&
       previous.fontSize === fontSize &&
       previous.extension === extension &&
       sameRows(previous.rows, rows)
         ? previous
-        : { fontSize, extension, rows },
+        : { fontSize, extension, rows, instant, measured: true },
     );
   }, [
     refs,

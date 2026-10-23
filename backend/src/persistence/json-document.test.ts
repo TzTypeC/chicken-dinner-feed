@@ -59,6 +59,43 @@ describe('JsonDocument', () => {
     expect(await readdir(path.dirname(filePath))).toEqual(['doc.json']);
   });
 
+  describe('pre-upgrade copy for rollback (Part 10)', () => {
+    const upgrade = (raw: unknown) => {
+      const doc = raw as Doc;
+      return doc.schemaVersion >= 2 ? doc : { ...doc, schemaVersion: 2 };
+    };
+    const makeMigrating = () =>
+      new JsonDocument({ filePath, schema, createDefault, migrate: upgrade });
+
+    it('keeps the exact pre-upgrade file next to it before rewriting, once', async () => {
+      await makeDocument().load();
+      const original = `${JSON.stringify({ schemaVersion: 1, label: 'operator' })}\n`;
+      await writeFile(filePath, original, 'utf8');
+
+      expect(await makeMigrating().load()).toEqual({ schemaVersion: 2, label: 'operator' });
+      expect(await readFile(`${filePath}.v1.bak`, 'utf8')).toBe(original);
+      expect(JSON.parse(await readFile(filePath, 'utf8')).schemaVersion).toBe(2);
+
+      // A later upgrade from the same version must not overwrite the first copy.
+      await writeFile(
+        filePath,
+        `${JSON.stringify({ schemaVersion: 1, label: 'other' })}\n`,
+        'utf8',
+      );
+      await makeMigrating().load();
+      expect(await readFile(`${filePath}.v1.bak`, 'utf8')).toBe(original);
+    });
+
+    it('writes no copy when nothing was upgraded', async () => {
+      await makeDocument().load();
+      await writeFile(filePath, JSON.stringify({ schemaVersion: 2, label: 'current' }), 'utf8');
+
+      await makeMigrating().load();
+
+      expect((await readdir(path.dirname(filePath))).sort()).toEqual(['doc.json']);
+    });
+  });
+
   it('rejects an invalid write without touching the stored file', async () => {
     // Validating before writing is what stops a bad save destroying a good configuration.
     const document = makeDocument();

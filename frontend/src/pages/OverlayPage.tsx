@@ -3,12 +3,13 @@ import {
   DEFAULT_OVERLAY_APPEARANCE,
   type AutoWwcdVariant,
   type LiveSnapshot,
+  type MatchState,
   type OverlayInstance,
   type OverlayType,
   type OverlayVisibility,
 } from '@cdf/shared';
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { appearanceToAnimation, appearanceToPosition } from '@/components/overlay/appearance';
 import {
   isPinnedPostGameMatchUnavailable,
@@ -24,11 +25,20 @@ import {
 import { EliminationOverlay } from '@/components/overlay/EliminationOverlay';
 import { FinalFourOverlay } from '@/components/overlay/FinalFourOverlay';
 import { FullscreenWwcdOverlay } from '@/components/overlay/FullscreenWwcdOverlay';
-import { LeaderboardOverlay } from '@/components/overlay/LeaderboardOverlay';
+import {
+  LeaderboardOverlay,
+  PANEL_WIDTH_EASING,
+  PANEL_WIDTH_TRANSITION_MS,
+} from '@/components/overlay/LeaderboardOverlay';
 import { MatchInfoOverlay } from '@/components/overlay/MatchInfoOverlay';
+import { MostImprovedOverlay } from '@/components/overlay/MostImprovedOverlay';
+import { selectMostImproved } from '@/components/overlay/most-improved';
 import { PostGameOverlay } from '@/components/overlay/PostGameOverlay';
 import { PostGameSeriesOverlay } from '@/components/overlay/PostGameSeriesOverlay';
+import { selectTopKill } from '@/components/overlay/top-kill';
+import { TopKillOverlay } from '@/components/overlay/TopKillOverlay';
 import { WwcdOverlay } from '@/components/overlay/WwcdOverlay';
+import { computeWwcdPrediction } from '@/components/overlay/wwcd-prediction';
 import { u } from '@/components/overlay/overlay-scale';
 import { useDocumentTitle } from '@/hooks/useDocumentTitle';
 import { useEliminationQueue, type EliminationAlertItem } from '@/hooks/useEliminationQueue';
@@ -44,10 +54,18 @@ export type OverlaySurfaceMode =
   | 'wwcd-fullscreen'
   | 'postgame'
   | 'postgame-match'
-  | 'postgame-series';
+  | 'postgame-series'
+  | 'top-kill'
+  | 'most-improved';
 
 export type OverlayPreviewViewMode =
-  'auto' | LeaderboardLayoutMode | 'wwcd-fullscreen' | 'postgame' | 'postgame-series';
+  | 'auto'
+  | LeaderboardLayoutMode
+  | 'wwcd-fullscreen'
+  | 'postgame'
+  | 'postgame-series'
+  | 'top-kill'
+  | 'most-improved';
 
 export interface OverlayPageProps {
   instanceId?: string;
@@ -112,6 +130,10 @@ function defaultInstanceIdForSurface(
       return DEFAULT_INSTANCE_ID_BY_TYPE['postgame-match'];
     case 'postgame-series':
       return DEFAULT_INSTANCE_ID_BY_TYPE['postgame-series'];
+    case 'top-kill':
+      return DEFAULT_INSTANCE_ID_BY_TYPE['top-kill'];
+    case 'most-improved':
+      return DEFAULT_INSTANCE_ID_BY_TYPE['most-improved'];
     case 'leaderboard':
     case 'auto':
     default:
@@ -137,6 +159,10 @@ function surfaceFromInstanceType(
       return 'postgame';
     case 'postgame-series':
       return 'postgame-series';
+    case 'top-kill':
+      return 'top-kill';
+    case 'most-improved':
+      return 'most-improved';
     case 'leaderboard':
     default:
       return 'leaderboard';
@@ -176,8 +202,20 @@ export function OverlayPage({
     elimination: true,
     viewMode: 'auto',
   });
-  /** Extended-mode leftward widening reported by the tower (Part 8), in design px. */
-  const [towerExtension, setTowerExtension] = useState(0);
+  /**
+   * Extended-mode leftward widening reported by the tower (Part 8), in design px, and whether the
+   * change is animated (Part 10) — a left-anchored panel's position then moves in step with it.
+   */
+  const [towerExtension, setTowerExtensionState] = useState({ extension: 0, animate: false });
+  const setTowerExtension = useCallback(
+    (extension: number, animate: boolean) =>
+      setTowerExtensionState((current) =>
+        current.extension === extension && current.animate === animate
+          ? current
+          : { extension, animate },
+      ),
+    [],
+  );
 
   const storeSnapshot = useLiveStore((state) => state.snapshot);
   const storeInstances = useLiveStore((state) => state.instances);
@@ -299,7 +337,11 @@ export function OverlayPage({
                 ? 'Post-Game Match Standings'
                 : effectiveSurface === 'postgame-series'
                   ? 'Post-Game Series Standings'
-                  : (instance?.name ?? resolvedInstanceId);
+                  : effectiveSurface === 'top-kill'
+                    ? 'Top Kill'
+                    : effectiveSurface === 'most-improved'
+                      ? 'Most Improved Team'
+                      : (instance?.name ?? resolvedInstanceId);
   useDocumentTitle(titlePrefix);
 
   if (protocolMismatch !== null) {
@@ -391,6 +433,14 @@ export function OverlayPage({
       (appearance.showFinalFourLayout ?? true) &&
       (activeLayoutMode === 'final-four' || isPreviewingFinalFour);
     const cohort = selectFinalFourCohort(snapshot.match, lockedNos, isPreviewingFinalFour);
+    const prediction =
+      (appearance.showWwcdPrediction ?? false)
+        ? computeFinalFourPrediction(
+            snapshot,
+            cohort,
+            isPreviewingFinalFour && activeLayoutMode !== 'final-four',
+          )
+        : null;
     return (
       <>
         {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
@@ -400,6 +450,7 @@ export function OverlayPage({
           appearance={appearance}
           source={snapshot.ingest.source}
           visible={isFinalFourVisible}
+          prediction={prediction}
         />
       </>
     );
@@ -525,6 +576,49 @@ export function OverlayPage({
     );
   }
 
+  if (effectiveSurface === 'top-kill' || effectiveSurface === 'most-improved') {
+    // Fullscreen statistics screens (Part 10): on air only by the operator (ON AIR), never
+    // automatically; data comes from closed maps only, so the live match never feeds them.
+    const rosterByNo = new Map(
+      snapshot.match.teams.map((team) => [team.teamNo, { name: team.name, logoUrl: team.logoUrl }]),
+    );
+    const content =
+      effectiveSurface === 'top-kill' ? (
+        <TopKillOverlay
+          board={selectTopKill(closedMaps, { isPreviewSimulation: isPreview, rosterByNo })}
+          appearance={appearance}
+        />
+      ) : (
+        <MostImprovedOverlay
+          board={selectMostImproved(
+            closedMaps,
+            appearance.mostImprovedFrom ?? 'previous',
+            appearance.mostImprovedTo ?? 'latest',
+            { isPreviewSimulation: isPreview, rosterByNo },
+          )}
+          appearance={appearance}
+        />
+      );
+    return (
+      <>
+        {isPreview && <div style={PREVIEW_BACKDROP} aria-hidden />}
+        <AnimatePresence mode="wait" initial={false}>
+          {isOperatorVisible && (
+            <motion.div
+              key={`${effectiveSurface}-surface`}
+              variants={animation.variants}
+              initial="hidden"
+              animate="visible"
+              exit="hidden"
+            >
+              {content}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </>
+    );
+  }
+
   // Main leaderboard route (`/overlay/:instanceId` when type==='leaderboard', `/overlay/:instanceId/main`, & `/main`):
   // Strictly renders LeaderboardOverlay only. When in Final-4 or WWCD, the vertical tower hides cleanly.
   return (
@@ -550,7 +644,17 @@ export function OverlayPage({
       {(!isPreview || previewLayers.leaderboard) && (
         <AnimatePresence mode="wait" initial={false}>
           {isOperatorVisible && activeLayoutMode === 'tower' && (
-            <div key="layout-tower" style={appearanceToPosition(appearance, towerExtension)}>
+            <div
+              key="layout-tower"
+              style={{
+                ...appearanceToPosition(appearance, towerExtension.extension),
+                // A left-anchored panel moves left as it widens; in step with the width transition
+                // so its right edge stays put (Part 10). Right-anchored panels never change `left`.
+                transition: towerExtension.animate
+                  ? `left ${PANEL_WIDTH_TRANSITION_MS}ms ${PANEL_WIDTH_EASING}`
+                  : undefined,
+              }}
+            >
               <motion.div
                 key="panel"
                 variants={animation.variants}
@@ -572,4 +676,36 @@ export function OverlayPage({
       )}
     </>
   );
+}
+
+/**
+ * The Final 4 WWCD estimate (Part 10, Model U). In the admin preview, when the live match is not
+ * actually in the Final 4, the cohort is a sample: the estimate is computed over that sample as if it
+ * were the match, so the operator sees the strip as it will look — never from teams that are not on
+ * the cards.
+ */
+function computeFinalFourPrediction(
+  snapshot: LiveSnapshot,
+  cohort: ReturnType<typeof selectFinalFourCohort>,
+  simulate: boolean,
+) {
+  const cohortTeamNos = cohort.map((member) => member.team.teamNo);
+  if (!simulate) {
+    return computeWwcdPrediction({
+      match: snapshot.match,
+      cohortTeamNos,
+      ingestState: snapshot.ingest.state,
+    });
+  }
+  const sampleMatch: MatchState = {
+    ...snapshot.match,
+    phase: 'live',
+    teams: cohort.map((member) => ({
+      ...member.team,
+      hasAppeared: true,
+      isEliminated: member.isKnockedOut,
+      standingPlayerCount: member.isKnockedOut ? 0 : Math.max(1, member.team.standingPlayerCount),
+    })),
+  };
+  return computeWwcdPrediction({ match: sampleMatch, cohortTeamNos, ingestState: 'connected' });
 }

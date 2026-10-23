@@ -79,3 +79,21 @@ export function OverlayInstancePostGameSeriesRoute() {
   const { instanceId } = useParams({ strict: false }) as { instanceId?: string };
   return <OverlayPage instanceId={instanceId} surfaceMode="postgame-series" />;
 }
+
+export function OverlayTopKillRoute() {
+  return <OverlayPage surfaceMode="top-kill" />;
+}
+
+export function OverlayInstanceTopKillRoute() {
+  const { instanceId } = useParams({ strict: false }) as { instanceId?: string };
+  return <OverlayPage instanceId={instanceId} surfaceMode="top-kill" />;
+}
+
+export function OverlayMostImprovedRoute() {
+  return <OverlayPage surfaceMode="most-improved" />;
+}
+
+export function OverlayInstanceMostImprovedRoute() {
+  const { instanceId } = useParams({ strict: false }) as { instanceId?: string };
+  return <OverlayPage instanceId={instanceId} surfaceMode="most-improved" />;
+}

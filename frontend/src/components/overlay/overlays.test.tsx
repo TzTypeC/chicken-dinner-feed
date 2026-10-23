@@ -1284,7 +1284,7 @@ describe('D-PMCC-08 — Configurable Automatic WWCD Presentation & Fullscreen WW
     expect(html).toContain('transform:translateX(-2.5%)');
   });
 
-  it('Part 6 Feature C — Elimination notification shifts from top: u(42) down to top: u(164) when Final-4 is active', () => {
+  it('Part 6 Feature C — Elimination notification shifts from top: u(42) down to top: ub(194) when Final-4 is active (Part 10: clears the WWCD prediction strip)', () => {
     const alert = {
       id: 'alert-team-4',
       matchId: 'match-1',
@@ -1312,7 +1312,7 @@ describe('D-PMCC-08 — Configurable Automatic WWCD Presentation & Fullscreen WW
         finalFourActive={true}
       />,
     );
-    expect(finalFourHtml).toContain('top:calc(164 * var(--overlay-unit))');
+    expect(finalFourHtml).toContain('top:calc(194 * var(--overlay-base-unit))');
   });
 });
 

@@ -328,4 +328,40 @@ describe('config routes - Part 8 team-name display settings', () => {
       teamNameMaxExtension: 120,
     });
   });
+
+  it('Part 10: a pre-Part-10 admin save keeps the stored prediction toggle and Most Improved range', async () => {
+    await start();
+    const final4 = configStore.findInstance('default-final4')!;
+    const putFinal4 = (appearance: Record<string, unknown>) =>
+      app.inject({
+        method: 'PUT',
+        url: '/api/config/overlays/default-final4',
+        payload: { ...final4, appearance },
+      });
+    expect(
+      (await putFinal4({ ...final4.appearance, showWwcdPrediction: true, mostImprovedTo: 'map-x' }))
+        .statusCode,
+    ).toBe(200);
+
+    const {
+      showWwcdPrediction: _p,
+      mostImprovedFrom: _f,
+      mostImprovedTo: _t,
+      ...stale
+    } = configStore.findInstance('default-final4')!.appearance;
+    expect((await putFinal4({ ...stale, scale: 1.1 })).statusCode).toBe(200);
+
+    expect(configStore.findInstance('default-final4')!.appearance).toMatchObject({
+      scale: 1.1,
+      showWwcdPrediction: true,
+      mostImprovedFrom: 'previous',
+      mostImprovedTo: 'map-x',
+    });
+    // The toggle is per instance: no other instance changed.
+    expect(
+      configStore.instances.current.instances
+        .filter((inst) => inst.id !== 'default-final4')
+        .every((inst) => inst.appearance.showWwcdPrediction === false),
+    ).toBe(true);
+  });
 });

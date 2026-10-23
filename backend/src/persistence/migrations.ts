@@ -23,6 +23,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/** Overlay types added in schema v6 (Part 10); seeded into v5 documents on upgrade. */
+const PART10_SEEDED_TYPES: ReadonlySet<string> = new Set(['top-kill', 'most-improved']);
+
 /**
  * v1 → v2: the animation gained a type, and direction became one of four edges.
  *
@@ -134,10 +137,20 @@ export function migrateOverlayInstances(raw: unknown): unknown {
     };
   });
 
-  // v4 → v5: seed default instances for the newly introduced overlay types when upgrading a real
-  // configuration document, while preserving every existing instance in its exact position.
+  /*
+   * Seed default instances for overlay types introduced since the document was written, preserving
+   * every existing instance in its exact position and never replacing one:
+   * - v4 → v5 introduced the dedicated Final-4 / WWCD / post-game types;
+   * - v5 → v6 introduced Top Kill and Most Improved Team (Part 10). Only those two are seeded for a
+   *   v5 document — an operator who deleted, say, the default match-info instance on v5 must not see
+   *   it come back.
+   * A type that already has an instance, or a default id already taken by another instance, is
+   * skipped. Only a real configuration document (non-empty, well-formed instances) is seeded.
+   */
+  const seedTypes: ReadonlySet<string> | null =
+    version < 5 ? null : version < 6 ? PART10_SEEDED_TYPES : new Set<string>();
   const canSeedDefaults =
-    version < 5 &&
+    (seedTypes === null || seedTypes.size > 0) &&
     migratedInstances.length > 0 &&
     migratedInstances.every(
       (item) =>
@@ -163,15 +176,24 @@ export function migrateOverlayInstances(raw: unknown): unknown {
     );
 
     for (const defaultInst of DEFAULT_OVERLAY_INSTANCES.instances) {
+      if (seedTypes !== null && !seedTypes.has(defaultInst.type)) continue;
       if (!existingIds.has(defaultInst.id) && !existingTypes.has(defaultInst.type)) {
         finalInstances.push(structuredClone(defaultInst));
       }
     }
   }
 
+  /*
+   * `dual` became a valid variant in v5. Before v5 it could not have been written, so anything other
+   * than the two older values falls back to `standard`; from v5 on, a stored `dual` is the operator's
+   * choice and is kept (a v5 → v6 upgrade must not silently switch Dual WWCD off).
+   */
+  const storedVariant = raw['autoWwcdVariant'];
   const autoWwcdVariant =
-    raw['autoWwcdVariant'] === 'fullscreen' || raw['autoWwcdVariant'] === 'standard'
-      ? raw['autoWwcdVariant']
+    storedVariant === 'fullscreen' ||
+    storedVariant === 'standard' ||
+    (version >= 5 && storedVariant === 'dual')
+      ? storedVariant
       : 'standard';
 
   return {

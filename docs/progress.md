@@ -486,3 +486,20 @@ Chronological record of phases, tasks, files changed, and verification results.
 - **Verification Results:** `npm test` 521 passed (backend 343 / 27, frontend 178 / 14); typecheck 0 errors; lint 0 diagnostics; build OK; Prettier clean on changed files. Browser checks on an isolated data copy: proposal §19.5. OBS not available (not verified).
 - **Safeguards honoured:** no destructive git commands; production `backend/data` hashes unchanged; `payload.ts`/`payload.test.ts`, the external Obsidian vault folder and the user's `.gitignore` edit untouched; temp data copy, server and browser tabs removed.
 - **Next Steps:** deploy per proposal §19.7 and run the operator OBS check.
+
+## Entry 12 — 2026-10-23 — Part 10: Audit & Proposal (Extended Name animation, Top Kill, Most Improved, WWCD Prediction)
+
+- **Phase:** Part 10 audit/proposal. **No implementation** (stopped at the approval gate).
+- **Status:** `AWAITING_USER_APPROVAL`
+- **Files Affected:** `docs/part10-audit-and-proposal.md` (new), `docs/checkpoint.md`, `docs/progress.md`. Obsidian vault (gitignored): Part 10 session note with progress log, `Research/Part 10 Research Sources.md`, `Attachments/Part 10 Prototypes/` (throwaway HTML prototypes + screenshots).
+- **Verification Results:** baseline at `4893dc6`: 521/521 tests, typecheck 0, lint 0, format clean, build OK. Issue A reproduced (96 px one-frame jump, standalone and admin preview); naive width-transition prototype measured (20–22 frames, 333–383 ms) and found to cause 5 marquee flips. 0 console errors on five routes.
+- **Safeguards honoured:** no destructive git commands; production `backend/data` only read (hashes identical); temp data copy, server and browser tabs removed afterwards.
+- **Next Steps:** answers to proposal §21 (Q1–Q15) and explicit approval; then `WS-10.1`–`WS-10.6`.
+
+## Entry 13 — 2026-10-23 — Part 10: Implementation & Verification (`WS-10.1`–`WS-10.6`)
+
+- **Status:** `COMPLETED` (uncommitted).
+- **Files:** shared `config/overlay-instance.ts`, `versions.ts` (v6); backend `persistence/{migrations,json-document}.ts`, `routes/config.ts` + tests; frontend overlay `LeaderboardOverlay`, `OverflowMarquee`, `TeamRow`, `useTeamNameLayout`, `EliminationOverlay`, `FinalFourOverlay`, new `top-kill.ts`, `TopKillOverlay.tsx`, `most-improved.ts`, `MostImprovedOverlay.tsx`, `wwcd-prediction.ts` + tests; pages `OverlayPage`, `OverlayRoute`, `AdminPage`, `router.tsx`; admin `AppearanceEditor`, `OverlayPreview`, `overlay-types`; docs proposal §23–§24, ADR-0020, CHANGELOG, user guides en/hu.
+- **Verification:** backend 351/351, frontend 241/241, typecheck 0, lint clean, format clean, build OK; browser matrix and migration/rollback results in proposal §24.3. Default-parallel backend runs hit worker OOM on this machine under load; passes with `--maxWorkers=2`.
+- **Safeguards:** no destructive git; production `backend/data` hashes unchanged; all browser/migration/rollback tests on temp copies, removed afterwards (temp junctions removed link-by-link; repo `node_modules` verified intact).
+- **Next:** user review/commit; deploy per `docs/checkpoint.md` §3; OBS operator checks.

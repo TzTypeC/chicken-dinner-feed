@@ -204,6 +204,22 @@ export const overlayAppearanceSchema = z.object({
     .min(TEAM_NAME_DISPLAY_LIMITS.maxExtension.min)
     .max(TEAM_NAME_DISPLAY_LIMITS.maxExtension.max)
     .default(TEAM_NAME_DISPLAY_LIMITS.maxExtension.default),
+  /**
+   * Most Improved Team (`most-improved`, Part 10): the closed map whose standings are the starting
+   * point. `'previous'` is the map before the end map; any other value is a pinned
+   * `ClosedMapResult.id`.
+   */
+  mostImprovedFrom: z.string().min(1).default('previous'),
+  /**
+   * Most Improved Team: the closed map whose standings are the end point. `'latest'` is the most
+   * recently closed map; any other value is a pinned `ClosedMapResult.id`.
+   */
+  mostImprovedTo: z.string().min(1).default('latest'),
+  /**
+   * Final 4 (`final4`, Part 10): show each standing team's live WWCD estimate (share of standing
+   * players) under its card. Off by default so existing layouts are unchanged.
+   */
+  showWwcdPrediction: z.boolean().default(false),
   /** Trim the table for formats with fewer than 25 teams. */
   maxTeams: z.number().int().min(1).max(25),
 });
@@ -221,6 +237,8 @@ export const overlayTypeSchema = z.enum([
   'wwcd-fullscreen',
   'postgame-match',
   'postgame-series',
+  'top-kill',
+  'most-improved',
 ]);
 export type OverlayType = z.infer<typeof overlayTypeSchema>;
 
@@ -335,6 +353,9 @@ export const DEFAULT_OVERLAY_APPEARANCE: OverlayAppearance = {
   teamNameMaxChars: TEAM_NAME_DISPLAY_LIMITS.maxChars.default,
   teamNameExtendedMode: false,
   teamNameMaxExtension: TEAM_NAME_DISPLAY_LIMITS.maxExtension.default,
+  mostImprovedFrom: 'previous',
+  mostImprovedTo: 'latest',
+  showWwcdPrediction: false,
   maxTeams: 16,
 };
 
@@ -348,6 +369,8 @@ export const DEFAULT_INSTANCE_ID_BY_TYPE: Record<OverlayType, string> = {
   'wwcd-fullscreen': 'default-wwcd-fullscreen',
   'postgame-match': 'default-postgame-match',
   'postgame-series': 'default-postgame-series',
+  'top-kill': 'default-top-kill',
+  'most-improved': 'default-most-improved',
 };
 
 /** Default appearance tailored to a given overlay type. */
@@ -386,6 +409,8 @@ export function defaultAppearanceForType(type: OverlayType): OverlayAppearance {
       };
     case 'postgame-match':
     case 'postgame-series':
+    case 'top-kill':
+    case 'most-improved':
       return {
         ...base,
         animation: { ...base.animation, type: 'fade', durationMs: 420 },
@@ -463,6 +488,26 @@ export const DEFAULT_OVERLAY_INSTANCES: OverlayInstancesDocument = {
       enabled: true,
       onAir: true,
       appearance: defaultAppearanceForType('postgame-series'),
+    },
+    /*
+     * Part 10 fullscreen statistics screens. They go on air only when the operator presses ON AIR,
+     * so they start hidden: a freshly seeded instance must never appear in a scene by itself.
+     */
+    {
+      id: 'default-top-kill',
+      name: 'Top Kill',
+      type: 'top-kill',
+      enabled: true,
+      onAir: false,
+      appearance: defaultAppearanceForType('top-kill'),
+    },
+    {
+      id: 'default-most-improved',
+      name: 'Most Improved Team',
+      type: 'most-improved',
+      enabled: true,
+      onAir: false,
+      appearance: defaultAppearanceForType('most-improved'),
     },
   ],
 };

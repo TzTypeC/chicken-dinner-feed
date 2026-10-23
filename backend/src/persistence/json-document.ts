@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { ZodType } from 'zod';
 
@@ -102,10 +102,33 @@ export class JsonDocument<T> {
     // Persist the upgrade so the migration runs once rather than on every start, and so what is on
     // disk matches what the app is using.
     if (JSON.stringify(migrated) !== raw.trim()) {
+      await this.keepPreUpgradeCopy(parsed, migrated, raw);
       await this.write(result.data);
     }
 
     return result.data;
+  }
+
+  /**
+   * Before a schema-version upgrade rewrites a document, keep the file exactly as it was next to it
+   * (`<file>.v<old>.bak`, written once and never overwritten). An older app version cannot read a
+   * document written by a newer one — e.g. a v5 build rejects overlay types added in v6 — so this
+   * copy is what makes rolling back to the previous release possible: stop the app, restore the
+   * `.bak` over the file, start the old version.
+   */
+  private async keepPreUpgradeCopy(parsed: unknown, migrated: unknown, raw: string): Promise<void> {
+    const fromVersion = schemaVersionOf(parsed);
+    const toVersion = schemaVersionOf(migrated);
+    if (fromVersion === null || toVersion === null || toVersion <= fromVersion) return;
+
+    const backupPath = `${this.options.filePath}.v${fromVersion}.bak`;
+    if (existsSync(backupPath)) return;
+    try {
+      await writeFile(backupPath, raw, { encoding: 'utf8', flag: 'wx' });
+    } catch (cause) {
+      // A missing backup must not stop the app from starting; the upgrade itself is still valid.
+      this.options.onWarn?.(`Could not keep a pre-upgrade copy at ${backupPath}`, cause);
+    }
   }
 
   /** Validate, persist atomically, then update the in-memory value. Queued — see the class doc comment. */
@@ -152,4 +175,10 @@ export class JsonDocument<T> {
     this.cached = validated;
     return validated;
   }
+}
+
+function schemaVersionOf(value: unknown): number | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const version = (value as Record<string, unknown>)['schemaVersion'];
+  return typeof version === 'number' ? version : null;
 }

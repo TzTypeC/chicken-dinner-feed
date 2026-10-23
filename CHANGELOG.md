@@ -13,6 +13,24 @@ release time — add to `[Unreleased]` in the same change that makes the change.
 
 ### Added
 
+- **Top Kill screen** (`/overlay/top-kill`, admin group _Broadcast Statistics_). Fullscreen graphic of
+  the four teams with the most eliminations in the **last closed map** (a running map is never used).
+  Ordered by eliminations, then placement, then slot; tied teams carry a `TIED` tag and extra teams
+  tied at fourth place are named in a footnote instead of adding cards. A map where nobody scored an
+  elimination, or no closed map at all, shows a clear message. Goes on air only when you press
+  ON AIR.
+- **Most Improved Team screen** (`/overlay/most-improved`). The team that climbed most in the official
+  overall standings between two closed maps (`start rank − end rank`, e.g. 18 → 5 = ▲13), plus up to
+  three more climbers. Pick the start and end match per instance in the admin (default: the match
+  before the latest → the latest); invalid ranges are explained. Teams that first played after the
+  start match, and slots whose recorded team name changed inside the range (a possible renumber), are
+  left out and listed. Series points are shown separately and never used for the ranking. ON AIR only.
+- **WWCD Prediction on the Final 4** (Overlays → Final-4 → _WWCD Prediction_, off by default). Under
+  each card: `WIN CHANCE · MODEL` and a percentage = that team's share of the players still standing,
+  rounded so the four always add up to exactly 100%. It is an estimate, not a calibrated model; no
+  number is shown when data is stale, incomplete or contradictory, and it stops when the WWCD is
+  confirmed. See ADR-0020.
+
 - **Team-name length limit on the main leaderboard.** Under Overlays → your leaderboard → Team
   names, set how many characters a team name may show (6–32, default 14). A longer name ends in
   `...`, and the dots count toward the limit, so `Lanang nak chicken main pubg` reads
@@ -48,6 +66,21 @@ release time — add to `[Unreleased]` in the same change that makes the change.
   as it has a provisional result, instead of the previous map.
 
 ### Changed
+
+- **Extended team names now slide instead of jumping.** Turning extended mode on or off (or changing
+  its maximum) widens or narrows the whole leaderboard smoothly over about 0.4 s — background and rows
+  together, right edge fixed. Names never start and stop scrolling halfway, and `...` only comes back
+  once the panel has finished narrowing. The first load, a web font arriving and HIDE → ON AIR still
+  apply the width instantly.
+- **The elimination banner sits lower while the Final 4 is on screen** (194 instead of 164 design px
+  from the top), so it also clears the WWCD Prediction strip; its position there no longer shrinks
+  with the banner's own size setting.
+- **Upgrade note:** configuration files move to schema v6. On first start the app keeps a copy of each
+  file as it was (`backend/data/<file>.json.v5.bak`) and adds hidden _Top Kill_ and _Most Improved
+  Team_ overlays; every existing overlay and setting is kept, including a Dual WWCD choice. To roll
+  back to the previous release, stop the app and copy the `.v5.bak` files over the `.json` files — the
+  previous release refuses to start on v6 files rather than misreading them. Refresh OBS sources and
+  reload the admin after upgrading.
 
 - **Redesigned WWCD card.** The winning squad's gold banner, carrying `#1`, the team logo and slot,
   now unfurls from a bronze rod at the top of the card, borrowed from the hanging banners in the

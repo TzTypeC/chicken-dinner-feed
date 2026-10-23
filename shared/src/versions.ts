@@ -21,4 +21,4 @@ export const PROTOCOL_VERSION = 11;
  * Bump when a stored document's shape changes. Every persisted document carries this value so a
  * newer bundle can migrate an operator's existing configuration forward rather than discarding it.
  */
-export const CONFIG_SCHEMA_VERSION = 5;
+export const CONFIG_SCHEMA_VERSION = 6;

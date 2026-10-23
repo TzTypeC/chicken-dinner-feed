@@ -1,12 +1,39 @@
 import type { IngestSourceKind, MatchState, OverlayAppearance } from '@cdf/shared';
 import { motion } from 'motion/react';
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { appearanceToCssVariables, ROW_VARIANTS } from './appearance';
 import { formatTeamSlot, LEADERBOARD_METRICS as M, leaderboardColumns, u } from './overlay-scale';
 import { TeamRow } from './TeamRow';
 import { SLOT_BADGE_CLASS, SLOT_BADGE_STYLE, TEAM_NAME_CLASS } from './team-row-styles';
 import { truncateTeamName } from './team-name-fit';
-import { useTeamNameLayout } from './useTeamNameLayout';
+import { useTeamNameLayout, type TeamNameLayout, type TeamNamePlan } from './useTeamNameLayout';
+
+/**
+ * The extended-mode width change (Part 10): one ~400 ms, symmetric ease-in-out move of the whole
+ * panel — background, header, rows and legend together. Exported so the page can move a
+ * left-anchored panel's position in step with it.
+ */
+export const PANEL_WIDTH_TRANSITION_MS = 400;
+export const PANEL_WIDTH_EASING = 'cubic-bezier(0.45, 0, 0.55, 1)';
+/** Ends a transition whose `transitionend` never arrives (e.g. the page was hidden meanwhile). */
+const TRANSITION_FALLBACK_MS = PANEL_WIDTH_TRANSITION_MS + 250;
+
+/** A panel-width transition in progress. */
+interface WidthTransition {
+  id: number;
+  /**
+   * Leaving extended mode: the full-name rows stay on screen (clipped by the shrinking column) until
+   * the panel has finished narrowing, and only then switch to the `...` form — an ellipsis never
+   * appears in a panel that is still wide. Null when entering extended mode or changing width
+   * within it: the new rows apply straight away.
+   */
+  heldRows: ReadonlyMap<number, TeamNamePlan> | null;
+}
+
+function hasMode(rows: ReadonlyMap<number, TeamNamePlan>, mode: TeamNamePlan['mode']): boolean {
+  for (const plan of rows.values()) if (plan.mode === mode) return true;
+  return false;
+}
 
 const LEGEND = [
   { label: 'ALIVE', color: 'var(--player-alive)' },
@@ -25,10 +52,11 @@ export interface LeaderboardOverlayProps {
    */
   animateRows?: boolean;
   /**
-   * Extended mode: how far the panel currently widens to the left, in design px. The page uses it
-   * to keep a left-anchored panel's right edge in place (see `appearanceToPosition`).
+   * Extended mode: how far the panel currently widens to the left, in design px, and whether the
+   * change is being animated. The page uses it to keep a left-anchored panel's right edge in place
+   * (see `appearanceToPosition`), moving the position in step with the width when `animate` is set.
    */
-  onExtensionChange?(extension: number): void;
+  onExtensionChange?(extension: number, animate: boolean): void;
 }
 
 /**
@@ -71,20 +99,100 @@ export function LeaderboardOverlay({
   const nameLayout = useTeamNameLayout(match.teams, appearance, probeRefs);
   const extension = nameLayout.extension;
 
+  /*
+   * Settled: the panel has been painted and the page's fonts have loaded. Until then every width is
+   * applied instantly — the first layout, and the re-layout when a web font arrives, are not changes
+   * the operator made, so they must not animate (Part 10). Re-mounting (HIDE → ON AIR) starts over.
+   */
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    let frame = 0;
+    const fontsReady =
+      typeof document !== 'undefined' && document.fonts ? document.fonts.ready : Promise.resolve();
+    void fontsReady.then(() => {
+      if (cancelled || typeof requestAnimationFrame === 'undefined') return;
+      frame = requestAnimationFrame(() => {
+        frame = requestAnimationFrame(() => {
+          if (!cancelled) setSettled(true);
+        });
+      });
+    });
+    return () => {
+      cancelled = true;
+      if (frame && typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  const animateWidth = settled && !nameLayout.instant;
+
+  /*
+   * The transition is derived while rendering (state-from-props), not in an effect: the very render
+   * that brings the new layout must already hold the scroll decisions and, when leaving extended
+   * mode, the full-name rows. Deciding one commit later let new marquees measure the still-narrow
+   * column for a frame and start scrolling.
+   */
+  const [tracked, setTracked] = useState<{
+    layout: TeamNameLayout;
+    transition: WidthTransition | null;
+  }>(() => ({ layout: nameLayout, transition: null }));
+  let widthTransition = tracked.transition;
+  if (tracked.layout !== nameLayout) {
+    const previous = tracked.layout;
+    if (previous.extension !== nameLayout.extension) {
+      const leavingExtended =
+        hasMode(nameLayout.rows, 'static') && hasMode(previous.rows, 'scroll');
+      widthTransition = animateWidth
+        ? {
+            id: (widthTransition?.id ?? 0) + 1,
+            heldRows: leavingExtended ? (widthTransition?.heldRows ?? previous.rows) : null,
+          }
+        : null;
+    }
+    setTracked({ layout: nameLayout, transition: widthTransition });
+  }
+  const endWidthTransition = useCallback(
+    () =>
+      setTracked((current) => (current.transition ? { ...current, transition: null } : current)),
+    [],
+  );
+
+  // Safety net only; the normal end is the panel's own `transitionend`.
+  const transitionId = widthTransition?.id ?? null;
+  useEffect(() => {
+    if (transitionId === null) return;
+    const timer = setTimeout(endWidthTransition, TRANSITION_FALLBACK_MS);
+    return () => clearTimeout(timer);
+  }, [transitionId, endWidthTransition]);
+
+  const nameRows = widthTransition?.heldRows ?? nameLayout.rows;
+  // Also held until the first real measurement replaces the fallback layout (mount, HIDE → ON AIR).
+  const namesFrozen = widthTransition !== null || !nameLayout.measured;
+
   // Layout effect: the page repositions in the same frame, before anything is painted.
   useLayoutEffect(() => {
-    onExtensionChange?.(extension);
-  }, [extension, onExtensionChange]);
+    onExtensionChange?.(extension, animateWidth);
+  }, [extension, animateWidth, onExtensionChange]);
 
   return (
     <div
       data-testid="leaderboard-panel"
+      data-width-transition={widthTransition !== null ? 'running' : 'idle'}
+      onTransitionEnd={(event) => {
+        if (event.target === event.currentTarget && event.propertyName === 'width') {
+          endWidthTransition();
+        }
+      }}
       style={{
         ...appearanceToCssVariables(appearance),
         // Extended mode widens the panel to the LEFT only: the right edge — and with it the ALIVE,
         // PTS and ELIMS columns — stays exactly where it is. A right-anchored panel grows leftward
         // by itself; a left-anchored one is moved left by the page (`onExtensionChange`).
         width: u(M.panelWidth + extension),
+        // Only operator-visible changes animate; first paint and font loads snap (see `settled`).
+        transition: animateWidth
+          ? `width ${PANEL_WIDTH_TRANSITION_MS}ms ${PANEL_WIDTH_EASING}`
+          : 'none',
         position: 'relative',
         backgroundColor: 'var(--overlay-bg)',
         fontFamily: 'var(--overlay-font-family)',
@@ -178,8 +286,9 @@ export function LeaderboardOverlay({
               showLogo={showLogos}
               showTeamNumber={showTeamNumbers}
               nameFontSize={nameLayout.fontSize}
+              nameFrozen={namesFrozen}
               namePlan={
-                nameLayout.rows.get(team.teamNo) ?? {
+                nameRows.get(team.teamNo) ?? {
                   mode: 'static',
                   text: truncateTeamName(team.name, appearance.teamNameMaxChars),
                 }

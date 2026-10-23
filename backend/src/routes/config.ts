@@ -63,6 +63,10 @@ const updateInstanceSchema = overlayInstanceSchema.extend({
       .min(TEAM_NAME_DISPLAY_LIMITS.maxExtension.min)
       .max(TEAM_NAME_DISPLAY_LIMITS.maxExtension.max)
       .optional(),
+    // Part 10: same reasoning — a pre-Part-10 admin tab must not reset these on an unrelated save.
+    mostImprovedFrom: z.string().min(1).optional(),
+    mostImprovedTo: z.string().min(1).optional(),
+    showWwcdPrediction: z.boolean().optional(),
   }),
 });
 
@@ -171,6 +175,11 @@ export const configRoutes: FastifyPluginAsyncZod<ConfigRoutesOptions> = async (a
             body.appearance.teamNameExtendedMode ?? existing.appearance.teamNameExtendedMode,
           teamNameMaxExtension:
             body.appearance.teamNameMaxExtension ?? existing.appearance.teamNameMaxExtension,
+          mostImprovedFrom:
+            body.appearance.mostImprovedFrom ?? existing.appearance.mostImprovedFrom,
+          mostImprovedTo: body.appearance.mostImprovedTo ?? existing.appearance.mostImprovedTo,
+          showWwcdPrediction:
+            body.appearance.showWwcdPrediction ?? existing.appearance.showWwcdPrediction,
         },
       };
 

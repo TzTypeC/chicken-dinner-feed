@@ -18,6 +18,7 @@ import {
 import { AlertTriangle } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { isPinnedPostGameMatchUnavailable } from '@/components/overlay/broadcast-state';
+import { resolveMostImprovedRange, selectMostImproved } from '@/components/overlay/most-improved';
 import { ColorField } from './ColorField';
 import { TeamNameSettings } from './TeamNameSettings';
 
@@ -115,6 +116,8 @@ export function AppearanceEditor({
         'wwcd-fullscreen',
         'postgame-match',
         'postgame-series',
+        'top-kill',
+        'most-improved',
       ],
     },
     {
@@ -131,6 +134,8 @@ export function AppearanceEditor({
         'wwcd-fullscreen',
         'postgame-match',
         'postgame-series',
+        'top-kill',
+        'most-improved',
       ],
     },
     {
@@ -140,6 +145,14 @@ export function AppearanceEditor({
         'Enable the 4-column top-center Final-4 squad bar when 4, 3, or 2 teams remain alive.',
       value: appearance.showFinalFourLayout ?? true,
       types: ['leaderboard', 'final4'],
+    },
+    {
+      key: 'showWwcdPrediction',
+      label: 'WWCD Prediction (WIN CHANCE · MODEL)',
+      description:
+        'Show each standing team’s win chance under its Final-4 card: its share of the players still standing (knocked and disconnected players count until the game eliminates them). An estimate, not a calibrated model; no number is shown when data is stale, incomplete or conflicting. Stops when the WWCD is confirmed.',
+      value: appearance.showWwcdPrediction ?? false,
+      types: ['final4'],
     },
     {
       key: 'showWwcdOverlay',
@@ -232,7 +245,9 @@ export function AppearanceEditor({
   const supportsShowHideAnimation =
     instanceType === 'leaderboard' ||
     instanceType === 'postgame-match' ||
-    instanceType === 'postgame-series';
+    instanceType === 'postgame-series' ||
+    instanceType === 'top-kill' ||
+    instanceType === 'most-improved';
   const supportsRowStagger = instanceType === 'leaderboard';
 
   return (
@@ -301,6 +316,17 @@ export function AppearanceEditor({
             </div>
           )}
         </section>
+      )}
+
+      {instanceType === 'top-kill' && <TopKillSourceNote closedMaps={closedMaps} />}
+
+      {instanceType === 'most-improved' && (
+        <MostImprovedRangeEditor
+          closedMaps={closedMaps}
+          from={appearance.mostImprovedFrom ?? 'previous'}
+          to={appearance.mostImprovedTo ?? 'latest'}
+          onChange={(range) => patch(range)}
+        />
       )}
 
       {visibleToggles.length > 0 && (
@@ -840,5 +866,151 @@ export function AppearanceEditor({
         </section>
       )}
     </div>
+  );
+}
+
+function matchOptionLabel(map: { mapNumber: number; mapName: string | null }): string {
+  return `Match ${map.mapNumber}${map.mapName ? ` — ${map.mapName}` : ''}`;
+}
+
+/** Top Kill has no source setting: it always reads the last closed map (Part 10 decision). */
+function TopKillSourceNote({ closedMaps }: { closedMaps: readonly ClosedMapResult[] }) {
+  const last = closedMaps.at(-1);
+  return (
+    <section
+      data-testid="top-kill-source-note"
+      className="border-border bg-secondary/20 grid gap-1 rounded-lg border p-3.5 text-xs"
+    >
+      <h3 className="text-sm font-medium text-[var(--brand-gold)]">Top Kill source</h3>
+      <p className="text-muted-foreground">
+        Always the last closed map: the four teams with the most eliminations, ordered by
+        eliminations, then placement, then slot. A running map is never used. Goes on air only when
+        you press ON AIR.
+      </p>
+      <p>
+        {last
+          ? `Currently showing: ${matchOptionLabel(last)}.`
+          : 'No map has been closed yet — the overlay shows “No finished match yet”.'}
+      </p>
+    </section>
+  );
+}
+
+/**
+ * Most Improved Team range (Part 10): the standings after the start match are compared with the
+ * standings after the end match. Saved per instance; `previous` / `latest` follow the series, a
+ * specific match pins it.
+ */
+function MostImprovedRangeEditor({
+  closedMaps,
+  from,
+  to,
+  onChange,
+}: {
+  closedMaps: readonly ClosedMapResult[];
+  from: string;
+  to: string;
+  onChange(range: { mostImprovedFrom?: string; mostImprovedTo?: string }): void;
+}) {
+  const range = resolveMostImprovedRange(closedMaps, from, to);
+  const board = range.ok ? selectMostImproved(closedMaps, from, to) : null;
+  const excluded = board && 'excluded' in board ? board.excluded : [];
+  const knownIds = new Set(closedMaps.map((map) => map.id));
+
+  return (
+    <section
+      data-testid="most-improved-range-section"
+      className="border-border bg-secondary/20 grid gap-3 rounded-lg border p-3.5"
+    >
+      <div>
+        <h3 className="text-sm font-medium text-[var(--brand-gold)]">
+          Compared matches (Most Improved Team)
+        </h3>
+        <p className="text-muted-foreground text-xs">
+          Places gained in the official overall standings between the standings after the start
+          match and the standings after the end match. Only closed maps can be chosen. Press Save to
+          apply.
+        </p>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="grid gap-1 text-xs">
+          <span className="text-muted-foreground">Start: standings after</span>
+          <select
+            aria-label="Most Improved start match"
+            data-testid="most-improved-from"
+            className="border-border bg-background min-h-9 rounded border px-2.5 py-1.5 text-sm"
+            value={from}
+            onChange={(event) => onChange({ mostImprovedFrom: event.target.value })}
+          >
+            <option value="previous">Match before the end match (Automatic)</option>
+            {closedMaps.map((map) => (
+              <option key={map.id} value={map.id}>
+                {matchOptionLabel(map)}
+              </option>
+            ))}
+            {from !== 'previous' && !knownIds.has(from) && (
+              <option value={from}>Unavailable match — removed or reset</option>
+            )}
+          </select>
+        </label>
+        <label className="grid gap-1 text-xs">
+          <span className="text-muted-foreground">End: standings after</span>
+          <select
+            aria-label="Most Improved end match"
+            data-testid="most-improved-to"
+            className="border-border bg-background min-h-9 rounded border px-2.5 py-1.5 text-sm"
+            value={to}
+            onChange={(event) => onChange({ mostImprovedTo: event.target.value })}
+          >
+            <option value="latest">Latest closed match (Automatic)</option>
+            {closedMaps.map((map) => (
+              <option key={map.id} value={map.id}>
+                {matchOptionLabel(map)}
+              </option>
+            ))}
+            {to !== 'latest' && !knownIds.has(to) && (
+              <option value={to}>Unavailable match — removed or reset</option>
+            )}
+          </select>
+        </label>
+      </div>
+
+      {range.ok ? (
+        <p data-testid="most-improved-range-summary" className="text-xs">
+          Comparing standings after {matchOptionLabel(range.from)} with standings after{' '}
+          {matchOptionLabel(range.to)}.
+          {board?.status === 'no-climber' &&
+            ' No team climbed in this range — the overlay says so.'}
+        </p>
+      ) : (
+        <div
+          data-testid="most-improved-range-warning"
+          className="flex items-center gap-2 rounded border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+        >
+          <AlertTriangle className="size-4 shrink-0 text-amber-400" aria-hidden />
+          <span>{range.message}</span>
+        </div>
+      )}
+
+      {excluded.length > 0 && (
+        <div
+          data-testid="most-improved-excluded-warning"
+          className="grid gap-1 rounded border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+        >
+          <span className="flex items-center gap-2 font-medium">
+            <AlertTriangle className="size-4 shrink-0 text-amber-400" aria-hidden />
+            {excluded.length} team{excluded.length === 1 ? '' : 's'} not compared
+          </span>
+          <ul className="list-disc pl-6">
+            {excluded.map((entry) => (
+              <li key={`${entry.teamNo}-${entry.reason}`}>
+                T{String(entry.teamNo).padStart(2, '0')} {entry.name}: {entry.detail}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </section>
   );
 }

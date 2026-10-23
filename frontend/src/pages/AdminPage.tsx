@@ -51,6 +51,10 @@ const INSTANCE_CATEGORIES: { label: string; types: OverlayType[] }[] = [
     label: 'Post-Game Standings',
     types: ['postgame-match', 'postgame-series'],
   },
+  {
+    label: 'Broadcast Statistics',
+    types: ['top-kill', 'most-improved'],
+  },
 ];
 
 const CONNECTION_LABEL: Record<string, { label: string; hint: string; tone: string }> = {
@@ -1054,6 +1058,24 @@ export function AdminPage() {
                         useScopedOverlayUrls
                           ? `${window.location.origin}/overlay/${selected.id}/postgame-series`
                           : `${window.location.origin}/overlay/postgame-series`
+                      }
+                    />
+
+                    <CopyableUrl
+                      label="9. Top Kill (most eliminations, last closed match)"
+                      url={
+                        useScopedOverlayUrls
+                          ? `${window.location.origin}/overlay/${selected.id}/top-kill`
+                          : `${window.location.origin}/overlay/top-kill`
+                      }
+                    />
+
+                    <CopyableUrl
+                      label="10. Most Improved Team (series rank change)"
+                      url={
+                        useScopedOverlayUrls
+                          ? `${window.location.origin}/overlay/${selected.id}/most-improved`
+                          : `${window.location.origin}/overlay/most-improved`
                       }
                     />
                   </div>

@@ -312,6 +312,31 @@ Companion gombokba, tehát az átnevezés csendben eltörné őket. Helyette hoz
 - A post-game meccs képernyő _latest_ beállítása az aktuális pályát mutatja, amint ideiglenes
   eredménye van, lezárás után pedig ugyanazt a pályát véglegesként.
 
+### Statisztika képernyők: Top Kill és Most Improved Team
+
+Két teljes képernyős overlay a **Broadcast Statistics** csoportban. Mindkettő rejtve indul, és csak
+az **ON AIR** megnyomására kerül adásba; csak lezárt pályákból dolgoznak, ezért előbb zárd le a pályát.
+
+- **Top Kill** (`/overlay/top-kill`): az utolsó lezárt pálya négy legtöbb eliminációt szerző csapata
+  (utána helyezés, majd slot szerint). Az azonos számú csapatoknál `TIED` jelölés áll; ha a negyedik
+  helyen még több csapat osztozik, egy lábjegyzet írja, hányan. Ha senki nem eliminált, ezt mondja ki.
+- **Most Improved Team** (`/overlay/most-improved`): hány helyet lépett előre egy csapat az összesített
+  tabellán a kezdő meccs utáni és a záró meccs utáni állás között (18. → 5. = ▲13), és még legfeljebb
+  három csapat. A két meccset az overlay beállításaiban választod (alapértelmezés: a legutóbbi előtti →
+  a legutóbbi). Az admin elmagyarázza az érvénytelen választást, és felsorolja a kihagyott csapatokat:
+  akik a kezdő meccs után játszottak először, és azokat a slotokat, ahol közben megváltozott a
+  rögzített csapatnév (átszámozás után ugyanaz a slot más csapat lehet).
+
+### WWCD Prediction a Final 4-en
+
+Kapcsold be a **WWCD Prediction** opciót a Final-4 overlay beállításaiban. Minden álló csapat kártyája
+alatt megjelenik a `WIN CHANCE · MODEL` és egy százalék: a még álló játékosokból vett részesedése (a
+knockolt játékos addig számít, amíg a játék ki nem ejti), úgy kerekítve, hogy pontosan 100% legyen az
+összeg. Egyszerű becslés, nem korábbi meccseken tanított előrejelzés. Elavult adatnál az értékek
+elhalványulnak és `DATA STALE` felirat jelenik meg; hiányos vagy ellentmondásos adatnál nincs szám.
+A WWCD megerősítésekor a Final 4-gyel együtt eltűnik. Bekapcsolva az eliminációs banner kicsit lejjebb
+kerül, hogy ne takarja a sávot.
+
 ### Pálya lezárása Manual módban
 
 A **Close current map now** (Manual control vagy Series control oldalon) rögzíti a pályát, majd

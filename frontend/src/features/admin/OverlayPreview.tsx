@@ -68,7 +68,11 @@ export function OverlayPreview({ instanceId, instanceType = 'leaderboard' }: Ove
               ? `/overlay/${instanceId}/postgame`
               : viewMode === 'postgame-series'
                 ? `/overlay/${instanceId}/postgame-series`
-                : `/overlay/${instanceId}/main`;
+                : viewMode === 'top-kill'
+                  ? `/overlay/${instanceId}/top-kill`
+                  : viewMode === 'most-improved'
+                    ? `/overlay/${instanceId}/most-improved`
+                    : `/overlay/${instanceId}/main`;
   } else if (instanceType === 'leaderboard') {
     previewPath =
       effectiveScreen === 'final-four'
@@ -153,6 +157,8 @@ export function OverlayPreview({ instanceId, instanceType = 'leaderboard' }: Ove
             ['wwcd-fullscreen', 'WWCD Fullscreen'],
             ['postgame', 'Post-Game Match'],
             ['postgame-series', 'Post-Game Series'],
+            ['top-kill', 'Top Kill'],
+            ['most-improved', 'Most Improved'],
           ] as const
         ).map(([value, label]) => {
           const active = (layers.viewMode ?? 'auto') === value;

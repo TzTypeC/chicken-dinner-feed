@@ -307,6 +307,31 @@ Companion buttons, so renaming it would silently break them. Create a new overla
 - The post-game match screen's _latest_ setting shows the current map as soon as it has a
   provisional result, then the same map as final once it is closed.
 
+### Statistics screens: Top Kill and Most Improved Team
+
+Two fullscreen screens in the **Broadcast Statistics** group. Both start hidden and go on air only
+when you press **ON AIR**; both use closed maps only, so close the map first.
+
+- **Top Kill** (`/overlay/top-kill`): the four teams with the most eliminations in the last closed
+  map, then placement, then slot. Teams on the same number say `TIED`; if more teams share fourth
+  place, a footnote names how many. If nobody scored an elimination, the screen says so.
+- **Most Improved Team** (`/overlay/most-improved`): places gained in the overall standings between
+  the standings after a start match and after an end match (18th → 5th = ▲13), with up to three more
+  climbers. Choose the two matches in the overlay's settings (default: the match before the latest →
+  the latest). The admin explains an invalid choice and lists teams it left out: teams that first
+  played after the start match, and slots whose recorded team name changed in between (after
+  renumbering teams the same slot may be a different team).
+
+### WWCD Prediction on the Final 4
+
+Turn on **WWCD Prediction** in the Final-4 overlay's settings. Each standing team then shows
+`WIN CHANCE · MODEL` and a percentage under its card: its share of all players still standing
+(knocked players count until the game eliminates them), rounded so the numbers add up to exactly
+100%. It is a simple estimate, not a prediction trained on past matches — say so on commentary if
+you use it. When the data is stale the values dim and read `DATA STALE`; when the data is incomplete
+or contradictory no number is shown. It disappears with the Final 4 once the WWCD is confirmed. With
+it on, the elimination banner moves a little lower so it never covers the strip.
+
 ### Closing a map in Manual mode
 
 **Close current map now** (on Manual control or Series control) records the map and then starts a
