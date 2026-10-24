@@ -362,6 +362,8 @@ describe('migrateOverlayInstances v5 → v6 (Part 10)', () => {
           mostImprovedTo: _to,
           showWwcdPrediction: _prediction,
           nextMapUpcomingMatch: _nextMap,
+          showTeamLogo: _logo,
+          nextMapSimulatorMode: _sim,
           ...appearance
         } = inst.appearance;
         return { ...inst, appearance };

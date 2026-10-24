@@ -68,6 +68,10 @@ const updateInstanceSchema = overlayInstanceSchema.extend({
     mostImprovedTo: z.string().min(1).optional(),
     showWwcdPrediction: z.boolean().optional(),
     nextMapUpcomingMatch: z.enum(['auto', '1', '2', '3', '4']).optional(),
+    showTeamLogo: z.boolean().optional(),
+    nextMapSimulatorMode: z
+      .enum(['disabled', 'match-1', 'match-2', 'match-3', 'all-completed'])
+      .optional(),
   }),
 });
 
@@ -183,6 +187,9 @@ export const configRoutes: FastifyPluginAsyncZod<ConfigRoutesOptions> = async (a
             body.appearance.showWwcdPrediction ?? existing.appearance.showWwcdPrediction,
           nextMapUpcomingMatch:
             body.appearance.nextMapUpcomingMatch ?? existing.appearance.nextMapUpcomingMatch,
+          showTeamLogo: body.appearance.showTeamLogo ?? existing.appearance.showTeamLogo,
+          nextMapSimulatorMode:
+            body.appearance.nextMapSimulatorMode ?? existing.appearance.nextMapSimulatorMode,
         },
       };
 

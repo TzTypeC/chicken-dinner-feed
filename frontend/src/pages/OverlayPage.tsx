@@ -629,6 +629,7 @@ export function OverlayPage({
       isPreviewSimulation: isPreview,
       rosterByNo,
       liveMatch: snapshot.match,
+      simulatorMode: appearance.nextMapSimulatorMode,
     });
     return (
       <>

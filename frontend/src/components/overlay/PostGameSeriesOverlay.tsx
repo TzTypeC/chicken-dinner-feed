@@ -52,8 +52,12 @@ export function PostGameSeriesOverlay({
   const displayLastMap = (board?.lastMapName ?? matchInfo.mapName).trim();
 
   return (
-    <div
+    <motion.div
       data-testid="postgame-series-overlay"
+      initial={{ opacity: 0, scale: 0.95, filter: 'blur(8px)' }}
+      animate={{ opacity: 1, scale: 1, filter: 'blur(0px)' }}
+      exit={{ opacity: 0, scale: 0.96, filter: 'blur(4px)' }}
+      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
       style={{
         ...appearanceToCssVariables(appearance),
         position: 'fixed',
@@ -140,9 +144,10 @@ export function PostGameSeriesOverlay({
       >
         {/* Top Championship Header Bar */}
         <motion.div
-          initial={{ opacity: 0, y: -14 }}
+          initial={{ opacity: 0, y: -25 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+          exit={{ opacity: 0, y: -25 }}
+          transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
           className="flex flex-col overflow-hidden"
           style={{
             borderRadius: ub(3),
@@ -292,10 +297,10 @@ export function PostGameSeriesOverlay({
             {/* LEFT ZONE: Featured #1 Series Leader Spotlight Card */}
             <motion.div
               data-testid="postgame-series-leader-card"
-              initial={{ opacity: 0, x: -18 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-              className="flex flex-col justify-between overflow-hidden"
+              initial={{ opacity: 0, x: -25, scale: 0.96 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: -20, scale: 0.96 }}
+              transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
               style={{
                 borderRadius: ub(4),
                 backgroundColor: 'var(--overlay-bg)',
@@ -502,10 +507,10 @@ export function PostGameSeriesOverlay({
 
             {/* RIGHT ZONE: Structured Cumulative Series Standings Table */}
             <motion.div
-              initial={{ opacity: 0, x: 18 }}
+              initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-              className="grid items-stretch"
+              exit={{ opacity: 0, x: 15 }}
+              transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
               style={{
                 gridTemplateColumns: isTwoColumnTable
                   ? 'repeat(2, minmax(0, 1fr))'
@@ -536,7 +541,7 @@ export function PostGameSeriesOverlay({
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -666,9 +671,13 @@ function SeriesStandingsColumnTable({
           const isTop3 = row.seriesRank <= 3;
 
           return (
-            <div
+            <motion.div
               key={row.teamNo}
               data-testid={`postgame-series-row-${row.teamNo}`}
+              initial={{ opacity: 0, x: -12, y: 8 }}
+              animate={{ opacity: 1, x: 0, y: 0 }}
+              exit={{ opacity: 0, x: -12, y: 6 }}
+              transition={{ duration: 0.35, delay: 0.08 + idx * 0.035, ease: [0.16, 1, 0.3, 1] }}
               className="grid flex-1 items-center tabular-nums"
               style={{
                 minHeight: ub(compact ? 42 : 48),
@@ -688,7 +697,10 @@ function SeriesStandingsColumnTable({
               }}
             >
               {/* Overall Series Rank */}
-              <span
+              <motion.span
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+                transition={{ duration: 0.25, delay: 0.12 + idx * 0.035 }}
                 className="font-extrabold tabular-nums"
                 style={{
                   fontSize: ub(compact ? 14 : 16),
@@ -696,7 +708,7 @@ function SeriesStandingsColumnTable({
                 }}
               >
                 {row.seriesRank}
-              </span>
+              </motion.span>
 
               {/* Team Logo */}
               {showLogos && (
@@ -827,8 +839,11 @@ function SeriesStandingsColumnTable({
               )}
 
               {/* Cumulative Total Series Points */}
-              <span
+              <motion.span
                 data-testid={`postgame-series-total-pts-${row.teamNo}`}
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+                transition={{ duration: 0.25, delay: 0.15 + idx * 0.035 }}
                 className="text-center font-black tabular-nums"
                 style={{
                   fontSize: ub(compact ? 14.5 : 16.5),
@@ -836,8 +851,8 @@ function SeriesStandingsColumnTable({
                 }}
               >
                 {row.totalPoints}
-              </span>
-            </div>
+              </motion.span>
+            </motion.div>
           );
         })}
       </div>

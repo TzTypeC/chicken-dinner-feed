@@ -224,6 +224,14 @@ export const overlayAppearanceSchema = z.object({
    * Next Map (`next-map`): which match is upcoming ('auto' follows tournament status, or 1..4).
    */
   nextMapUpcomingMatch: z.enum(['auto', '1', '2', '3', '4']).default('auto'),
+  /**
+   * Next Map (`next-map`): whether to render winner team logo on completed match cards.
+   */
+  showTeamLogo: z.boolean().default(true),
+  /** Next Map simulator mode for admin preview testing. */
+  nextMapSimulatorMode: z
+    .enum(['disabled', 'match-1', 'match-2', 'match-3', 'all-completed'])
+    .default('disabled'),
   maxTeams: z.number().int().min(1).max(25),
 });
 export type OverlayAppearance = z.infer<typeof overlayAppearanceSchema>;
@@ -361,6 +369,8 @@ export const DEFAULT_OVERLAY_APPEARANCE: OverlayAppearance = {
   mostImprovedTo: 'latest',
   showWwcdPrediction: false,
   nextMapUpcomingMatch: 'auto',
+  showTeamLogo: true,
+  nextMapSimulatorMode: 'disabled',
   maxTeams: 16,
 };
 

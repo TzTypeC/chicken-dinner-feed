@@ -28,6 +28,7 @@ export interface SelectNextMapOptions {
   isPreviewSimulation?: boolean;
   rosterByNo?: ReadonlyMap<number, Pick<Team, 'name' | 'logoUrl'>>;
   liveMatch?: MatchState | null;
+  simulatorMode?: 'disabled' | 'match-1' | 'match-2' | 'match-3' | 'all-completed';
 }
 
 const DEFAULT_SCHEDULE: readonly { matchNumber: number; defaultMapName: string }[] = [
@@ -37,54 +38,89 @@ const DEFAULT_SCHEDULE: readonly { matchNumber: number; defaultMapName: string }
   { matchNumber: 4, defaultMapName: 'Miramar' },
 ];
 
+const SIMULATED_WINNERS: readonly NextMapWinnerInfo[] = [
+  {
+    teamNo: 1,
+    name: 'SUKA SUKA SQUAD',
+    logoUrl: null,
+    eliminations: 14,
+    totalPoints: 24,
+  },
+  {
+    teamNo: 7,
+    name: 'BIGETRON ESPORTS',
+    logoUrl: null,
+    eliminations: 16,
+    totalPoints: 26,
+  },
+  {
+    teamNo: 3,
+    name: 'RRQ RYU',
+    logoUrl: null,
+    eliminations: 12,
+    totalPoints: 22,
+  },
+  {
+    teamNo: 5,
+    name: 'ALTER EGO LIMAX',
+    logoUrl: null,
+    eliminations: 15,
+    totalPoints: 25,
+  },
+];
+
 export function selectNextMapBoard(
   closedMaps: readonly ClosedMapResult[] = [],
   selection: 'auto' | '1' | '2' | '3' | '4' = 'auto',
   options: SelectNextMapOptions = {},
 ): NextMapBoard {
-  const { isPreviewSimulation = false, rosterByNo = new Map() } = options;
+  const {
+    isPreviewSimulation = false,
+    rosterByNo = new Map(),
+    simulatorMode = 'disabled',
+  } = options;
 
-  // Sample data for admin preview when no real matches have finished
-  if (isPreviewSimulation && closedMaps.length === 0) {
+  // Simulator Mode logic (Admin interactive testing)
+  const effectiveSim =
+    simulatorMode !== 'disabled'
+      ? simulatorMode
+      : isPreviewSimulation && closedMaps.length === 0
+        ? 'match-1'
+        : 'disabled';
+
+  if (effectiveSim !== 'disabled') {
+    const completedCount =
+      effectiveSim === 'all-completed'
+        ? 4
+        : effectiveSim === 'match-3'
+          ? 3
+          : effectiveSim === 'match-2'
+            ? 2
+            : 1;
+
+    const allCompleted = completedCount >= 4;
+    const upcoming = allCompleted ? null : completedCount + 1;
+
     return {
-      upcomingMatchNumber: 2,
-      allCompleted: false,
-      cards: [
-        {
-          matchNumber: 1,
-          defaultMapName: 'Erangel',
-          mapName: 'Erangel',
-          state: 'completed',
-          winner: {
-            teamNo: 1,
-            name: 'SUKA SUKA SQUAD',
-            logoUrl: null,
-            eliminations: 14,
-            totalPoints: 24,
-          },
-        },
-        {
-          matchNumber: 2,
-          defaultMapName: 'Erangel',
-          mapName: 'Erangel',
-          state: 'upcoming',
-          winner: null,
-        },
-        {
-          matchNumber: 3,
-          defaultMapName: 'Miramar',
-          mapName: 'Miramar',
-          state: 'future',
-          winner: null,
-        },
-        {
-          matchNumber: 4,
-          defaultMapName: 'Miramar',
-          mapName: 'Miramar',
-          state: 'future',
-          winner: null,
-        },
-      ],
+      upcomingMatchNumber: upcoming,
+      allCompleted,
+      cards: DEFAULT_SCHEDULE.map(({ matchNumber, defaultMapName }) => {
+        const isCompleted = matchNumber <= completedCount;
+        const isUpcoming = matchNumber === upcoming;
+        const state: MatchCardState = isCompleted
+          ? 'completed'
+          : isUpcoming
+            ? 'upcoming'
+            : 'future';
+
+        return {
+          matchNumber,
+          defaultMapName,
+          mapName: defaultMapName,
+          state,
+          winner: isCompleted ? (SIMULATED_WINNERS[matchNumber - 1] ?? null) : null,
+        };
+      }),
     };
   }
 
@@ -102,14 +138,14 @@ export function selectNextMapBoard(
     }
   }
 
-  const allCompleted = completedMatchNos.size >= 4;
-
   let upcomingMatchNumber: number | null = null;
-  if (!allCompleted) {
-    if (selection !== 'auto') {
-      upcomingMatchNumber = Number(selection);
-    } else {
-      // Find the earliest match 1..4 not yet closed
+  let allCompleted = false;
+
+  if (selection !== 'auto') {
+    upcomingMatchNumber = Number(selection);
+  } else {
+    allCompleted = completedMatchNos.size >= 4;
+    if (!allCompleted) {
       for (let m = 1; m <= 4; m++) {
         if (!completedMatchNos.has(m)) {
           upcomingMatchNumber = m;
@@ -124,7 +160,6 @@ export function selectNextMapBoard(
     let winner: NextMapWinnerInfo | null = null;
 
     if (closed && closed.teams.length > 0) {
-      // Find team with placement === 1, or best finish
       const sortedTeams = [...closed.teams].sort((a, b) => {
         const placeA = a.placement ?? 999;
         const placeB = b.placement ?? 999;
@@ -150,13 +185,11 @@ export function selectNextMapBoard(
     }
 
     let state: MatchCardState;
-    if (allCompleted) {
-      state = winner ? 'completed' : 'future';
+    if (upcomingMatchNumber !== null && matchNumber === upcomingMatchNumber) {
+      state = 'upcoming';
     } else if (winner && (upcomingMatchNumber === null || matchNumber < upcomingMatchNumber)) {
       state = 'completed';
-    } else if (matchNumber === upcomingMatchNumber) {
-      state = 'upcoming';
-    } else if (winner) {
+    } else if (allCompleted && winner) {
       state = 'completed';
     } else {
       state = 'future';

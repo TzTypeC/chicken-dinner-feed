@@ -13,7 +13,7 @@ export interface NextMapOverlayProps {
 
 const TABULAR: CSSProperties = { fontVariantNumeric: 'tabular-nums' };
 const GOLD = 'var(--overlay-accent, #F5A623)';
-const DARK_BG = 'rgba(16, 12, 7, 0.92)';
+const DARK_BG = 'rgba(14, 10, 6, 0.92)';
 const CARD_BORDER = '1px solid rgba(245, 166, 35, 0.65)';
 
 interface CardGeometry {
@@ -43,76 +43,138 @@ function monogram(name: string): string {
 
 function UpcomingCardOverlay({ card, geo }: { card: NextMapCard; geo: CardGeometry }) {
   return (
-    <motion.div
+    <div
       data-testid={`next-map-card-${card.matchNumber}`}
       data-state="upcoming"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4 }}
       style={{
         position: 'absolute',
         left: ub(geo.thumbLeft),
         top: ub(geo.thumbTop),
         width: ub(geo.thumbWidth),
         height: ub(geo.thumbHeight),
-        border: `${ub(2)} solid ${GOLD}`,
-        boxShadow: `0 0 ${ub(28)} rgba(245, 166, 35, 0.75), inset 0 0 ${ub(20)} rgba(245, 166, 35, 0.35)`,
+        overflow: 'hidden',
+        borderRadius: ub(2),
         pointerEvents: 'none',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        padding: ub(16),
       }}
     >
-      {/* Top dynamic badge: UPCOMING MATCH */}
-      <motion.div
-        data-testid="next-map-upcoming-badge"
-        initial={{ y: -8, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.15, duration: 0.35 }}
-        className="flex items-center justify-center font-black uppercase tracking-wider"
+      {/* 1. Strobe overlay: periodic dark pulse (100% -> 25% -> 100% light) */}
+      <div
+        className="next-map-strobe-layer"
         style={{
-          background: GOLD,
-          color: '#000000',
-          padding: `${ub(8)} ${ub(16)}`,
-          fontSize: ub(15),
-          boxShadow: `0 ${ub(4)} ${ub(12)} rgba(0, 0, 0, 0.65)`,
-          gap: ub(8),
+          position: 'absolute',
+          inset: 0,
+          backgroundColor: '#000000',
+          animation: 'next-map-strobe 1.35s ease-in-out infinite',
+          zIndex: 1,
+        }}
+      />
+
+      {/* 2. Golden pulsing neon inner-glow border */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          border: `${ub(2)} solid ${GOLD}`,
+          animation: 'next-map-neon-pulse 1.35s ease-in-out infinite',
+          zIndex: 2,
+        }}
+      />
+
+      {/* 3. Cyber scanline sweep moving vertically */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          height: ub(16),
+          background:
+            'linear-gradient(180deg, rgba(255, 200, 50, 0) 0%, rgba(255, 215, 60, 0.85) 50%, rgba(255, 200, 50, 0) 100%)',
+          animation: 'next-map-scanline 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+          zIndex: 3,
+        }}
+      />
+
+      {/* 4. Top subtle pill */}
+      <div
+        style={{
+          position: 'absolute',
+          top: ub(14),
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 4,
+          background: 'rgba(0, 0, 0, 0.8)',
+          border: `${ub(1)} solid rgba(245, 166, 35, 0.6)`,
+          padding: `${ub(4)} ${ub(12)}`,
+          borderRadius: ub(2),
+          whiteSpace: 'nowrap',
         }}
       >
         <span
-          className="rounded-full"
-          style={{
-            width: ub(8),
-            height: ub(8),
-            backgroundColor: '#000000',
-            animation: 'ping 1.5s cubic-bezier(0, 0, 0.2, 1) infinite',
-          }}
-        />
-        UPCOMING MATCH
-      </motion.div>
+          className="font-extrabold uppercase"
+          style={{ fontSize: ub(11), color: GOLD, letterSpacing: '0.12em' }}
+        >
+          LIVE TARGET
+        </span>
+      </div>
 
-      {/* Bottom status badge */}
-      <motion.div
-        initial={{ y: 8, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 0.25, duration: 0.35 }}
-        className="flex flex-col items-center justify-center font-black uppercase text-center"
+      {/* 5. Bottom dynamic UPCOMING MATCH badge with blinking radar dot */}
+      <div
         style={{
-          background: 'rgba(0, 0, 0, 0.75)',
-          backdropFilter: 'blur(4px)',
-          border: `${ub(1)} solid ${GOLD}`,
-          padding: `${ub(8)} ${ub(12)}`,
+          position: 'absolute',
+          bottom: ub(16),
+          left: ub(14),
+          right: ub(14),
+          zIndex: 4,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: ub(6),
         }}
       >
-        <span style={{ fontSize: ub(12), color: GOLD, letterSpacing: '0.1em' }}>
-          NEXT BATTLEGROUND
-        </span>
-        <span style={{ fontSize: ub(18), color: '#FFFFFF', letterSpacing: '0.04em' }}>
-          {card.mapName}
-        </span>
-      </motion.div>
-    </motion.div>
+        <div
+          data-testid="next-map-upcoming-badge"
+          className="flex items-center justify-center font-black uppercase tracking-wider"
+          style={{
+            background: GOLD,
+            color: '#000000',
+            padding: `${ub(8)} ${ub(14)}`,
+            fontSize: ub(15),
+            borderRadius: ub(2),
+            boxShadow: `0 ${ub(4)} ${ub(14)} rgba(0, 0, 0, 0.75)`,
+            gap: ub(8),
+          }}
+        >
+          <span
+            className="rounded-full"
+            style={{
+              width: ub(10),
+              height: ub(10),
+              backgroundColor: '#ff2222',
+              animation: 'next-map-radar-blink 1s ease-in-out infinite',
+            }}
+          />
+          UPCOMING MATCH
+        </div>
+
+        <div
+          className="flex items-center justify-center font-black uppercase text-center"
+          style={{
+            background: 'rgba(0, 0, 0, 0.82)',
+            backdropFilter: 'blur(4px)',
+            border: `${ub(1)} solid rgba(245, 166, 35, 0.5)`,
+            padding: `${ub(5)} ${ub(10)}`,
+            borderRadius: ub(2),
+            gap: ub(6),
+          }}
+        >
+          <span style={{ fontSize: ub(10.5), color: GOLD, letterSpacing: '0.1em' }}>
+            BATTLEGROUND
+          </span>
+          <span style={{ fontSize: ub(10.5), color: '#FFFFFF', letterSpacing: '0.04em' }}>
+            • {card.mapName}
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -134,63 +196,94 @@ function CompletedCardOverlay({
     <motion.div
       data-testid={`next-map-card-${card.matchNumber}`}
       data-state="completed"
-      initial={{ opacity: 0, scale: 0.96 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.45 }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
       style={{
         position: 'absolute',
         left: ub(geo.thumbLeft),
         top: ub(geo.thumbTop),
         width: ub(geo.thumbWidth),
         height: ub(geo.thumbHeight),
+        overflow: 'hidden',
+        borderRadius: ub(2),
         background: DARK_BG,
         backdropFilter: 'blur(8px)',
         border: CARD_BORDER,
         boxShadow: `0 ${ub(12)} ${ub(28)} rgba(0, 0, 0, 0.85)`,
-        padding: ub(20),
+        padding: `${ub(16)} ${ub(18)}`,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'space-between',
         textAlign: 'center',
+        pointerEvents: 'none',
         ...TABULAR,
       }}
     >
-      {/* Top WWCD Header */}
-      <div className="flex flex-col items-center" style={{ gap: ub(6) }}>
-        <img
-          src="/images/chicken-dinner-badge.png"
-          alt="WWCD"
-          style={{ width: ub(72), height: ub(72), objectFit: 'contain' }}
-        />
+      {/* Top WWCD Header with Golden Shimmer Sweep */}
+      <div className="flex flex-col items-center" style={{ gap: ub(4) }}>
+        <div
+          style={{
+            position: 'relative',
+            width: ub(68),
+            height: ub(68),
+            overflow: 'hidden',
+            display: 'grid',
+            placeItems: 'center',
+          }}
+        >
+          <img
+            src="/images/chicken-dinner-badge.png"
+            alt="WWCD"
+            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+          />
+          {/* Shimmer sweep */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              background:
+                'linear-gradient(90deg, rgba(255,240,180,0) 0%, rgba(255,240,180,0.6) 50%, rgba(255,240,180,0) 100%)',
+              animation: 'next-map-wwcd-shimmer 3.2s ease-in-out infinite',
+              pointerEvents: 'none',
+            }}
+          />
+        </div>
+
         <div
           data-testid={`next-map-wwcd-badge-${card.matchNumber}`}
           className="font-black uppercase tracking-wider"
-          style={{ fontSize: ub(16), color: GOLD }}
+          style={{ fontSize: ub(15), color: GOLD, lineHeight: 1.1 }}
         >
           WINNER WINNER
         </div>
         <div
           className="font-extrabold uppercase text-xs"
-          style={{ fontSize: ub(11), color: 'var(--overlay-text-muted)', letterSpacing: '0.1em' }}
+          style={{ fontSize: ub(10), color: 'var(--overlay-text-muted)', letterSpacing: '0.12em' }}
         >
           CHICKEN DINNER
         </div>
       </div>
 
-      {/* Winner Team info */}
+      {/* Winner Team info: honors showLogos and showTeamNumbers */}
       <div
-        className="flex flex-col items-center"
-        style={{ gap: ub(10), width: '100%', minWidth: 0 }}
+        className="flex flex-col items-center justify-center"
+        style={{ gap: ub(8), width: '100%', minWidth: 0, flex: 1 }}
       >
         {showLogos && (
           <div
+            data-testid={`next-map-team-logo-${card.matchNumber}`}
             className="grid place-items-center overflow-hidden rounded"
             style={{
-              width: ub(64),
-              height: ub(64),
+              width: ub(56),
+              height: ub(56),
               background: 'rgba(255, 255, 255, 0.06)',
               border: `${ub(1)} solid rgba(245, 166, 35, 0.4)`,
+              flexShrink: 0,
             }}
           >
             {winner.logoUrl ? (
@@ -207,8 +300,8 @@ function CompletedCardOverlay({
           <OverflowMarquee
             testId={`next-map-winner-name-${card.matchNumber}`}
             text={winner.name}
-            fontSize={22}
-            fontSizeCss={ub(22)}
+            fontSize={showLogos ? 20 : 24}
+            fontSizeCss={showLogos ? ub(20) : ub(24)}
             color="#FFFFFF"
             className="font-black uppercase"
           />
@@ -216,10 +309,13 @@ function CompletedCardOverlay({
 
         {showTeamNumbers && winner.teamNo > 0 && (
           <span
+            data-testid={`next-map-slot-badge-${card.matchNumber}`}
             className="font-extrabold"
             style={{
-              fontSize: ub(12),
+              fontSize: ub(11.5),
               padding: `${ub(2)} ${ub(8)}`,
+              borderRadius: ub(2),
+              background: 'rgba(245, 166, 35, 0.15)',
               border: `${ub(1)} solid rgba(245, 166, 35, 0.5)`,
               color: 'var(--overlay-text-muted)',
             }}
@@ -230,22 +326,29 @@ function CompletedCardOverlay({
       </div>
 
       {/* Quick stats pills: Kills & Points */}
-      <div className="grid grid-cols-2 gap-2" style={{ width: '100%', marginTop: ub(4) }}>
+      <div className="grid grid-cols-2 gap-2" style={{ width: '100%', marginTop: ub(2) }}>
         <div
           className="flex flex-col items-center rounded"
           style={{
-            background: 'rgba(255, 255, 255, 0.05)',
-            border: `${ub(1)} solid rgba(255, 255, 255, 0.1)`,
-            padding: `${ub(6)} ${ub(8)}`,
+            background: 'rgba(255, 255, 255, 0.06)',
+            border: `${ub(1)} solid rgba(255, 255, 255, 0.15)`,
+            padding: `${ub(5)} ${ub(8)}`,
           }}
         >
-          <span style={{ fontSize: ub(10), color: 'var(--overlay-text-muted)', fontWeight: 700 }}>
+          <span
+            style={{
+              fontSize: ub(9.5),
+              color: 'var(--overlay-text-muted)',
+              fontWeight: 800,
+              letterSpacing: '0.05em',
+            }}
+          >
             ELIMS
           </span>
           <span
             data-testid={`next-map-winner-elims-${card.matchNumber}`}
-            className="font-black text-base"
-            style={{ fontSize: ub(20), color: '#FFFFFF' }}
+            className="font-black"
+            style={{ fontSize: ub(19), color: '#FFFFFF', lineHeight: 1 }}
           >
             {winner.eliminations}
           </span>
@@ -254,16 +357,20 @@ function CompletedCardOverlay({
         <div
           className="flex flex-col items-center rounded"
           style={{
-            background: 'rgba(245, 166, 35, 0.12)',
-            border: `${ub(1)} solid rgba(245, 166, 35, 0.35)`,
-            padding: `${ub(6)} ${ub(8)}`,
+            background: 'rgba(245, 166, 35, 0.15)',
+            border: `${ub(1)} solid rgba(245, 166, 35, 0.5)`,
+            padding: `${ub(5)} ${ub(8)}`,
           }}
         >
-          <span style={{ fontSize: ub(10), color: GOLD, fontWeight: 700 }}>POINTS</span>
+          <span
+            style={{ fontSize: ub(9.5), color: GOLD, fontWeight: 800, letterSpacing: '0.05em' }}
+          >
+            POINTS
+          </span>
           <span
             data-testid={`next-map-winner-points-${card.matchNumber}`}
-            className="font-black text-base"
-            style={{ fontSize: ub(20), color: GOLD }}
+            className="font-black"
+            style={{ fontSize: ub(19), color: GOLD, lineHeight: 1 }}
           >
             {winner.totalPoints}
           </span>
@@ -284,6 +391,9 @@ function FutureCardOverlay({ card, geo }: { card: NextMapCard; geo: CardGeometry
         top: ub(geo.thumbTop),
         width: ub(geo.thumbWidth),
         height: ub(geo.thumbHeight),
+        overflow: 'hidden',
+        borderRadius: ub(2),
+        background: 'rgba(0, 0, 0, 0.45)', // Calm semi-transparent dark veil
         pointerEvents: 'none',
         display: 'flex',
         alignItems: 'flex-end',
@@ -294,11 +404,12 @@ function FutureCardOverlay({ card, geo }: { card: NextMapCard; geo: CardGeometry
       <div
         className="font-extrabold uppercase tracking-wider text-xs"
         style={{
-          background: 'rgba(0, 0, 0, 0.6)',
-          backdropFilter: 'blur(2px)',
-          border: `${ub(1)} solid rgba(255, 255, 255, 0.15)`,
+          background: 'rgba(0, 0, 0, 0.7)',
+          backdropFilter: 'blur(3px)',
+          border: `${ub(1)} solid rgba(255, 255, 255, 0.2)`,
           color: 'var(--overlay-text-muted)',
           padding: `${ub(4)} ${ub(12)}`,
+          borderRadius: ub(2),
         }}
       >
         STANDBY
@@ -308,7 +419,8 @@ function FutureCardOverlay({ card, geo }: { card: NextMapCard; geo: CardGeometry
 }
 
 export function NextMapOverlay({ board, appearance }: NextMapOverlayProps) {
-  const showLogos = appearance.showLogos ?? true;
+  // Respect showTeamLogo toggle (default: true) or showLogos master
+  const showLogos = (appearance.showTeamLogo ?? true) && (appearance.showLogos ?? true);
   const showTeamNumbers = appearance.showTeamNumbers ?? true;
   const scale = appearance.scale ?? 1;
 
@@ -330,6 +442,38 @@ export function NextMapOverlay({ board, appearance }: NextMapOverlayProps) {
         color: 'var(--overlay-text)',
       }}
     >
+      {/* Broadcast animation keyframe definitions */}
+      <style>{`
+        @keyframes next-map-strobe {
+          0%, 100% { opacity: 0; }
+          50% { opacity: 0.72; }
+        }
+        @keyframes next-map-neon-pulse {
+          0%, 100% {
+            box-shadow: inset 0 0 22px rgba(255, 174, 0, 0.6), 0 0 10px rgba(255, 174, 0, 0.4);
+            border-color: rgba(255, 185, 30, 0.85);
+          }
+          50% {
+            box-shadow: inset 0 0 38px rgba(255, 174, 0, 0.95), 0 0 24px rgba(255, 174, 0, 0.75);
+            border-color: rgba(255, 225, 110, 1);
+          }
+        }
+        @keyframes next-map-scanline {
+          0% { transform: translateY(-120%); opacity: 0; }
+          15% { opacity: 0.85; }
+          85% { opacity: 0.85; }
+          100% { transform: translateY(500%); opacity: 0; }
+        }
+        @keyframes next-map-radar-blink {
+          0%, 100% { transform: scale(1); opacity: 1; filter: drop-shadow(0 0 6px #ff2222); }
+          50% { transform: scale(1.35); opacity: 0.35; filter: drop-shadow(0 0 2px #ff2222); }
+        }
+        @keyframes next-map-wwcd-shimmer {
+          0% { transform: translateX(-150%) rotate(25deg); }
+          25%, 100% { transform: translateX(250%) rotate(25deg); }
+        }
+      `}</style>
+
       {/* Background base image */}
       <img
         src="/images/next-map-bg.jpg"
@@ -344,7 +488,7 @@ export function NextMapOverlay({ board, appearance }: NextMapOverlayProps) {
         }}
       />
 
-      {/* Dynamic layer for each of the 4 match cards */}
+      {/* Dynamic layer for each of the 4 match cards: strictly inside inner photo boundary */}
       {board.cards.map((card, index) => {
         const geo = GEOMETRIES[index] ?? GEOMETRIES[0];
 

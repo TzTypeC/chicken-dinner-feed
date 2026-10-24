@@ -143,7 +143,16 @@ export function AppearanceEditor({
         'postgame-series',
         'top-kill',
         'most-improved',
+        'next-map',
       ],
+    },
+    {
+      key: 'showTeamLogo',
+      label: 'Show Team Logo / Tampilkan Logo Tim',
+      description:
+        'Display the winning team logo on completed match cards. When OFF, the team name and slot badge are centered and balanced cleanly.',
+      value: appearance.showTeamLogo ?? true,
+      types: ['next-map'],
     },
     {
       key: 'showFinalFourLayout',
@@ -362,8 +371,10 @@ export function AppearanceEditor({
       {instanceType === 'next-map' && (
         <NextMapSettings
           upcomingSelection={appearance.nextMapUpcomingMatch ?? 'auto'}
+          simulatorMode={appearance.nextMapSimulatorMode ?? 'disabled'}
           closedMaps={closedMaps}
           onChange={(nextMapUpcomingMatch) => patch({ nextMapUpcomingMatch })}
+          onSimulatorChange={(nextMapSimulatorMode) => patch({ nextMapSimulatorMode })}
         />
       )}
       {isPostgameSuite && (
@@ -1106,15 +1117,30 @@ function MostImprovedRangeEditor({
 
 function NextMapSettings({
   upcomingSelection,
+  simulatorMode,
   closedMaps,
   onChange,
+  onSimulatorChange,
 }: {
   upcomingSelection: 'auto' | '1' | '2' | '3' | '4';
+  simulatorMode: 'disabled' | 'match-1' | 'match-2' | 'match-3' | 'all-completed';
   closedMaps: readonly ClosedMapResult[];
   onChange(selection: 'auto' | '1' | '2' | '3' | '4'): void;
+  onSimulatorChange(mode: 'disabled' | 'match-1' | 'match-2' | 'match-3' | 'all-completed'): void;
 }) {
   const completedCount = Math.min(4, closedMaps.length);
   const autoNext = completedCount >= 4 ? null : completedCount + 1;
+
+  const SIM_OPTIONS: readonly {
+    id: 'disabled' | 'match-1' | 'match-2' | 'match-3' | 'all-completed';
+    label: string;
+  }[] = [
+    { id: 'disabled', label: 'Live Data' },
+    { id: 'match-1', label: 'M1 Complete' },
+    { id: 'match-2', label: 'M1-2 Complete' },
+    { id: 'match-3', label: 'M1-3 Complete' },
+    { id: 'all-completed', label: 'All 4 Complete' },
+  ];
 
   return (
     <section
@@ -1131,7 +1157,7 @@ function NextMapSettings({
         </p>
       </div>
 
-      <div className="grid gap-2">
+      <div className="grid gap-3">
         <label className="grid gap-1 text-xs">
           <span className="text-muted-foreground">Upcoming match selection</span>
           <select
@@ -1151,7 +1177,7 @@ function NextMapSettings({
           </select>
         </label>
 
-        <div className="flex flex-wrap items-center gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-muted-foreground text-xs font-medium">Quick override:</span>
           {(['auto', '1', '2', '3', '4'] as const).map((opt) => (
             <button
@@ -1159,15 +1185,44 @@ function NextMapSettings({
               type="button"
               data-testid={`next-map-quick-${opt}`}
               onClick={() => onChange(opt)}
-              className={`min-h-7 rounded px-2.5 py-1 text-xs font-semibold transition-colors ${
+              className={`min-h-8 rounded border px-3 py-1 text-xs font-semibold transition-colors ${
                 upcomingSelection === opt
-                  ? 'border border-[var(--brand-gold)] bg-[var(--brand-gold)] text-black'
-                  : 'border-border bg-background text-muted-foreground hover:text-foreground border'
+                  ? 'border-[var(--brand-gold)] bg-[var(--brand-gold)] text-black font-extrabold shadow-sm'
+                  : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-secondary/40'
               }`}
             >
               {opt === 'auto' ? 'Auto' : `M${opt}`}
             </button>
           ))}
+        </div>
+
+        <div className="border-t border-border/70 pt-2.5 grid gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-[var(--brand-gold)]">
+              Simulator Mode (Admin Preview Only)
+            </span>
+            <span className="text-[11px] text-muted-foreground">
+              Test layout with completed maps
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {SIM_OPTIONS.map((sim) => (
+              <button
+                key={sim.id}
+                type="button"
+                data-testid={`next-map-sim-${sim.id}`}
+                onClick={() => onSimulatorChange(sim.id)}
+                className={`min-h-7 rounded border px-2.5 py-1 text-xs font-semibold transition-colors ${
+                  simulatorMode === sim.id
+                    ? 'border-[var(--brand-gold)] bg-[var(--brand-gold)] text-black font-extrabold shadow-sm'
+                    : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-secondary/40'
+                }`}
+              >
+                {sim.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </section>
