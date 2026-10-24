@@ -162,314 +162,326 @@ export function MostImprovedOverlay({ board, appearance }: MostImprovedOverlayPr
 
   return (
     <div
-      data-testid="most-improved-overlay"
-      data-status={board.status}
+      className="most-improved-viewport-container"
       style={{
-        ...appearanceToCssVariables(appearance),
         position: 'fixed',
-        top: '50%',
-        left: '50%',
-        width: ub(1920),
-        height: ub(1080),
-        transform: `translate(-50%, -50%) scale(${scale})`,
-        transformOrigin: 'center center',
+        inset: 0,
+        width: '100vw',
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         overflow: 'hidden',
         pointerEvents: 'none',
-        fontFamily: 'var(--overlay-font-family)',
-        color: 'var(--overlay-text)',
-        // The title and footnotes sit straight on the broadcast picture: a dark, tight shadow keeps
-        // them legible over bright game footage (inherited; invisible on the dark panels).
-        textShadow: '0 1px 2px rgba(0, 0, 0, 0.85), 0 0 18px rgba(0, 0, 0, 0.55)',
-        // Transparent canvas, like the other fullscreen screens without background media: only the
-        // panels are painted, the broadcast shows through around them.
+        zIndex: 25,
       }}
     >
       <div
-        className="relative flex flex-col"
+        data-testid="most-improved-overlay"
+        data-status={board.status}
         style={{
-          width: '100%',
-          height: '100%',
-          paddingInline: ub(96),
-          paddingBlock: ub(64),
-          gap: ub(36),
+          ...appearanceToCssVariables(appearance),
+          width: ub(1920),
+          height: ub(1080),
+          transform: `scale(${scale})`,
+          transformOrigin: 'center center',
+          pointerEvents: 'none',
+          fontFamily: 'var(--overlay-font-family)',
+          color: 'var(--overlay-text)',
+          // The title and footnotes sit straight on the broadcast picture: a dark, tight shadow keeps
+          // them legible over bright game footage (inherited; invisible on the dark panels).
+          textShadow: '0 1px 2px rgba(0, 0, 0, 0.85), 0 0 18px rgba(0, 0, 0, 0.55)',
+          // Transparent canvas, like the other fullscreen screens without background media: only the
+          // panels are painted, the broadcast shows through around them.
         }}
       >
-        {board.status === 'preview' && (
-          <div
-            data-testid="most-improved-preview-banner"
-            className="font-black uppercase"
-            style={{
-              alignSelf: 'flex-start',
-              paddingInline: ub(16),
-              paddingBlock: ub(6),
-              border: `${ub(2)} solid var(--overlay-accent)`,
-              color: 'var(--overlay-accent)',
-              fontSize: ub(18),
-              letterSpacing: '0.08em',
-            }}
-          >
-            Preview sample — not a result
-          </div>
-        )}
-
-        <header
-          className="flex items-baseline"
+        <div
+          className="relative flex flex-col"
           style={{
-            gap: ub(24),
-            paddingBottom: ub(18),
-            borderBottom: `${ub(2)} solid var(--overlay-accent)`,
+            width: '100%',
+            height: '100%',
+            paddingInline: ub(96),
+            paddingBlock: ub(64),
+            gap: ub(36),
           }}
         >
-          <h1
-            className="font-black uppercase"
-            style={{ fontSize: ub(72), lineHeight: 1, margin: 0 }}
-          >
-            Most Improved
-          </h1>
-          {hasRange && (
-            <span
-              data-testid="most-improved-subtitle"
-              style={{ fontSize: ub(24), color: 'var(--overlay-text-muted)' }}
+          {board.status === 'preview' && (
+            <div
+              data-testid="most-improved-preview-banner"
+              className="font-black uppercase"
+              style={{
+                alignSelf: 'flex-start',
+                paddingInline: ub(16),
+                paddingBlock: ub(6),
+                border: `${ub(2)} solid var(--overlay-accent)`,
+                color: 'var(--overlay-accent)',
+                fontSize: ub(18),
+                letterSpacing: '0.08em',
+              }}
             >
-              Overall standings ·{' '}
-              <b style={{ color: 'var(--overlay-text)' }}>
-                after {matchLabel(board.from)} → after {matchLabel(board.to)}
-              </b>
-            </span>
+              Preview sample — not a result
+            </div>
           )}
-        </header>
 
-        {board.status === 'ready' || board.status === 'preview' ? (
-          <div className="flex" style={{ gap: ub(40), flex: 1, minHeight: 0 }}>
-            <motion.section
-              data-testid="most-improved-hero"
-              data-team-no={board.hero.teamNo}
-              initial={{ opacity: 0, y: 16 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, ease: 'easeOut' }}
-              className="flex"
-              style={{ flex: 1, background: CARD_BG, border: CARD_BORDER }}
+          <header
+            className="flex items-baseline"
+            style={{
+              gap: ub(24),
+              paddingBottom: ub(18),
+              borderBottom: `${ub(2)} solid var(--overlay-accent)`,
+            }}
+          >
+            <h1
+              className="font-black uppercase"
+              style={{ fontSize: ub(72), lineHeight: 1, margin: 0 }}
             >
-              <div
-                className="flex flex-col justify-between"
-                style={{ flex: 1, padding: ub(48), minWidth: 0 }}
+              Most Improved
+            </h1>
+            {hasRange && (
+              <span
+                data-testid="most-improved-subtitle"
+                style={{ fontSize: ub(24), color: 'var(--overlay-text-muted)' }}
               >
-                <div className="flex items-start" style={{ gap: ub(24) }}>
-                  <TeamLogo entry={board.hero} show={showLogos} size={104} />
-                  <div className="flex flex-col" style={{ gap: ub(10), minWidth: 0 }}>
-                    <div
-                      data-testid="most-improved-hero-name"
-                      className="font-black uppercase"
-                      style={{
-                        fontSize: ub(50),
-                        lineHeight: 1.05,
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflowWrap: 'anywhere',
-                      }}
-                    >
-                      {board.hero.name}
-                    </div>
-                    {showTeamNumbers && board.hero.teamNo > 0 && (
-                      <span
-                        className="font-bold"
+                Overall standings ·{' '}
+                <b style={{ color: 'var(--overlay-text)' }}>
+                  after {matchLabel(board.from)} → after {matchLabel(board.to)}
+                </b>
+              </span>
+            )}
+          </header>
+
+          {board.status === 'ready' || board.status === 'preview' ? (
+            <div className="flex" style={{ gap: ub(40), flex: 1, minHeight: 0 }}>
+              <motion.section
+                data-testid="most-improved-hero"
+                data-team-no={board.hero.teamNo}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
+                className="flex"
+                style={{ flex: 1, background: CARD_BG, border: CARD_BORDER }}
+              >
+                <div
+                  className="flex flex-col justify-between"
+                  style={{ flex: 1, padding: ub(48), minWidth: 0 }}
+                >
+                  <div className="flex items-start" style={{ gap: ub(24) }}>
+                    <TeamLogo entry={board.hero} show={showLogos} size={104} />
+                    <div className="flex flex-col" style={{ gap: ub(10), minWidth: 0 }}>
+                      <div
+                        data-testid="most-improved-hero-name"
+                        className="font-black uppercase"
                         style={{
-                          alignSelf: 'flex-start',
-                          border: CARD_BORDER,
-                          paddingInline: ub(10),
-                          fontSize: ub(20),
+                          fontSize: ub(50),
+                          lineHeight: 1.05,
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        {board.hero.name}
+                      </div>
+                      {showTeamNumbers && board.hero.teamNo > 0 && (
+                        <span
+                          className="font-bold"
+                          style={{
+                            alignSelf: 'flex-start',
+                            border: CARD_BORDER,
+                            paddingInline: ub(10),
+                            fontSize: ub(20),
+                            color: 'var(--overlay-text-muted)',
+                          }}
+                        >
+                          {formatTeamSlot(board.hero.teamNo)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-around" style={TABULAR}>
+                    <div className="flex flex-col items-center">
+                      <span style={{ fontSize: ub(24), color: 'var(--overlay-text-muted)' }}>
+                        After {matchLabel(board.from)}
+                      </span>
+                      <span
+                        data-testid="most-improved-start-rank"
+                        className="font-black"
+                        style={{
+                          fontSize: ub(170),
+                          lineHeight: 1,
                           color: 'var(--overlay-text-muted)',
                         }}
                       >
-                        {formatTeamSlot(board.hero.teamNo)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-around" style={TABULAR}>
-                  <div className="flex flex-col items-center">
-                    <span style={{ fontSize: ub(24), color: 'var(--overlay-text-muted)' }}>
-                      After {matchLabel(board.from)}
-                    </span>
-                    <span
-                      data-testid="most-improved-start-rank"
-                      className="font-black"
-                      style={{
-                        fontSize: ub(170),
-                        lineHeight: 1,
-                        color: 'var(--overlay-text-muted)',
-                      }}
-                    >
-                      {board.hero.startRank}
-                    </span>
-                  </div>
-                  <span aria-hidden style={{ fontSize: ub(72), color: 'var(--overlay-accent)' }}>
-                    →
-                  </span>
-                  <div className="flex flex-col items-center">
-                    <span style={{ fontSize: ub(24), color: 'var(--overlay-text-muted)' }}>
-                      After {matchLabel(board.to)}
-                    </span>
-                    <span
-                      data-testid="most-improved-end-rank"
-                      className="font-black"
-                      style={{ fontSize: ub(170), lineHeight: 1 }}
-                    >
-                      {board.hero.endRank}
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  className="flex items-end justify-between"
-                  style={{ borderTop: CARD_BORDER, paddingTop: ub(20), ...TABULAR }}
-                >
-                  <span
-                    data-testid="most-improved-delta"
-                    className="font-black uppercase"
-                    style={{ fontSize: ub(28) }}
-                  >
-                    <span style={{ fontSize: ub(84), color: 'var(--overlay-accent)' }}>
-                      ▲ {board.hero.improvement}
-                    </span>{' '}
-                    {board.hero.improvement === 1 ? 'place' : 'places'} up
-                  </span>
-                  <span
-                    data-testid="most-improved-points"
-                    style={{ fontSize: ub(22), color: 'var(--overlay-text-muted)' }}
-                  >
-                    Series points{' '}
-                    <b style={{ color: 'var(--overlay-text)' }}>
-                      {board.hero.startPoints} → {board.hero.endPoints}
-                    </b>
-                  </span>
-                </div>
-              </div>
-              <div
-                className="flex items-center justify-center"
-                style={{
-                  borderLeft: CARD_BORDER,
-                  background: 'rgba(42, 29, 19, 0.6)',
-                  paddingInline: ub(40),
-                }}
-              >
-                <RankRail hero={board.hero} teamCount={board.teamCount} />
-              </div>
-            </motion.section>
-
-            {board.others.length > 0 && (
-              <section className="flex flex-col" style={{ width: ub(560), gap: ub(18) }}>
-                <h2
-                  className="font-bold"
-                  style={{ fontSize: ub(24), margin: 0, color: 'var(--overlay-text-muted)' }}
-                >
-                  Also climbing
-                </h2>
-                {board.others.map((entry, i) => (
-                  <motion.div
-                    key={`${entry.teamNo}-${i}`}
-                    data-testid={`most-improved-other-${i}`}
-                    data-team-no={entry.teamNo}
-                    initial={{ opacity: 0, x: 16 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.4, delay: 0.3 + i * 0.1, ease: 'easeOut' }}
-                    className="flex items-center"
-                    style={{
-                      flex: 1,
-                      gap: ub(20),
-                      padding: ub(28),
-                      background: CARD_BG,
-                      border: CARD_BORDER,
-                      ...TABULAR,
-                    }}
-                  >
-                    <div className="flex flex-col" style={{ flex: 1, minWidth: 0, gap: ub(6) }}>
-                      <OverflowMarquee
-                        text={entry.name}
-                        fontSize={26}
-                        fontSizeCss={ub(26)}
-                        color="var(--overlay-text)"
-                        className="font-black uppercase"
-                      />
-                      <span style={{ fontSize: ub(20), color: 'var(--overlay-text-muted)' }}>
-                        #{entry.startRank} → #{entry.endRank}
+                        {board.hero.startRank}
                       </span>
                     </div>
-                    <span
-                      className="font-black"
-                      style={{ fontSize: ub(48), color: 'var(--overlay-accent)' }}
-                    >
-                      ▲ {entry.improvement}
+                    <span aria-hidden style={{ fontSize: ub(72), color: 'var(--overlay-accent)' }}>
+                      →
                     </span>
-                  </motion.div>
-                ))}
-                {/* Invisible spacers keep each card at a third of the column when fewer than
-                    three teams climbed — never a placeholder that looks like a team. */}
-                {Array.from({ length: Math.max(0, 3 - board.others.length) }, (_, i) => (
-                  <div key={`spacer-${i}`} aria-hidden style={{ flex: 1 }} />
-                ))}
-              </section>
-            )}
-          </div>
-        ) : (
-          <div
-            data-testid="most-improved-empty"
-            className="flex flex-col items-center justify-center"
-            style={{
-              flex: 1,
-              gap: ub(16),
-              background: CARD_BG,
-              border: CARD_BORDER,
-              textAlign: 'center',
-            }}
-          >
-            {board.status === 'no-climber' ? (
-              <span className="font-black" style={{ fontSize: ub(44) }}>
-                No team climbed between {matchLabel(board.from)} and {matchLabel(board.to)}
-              </span>
-            ) : (
-              <>
-                <span className="font-black uppercase" style={{ fontSize: ub(44) }}>
-                  Comparison unavailable
-                </span>
-                <span style={{ fontSize: ub(26), color: 'var(--overlay-text-muted)' }}>
-                  {'message' in board ? board.message : null}
-                </span>
-              </>
-            )}
-          </div>
-        )}
+                    <div className="flex flex-col items-center">
+                      <span style={{ fontSize: ub(24), color: 'var(--overlay-text-muted)' }}>
+                        After {matchLabel(board.to)}
+                      </span>
+                      <span
+                        data-testid="most-improved-end-rank"
+                        className="font-black"
+                        style={{ fontSize: ub(170), lineHeight: 1 }}
+                      >
+                        {board.hero.endRank}
+                      </span>
+                    </div>
+                  </div>
 
-        {hasRange && (
-          <footer
-            className="flex justify-between"
-            style={{ gap: ub(32), fontSize: ub(18), color: 'var(--overlay-text-muted)' }}
-          >
-            <span>
-              Rank = official overall standings (points, then WWCD, placement pts, elimination pts,
-              last placement, slot).
-              {board.excluded.length > 0 && (
-                <span data-testid="most-improved-excluded-note">
-                  {' '}
-                  {board.excluded.length} {board.excluded.length === 1 ? 'team' : 'teams'} not
-                  compared:{' '}
-                  {board.excluded
-                    .map(
-                      (team) =>
-                        `${team.name} (${team.reason === 'new-after-start' ? 'joined later' : 'slot identity changed'})`,
-                    )
-                    .join(', ')}
-                  .
-                </span>
+                  <div
+                    className="flex items-end justify-between"
+                    style={{ borderTop: CARD_BORDER, paddingTop: ub(20), ...TABULAR }}
+                  >
+                    <span
+                      data-testid="most-improved-delta"
+                      className="font-black uppercase"
+                      style={{ fontSize: ub(28) }}
+                    >
+                      <span style={{ fontSize: ub(84), color: 'var(--overlay-accent)' }}>
+                        ▲ {board.hero.improvement}
+                      </span>{' '}
+                      {board.hero.improvement === 1 ? 'place' : 'places'} up
+                    </span>
+                    <span
+                      data-testid="most-improved-points"
+                      style={{ fontSize: ub(22), color: 'var(--overlay-text-muted)' }}
+                    >
+                      Series points{' '}
+                      <b style={{ color: 'var(--overlay-text)' }}>
+                        {board.hero.startPoints} → {board.hero.endPoints}
+                      </b>
+                    </span>
+                  </div>
+                </div>
+                <div
+                  className="flex items-center justify-center"
+                  style={{
+                    borderLeft: CARD_BORDER,
+                    background: 'rgba(42, 29, 19, 0.6)',
+                    paddingInline: ub(40),
+                  }}
+                >
+                  <RankRail hero={board.hero} teamCount={board.teamCount} />
+                </div>
+              </motion.section>
+
+              {board.others.length > 0 && (
+                <section className="flex flex-col" style={{ width: ub(560), gap: ub(18) }}>
+                  <h2
+                    className="font-bold"
+                    style={{ fontSize: ub(24), margin: 0, color: 'var(--overlay-text-muted)' }}
+                  >
+                    Also climbing
+                  </h2>
+                  {board.others.map((entry, i) => (
+                    <motion.div
+                      key={`${entry.teamNo}-${i}`}
+                      data-testid={`most-improved-other-${i}`}
+                      data-team-no={entry.teamNo}
+                      initial={{ opacity: 0, x: 16 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.4, delay: 0.3 + i * 0.1, ease: 'easeOut' }}
+                      className="flex items-center"
+                      style={{
+                        flex: 1,
+                        gap: ub(20),
+                        padding: ub(28),
+                        background: CARD_BG,
+                        border: CARD_BORDER,
+                        ...TABULAR,
+                      }}
+                    >
+                      <div className="flex flex-col" style={{ flex: 1, minWidth: 0, gap: ub(6) }}>
+                        <OverflowMarquee
+                          text={entry.name}
+                          fontSize={26}
+                          fontSizeCss={ub(26)}
+                          color="var(--overlay-text)"
+                          className="font-black uppercase"
+                        />
+                        <span style={{ fontSize: ub(20), color: 'var(--overlay-text-muted)' }}>
+                          #{entry.startRank} → #{entry.endRank}
+                        </span>
+                      </div>
+                      <span
+                        className="font-black"
+                        style={{ fontSize: ub(48), color: 'var(--overlay-accent)' }}
+                      >
+                        ▲ {entry.improvement}
+                      </span>
+                    </motion.div>
+                  ))}
+                  {/* Invisible spacers keep each card at a third of the column when fewer than
+                    three teams climbed — never a placeholder that looks like a team. */}
+                  {Array.from({ length: Math.max(0, 3 - board.others.length) }, (_, i) => (
+                    <div key={`spacer-${i}`} aria-hidden style={{ flex: 1 }} />
+                  ))}
+                </section>
               )}
-            </span>
-            <span style={{ flexShrink: 0 }}>
-              Ties in places gained: better final position first.
-            </span>
-          </footer>
-        )}
+            </div>
+          ) : (
+            <div
+              data-testid="most-improved-empty"
+              className="flex flex-col items-center justify-center"
+              style={{
+                flex: 1,
+                gap: ub(16),
+                background: CARD_BG,
+                border: CARD_BORDER,
+                textAlign: 'center',
+              }}
+            >
+              {board.status === 'no-climber' ? (
+                <span className="font-black" style={{ fontSize: ub(44) }}>
+                  No team climbed between {matchLabel(board.from)} and {matchLabel(board.to)}
+                </span>
+              ) : (
+                <>
+                  <span className="font-black uppercase" style={{ fontSize: ub(44) }}>
+                    Comparison unavailable
+                  </span>
+                  <span style={{ fontSize: ub(26), color: 'var(--overlay-text-muted)' }}>
+                    {'message' in board ? board.message : null}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
+
+          {hasRange && (
+            <footer
+              className="flex justify-between"
+              style={{ gap: ub(32), fontSize: ub(18), color: 'var(--overlay-text-muted)' }}
+            >
+              <span>
+                Rank = official overall standings (points, then WWCD, placement pts, elimination
+                pts, last placement, slot).
+                {board.excluded.length > 0 && (
+                  <span data-testid="most-improved-excluded-note">
+                    {' '}
+                    {board.excluded.length} {board.excluded.length === 1 ? 'team' : 'teams'} not
+                    compared:{' '}
+                    {board.excluded
+                      .map(
+                        (team) =>
+                          `${team.name} (${team.reason === 'new-after-start' ? 'joined later' : 'slot identity changed'})`,
+                      )
+                      .join(', ')}
+                    .
+                  </span>
+                )}
+              </span>
+              <span style={{ flexShrink: 0 }}>
+                Ties in places gained: better final position first.
+              </span>
+            </footer>
+          )}
+        </div>
       </div>
     </div>
   );

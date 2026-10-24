@@ -341,131 +341,144 @@ export function TopKillOverlay({ board, appearance }: TopKillOverlayProps) {
 
   return (
     <div
-      data-testid="top-kill-overlay"
-      data-status={board.status}
+      className="top-kill-viewport-container"
       style={{
-        ...appearanceToCssVariables(appearance),
         position: 'fixed',
-        top: '50%',
-        left: '50%',
-        width: ub(1920),
-        height: ub(1080),
-        transform: `translate(-50%, -50%) scale(${scale})`,
-        transformOrigin: 'center center',
-        padding: `${ub(72)} ${ub(96)}`,
-        display: 'grid',
-        gridTemplateRows: 'auto 1fr auto',
-        gap: ub(36),
+        inset: 0,
+        width: '100vw',
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
         pointerEvents: 'none',
-        fontFamily: 'var(--overlay-font-family)',
-        color: 'var(--overlay-text)',
-        // The title and footnotes sit straight on the broadcast picture: a dark, tight shadow keeps
-        // them legible over bright game footage (inherited; invisible on the dark panels).
-        textShadow: '0 1px 2px rgba(0, 0, 0, 0.85), 0 0 18px rgba(0, 0, 0, 0.55)',
+        zIndex: 25,
       }}
     >
       <div
-        className="flex items-baseline"
+        data-testid="top-kill-overlay"
+        data-status={board.status}
         style={{
-          gap: ub(24),
-          borderBottom: `${ub(2)} solid var(--overlay-accent)`,
-          paddingBottom: ub(18),
+          ...appearanceToCssVariables(appearance),
+          width: ub(1920),
+          height: ub(1080),
+          transform: `scale(${scale})`,
+          transformOrigin: 'center center',
+          padding: `${ub(72)} ${ub(96)}`,
+          display: 'grid',
+          gridTemplateRows: 'auto 1fr auto',
+          gap: ub(36),
+          pointerEvents: 'none',
+          fontFamily: 'var(--overlay-font-family)',
+          color: 'var(--overlay-text)',
+          // The title and footnotes sit straight on the broadcast picture: a dark, tight shadow keeps
+          // them legible over bright game footage (inherited; invisible on the dark panels).
+          textShadow: '0 1px 2px rgba(0, 0, 0, 0.85), 0 0 18px rgba(0, 0, 0, 0.55)',
         }}
       >
-        <h1
-          className="font-black uppercase"
-          style={{ fontSize: ub(64), letterSpacing: '-0.01em', margin: 0 }}
-        >
-          Top Kill
-        </h1>
-        <span
-          data-testid="top-kill-context"
-          className="font-semibold"
-          style={{ fontSize: ub(22), color: 'var(--overlay-text-muted)' }}
-        >
-          Most eliminations
-          {map && (
-            <>
-              {' '}
-              · <b style={{ color: 'var(--overlay-text)' }}>{mapLabel(map)}</b>
-            </>
-          )}
-        </span>
-        {board.status === 'preview' && (
-          <span
-            data-testid="top-kill-preview-banner"
-            className="font-extrabold uppercase"
-            style={{
-              marginLeft: 'auto',
-              fontSize: ub(20),
-              letterSpacing: '0.08em',
-              padding: `${ub(6)} ${ub(14)}`,
-              border: `${ub(2)} solid var(--overlay-accent)`,
-              background: PANEL_BG,
-              color: 'var(--overlay-accent)',
-            }}
-          >
-            PREVIEW SAMPLE — NOT A RESULT
-          </span>
-        )}
-      </div>
-
-      {hasEntries && hero ? (
         <div
+          className="flex items-baseline"
           style={{
-            display: 'grid',
-            gridTemplateColumns: `${ub(820)} 1fr`,
-            gap: ub(40),
-            minHeight: 0,
+            gap: ub(24),
+            borderBottom: `${ub(2)} solid var(--overlay-accent)`,
+            paddingBottom: ub(18),
           }}
         >
-          <Hero entry={hero} showLogos={showLogos} showTeamNumbers={showTeamNumbers} />
-          <section
+          <h1
+            className="font-black uppercase"
+            style={{ fontSize: ub(64), letterSpacing: '-0.01em', margin: 0 }}
+          >
+            Top Kill
+          </h1>
+          <span
+            data-testid="top-kill-context"
+            className="font-semibold"
+            style={{ fontSize: ub(22), color: 'var(--overlay-text-muted)' }}
+          >
+            Most eliminations
+            {map && (
+              <>
+                {' '}
+                · <b style={{ color: 'var(--overlay-text)' }}>{mapLabel(map)}</b>
+              </>
+            )}
+          </span>
+          {board.status === 'preview' && (
+            <span
+              data-testid="top-kill-preview-banner"
+              className="font-extrabold uppercase"
+              style={{
+                marginLeft: 'auto',
+                fontSize: ub(20),
+                letterSpacing: '0.08em',
+                padding: `${ub(6)} ${ub(14)}`,
+                border: `${ub(2)} solid var(--overlay-accent)`,
+                background: PANEL_BG,
+                color: 'var(--overlay-accent)',
+              }}
+            >
+              PREVIEW SAMPLE — NOT A RESULT
+            </span>
+          )}
+        </div>
+
+        {hasEntries && hero ? (
+          <div
             style={{
               display: 'grid',
-              gridTemplateRows: 'repeat(3, 1fr)',
-              gap: ub(20),
+              gridTemplateColumns: `${ub(820)} 1fr`,
+              gap: ub(40),
               minHeight: 0,
             }}
           >
-            {board.entries.slice(1).map((entry, i) => (
-              <Row
-                key={entry.teamNo}
-                entry={entry}
-                index={i + 1}
-                heroElims={hero.eliminations}
-                showLogos={showLogos}
-                showTeamNumbers={showTeamNumbers}
-              />
-            ))}
-          </section>
-        </div>
-      ) : (
-        <EmptyState
-          message={
-            board.status === 'no-eliminations'
-              ? `No eliminations were recorded in Match ${board.map.mapNumber}`
-              : 'No finished match yet'
-          }
-        />
-      )}
-
-      <div
-        className="flex justify-between font-semibold"
-        style={{ fontSize: ub(18), color: 'var(--overlay-text-muted)', gap: ub(24) }}
-      >
-        <span>
-          {map && hasEntries
-            ? `Eliminations recorded when Match ${map.mapNumber} was closed. Ties: better finish first.`
-            : ''}
-        </span>
-        {hasEntries && board.cutoffTiedExtra > 0 && (
-          <span data-testid="top-kill-cutoff-note">
-            {board.cutoffTiedExtra} more {board.cutoffTiedExtra === 1 ? 'team' : 'teams'} also on{' '}
-            {board.cutoffEliminations}{' '}
-            {board.cutoffEliminations === 1 ? 'elimination' : 'eliminations'}
-          </span>
+            <Hero entry={hero} showLogos={showLogos} showTeamNumbers={showTeamNumbers} />
+            <section
+              style={{
+                display: 'grid',
+                gridTemplateRows: 'repeat(3, 1fr)',
+                gap: ub(20),
+                minHeight: 0,
+              }}
+            >
+              {board.entries.slice(1).map((entry, i) => (
+                <Row
+                  key={entry.teamNo}
+                  entry={entry}
+                  index={i + 1}
+                  heroElims={hero.eliminations}
+                  showLogos={showLogos}
+                  showTeamNumbers={showTeamNumbers}
+                />
+              ))}
+            </section>
+          </div>
+        ) : (
+          <EmptyState
+            message={
+              board.status === 'no-eliminations'
+                ? `No eliminations were recorded in Match ${board.map.mapNumber}`
+                : 'No finished match yet'
+            }
+          />
         )}
+
+        <div
+          className="flex justify-between font-semibold"
+          style={{ fontSize: ub(18), color: 'var(--overlay-text-muted)', gap: ub(24) }}
+        >
+          <span>
+            {map && hasEntries
+              ? `Eliminations recorded when Match ${map.mapNumber} was closed. Ties: better finish first.`
+              : ''}
+          </span>
+          {hasEntries && board.cutoffTiedExtra > 0 && (
+            <span data-testid="top-kill-cutoff-note">
+              {board.cutoffTiedExtra} more {board.cutoffTiedExtra === 1 ? 'team' : 'teams'} also on{' '}
+              {board.cutoffEliminations}{' '}
+              {board.cutoffEliminations === 1 ? 'elimination' : 'eliminations'}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -428,24 +428,37 @@ export function NextMapOverlay({ board, appearance }: NextMapOverlayProps) {
 
   return (
     <div
-      data-testid="next-map-overlay"
+      className="next-map-viewport-container"
       style={{
-        ...appearanceToCssVariables(appearance),
         position: 'fixed',
-        top: '50%',
-        left: '50%',
-        width: ub(1920),
-        height: ub(1080),
-        transform: `translate(-50%, -50%) scale(${scale})`,
-        transformOrigin: 'center center',
+        inset: 0,
+        width: '100vw',
+        height: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         overflow: 'hidden',
         pointerEvents: 'none',
-        fontFamily: 'var(--overlay-font-family)',
-        color: 'var(--overlay-text)',
+        zIndex: 25,
       }}
     >
-      {/* Broadcast animation keyframe definitions */}
-      <style>{`
+      <div
+        data-testid="next-map-overlay"
+        style={{
+          ...appearanceToCssVariables(appearance),
+          position: 'relative',
+          width: ub(1920),
+          height: ub(1080),
+          transform: `scale(${scale})`,
+          transformOrigin: 'center center',
+          overflow: 'hidden',
+          pointerEvents: 'none',
+          fontFamily: 'var(--overlay-font-family)',
+          color: 'var(--overlay-text)',
+        }}
+      >
+        {/* Broadcast animation keyframe definitions */}
+        <style>{`
         @keyframes next-map-strobe {
           0%, 100% { opacity: 0; }
           50% { opacity: 0.72; }
@@ -476,40 +489,41 @@ export function NextMapOverlay({ board, appearance }: NextMapOverlayProps) {
         }
       `}</style>
 
-      {/* Background base image */}
-      <img
-        src="/images/next-map-bg.jpg"
-        alt=""
-        style={{
-          position: 'absolute',
-          inset: 0,
-          width: '100%',
-          height: '100%',
-          objectFit: 'cover',
-          display: 'block',
-        }}
-      />
+        {/* Background base image */}
+        <img
+          src="/images/next-map-bg.jpg"
+          alt=""
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block',
+          }}
+        />
 
-      {/* Dynamic layer for each of the 4 match cards: strictly inside inner photo boundary */}
-      {board.cards.map((card, index) => {
-        const geo = GEOMETRIES[index] ?? GEOMETRIES[0];
+        {/* Dynamic layer for each of the 4 match cards: strictly inside inner photo boundary */}
+        {board.cards.map((card, index) => {
+          const geo = GEOMETRIES[index] ?? GEOMETRIES[0];
 
-        if (card.state === 'upcoming') {
-          return <UpcomingCardOverlay key={card.matchNumber} card={card} geo={geo} />;
-        }
-        if (card.state === 'completed') {
-          return (
-            <CompletedCardOverlay
-              key={card.matchNumber}
-              card={card}
-              geo={geo}
-              showLogos={showLogos}
-              showTeamNumbers={showTeamNumbers}
-            />
-          );
-        }
-        return <FutureCardOverlay key={card.matchNumber} card={card} geo={geo} />;
-      })}
+          if (card.state === 'upcoming') {
+            return <UpcomingCardOverlay key={card.matchNumber} card={card} geo={geo} />;
+          }
+          if (card.state === 'completed') {
+            return (
+              <CompletedCardOverlay
+                key={card.matchNumber}
+                card={card}
+                geo={geo}
+                showLogos={showLogos}
+                showTeamNumbers={showTeamNumbers}
+              />
+            );
+          }
+          return <FutureCardOverlay key={card.matchNumber} card={card} geo={geo} />;
+        })}
+      </div>
     </div>
   );
 }
