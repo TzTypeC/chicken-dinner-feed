@@ -315,6 +315,7 @@ export function PostGameSeriesOverlay({
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: -20, scale: 0.96 }}
                 transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                className="flex flex-col justify-between overflow-hidden"
                 style={{
                   borderRadius: ub(4),
                   backgroundColor: 'var(--overlay-bg)',
@@ -531,7 +532,10 @@ export function PostGameSeriesOverlay({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 15 }}
                 transition={{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                data-testid="postgame-series-standings-grid"
+                className="grid items-stretch"
                 style={{
+                  display: 'grid',
                   gridTemplateColumns: isTwoColumnTable
                     ? 'repeat(2, minmax(0, 1fr))'
                     : 'minmax(0, 1fr)',
