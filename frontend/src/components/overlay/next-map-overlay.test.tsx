@@ -116,11 +116,11 @@ describe('NextMapOverlay strict boundaries and rendering', () => {
     expect(card3.style.overflow).toBe('hidden');
     expect(card4.style.overflow).toBe('hidden');
 
-    // Verify left, top, width, height match the exact photo thumbnail frame
+    // Verify left, top, width, height match the exact photo thumbnail frame (346x368 at y=383)
     expect(card1.style.left).toContain('137');
-    expect(card1.style.top).toContain('291');
+    expect(card1.style.top).toContain('383');
     expect(card1.style.width).toContain('346');
-    expect(card1.style.height).toContain('460');
+    expect(card1.style.height).toContain('368');
 
     expect(card2.style.left).toContain('571');
     expect(card3.style.left).toContain('1005');
